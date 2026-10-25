@@ -48,6 +48,18 @@ export function trayToWorld(x: number, y: number, lift = 0, pose: TrayPose = TRA
   return [px + lx * cy + tz * sy, py + ty, pz - lx * sy + tz * cy];
 }
 
+/** Inverse of `trayToWorld`: a world point as [level x, level y, lift above the tray surface]. */
+export function worldToTray(p: Vec3, pose: TrayPose = TRAY_POSE): Vec3 {
+  const cy = Math.cos(pose.yaw ?? 0);
+  const sy = Math.sin(pose.yaw ?? 0);
+  const [dx, ty, dz] = [p[0] - pose.position[0], p[1] - pose.position[1], p[2] - pose.position[2]];
+  const lx = dx * cy - dz * sy;
+  const tz = dx * sy + dz * cy;
+  const c = Math.cos(pose.tilt);
+  const s = Math.sin(pose.tilt);
+  return [lx, -(-ty * s + tz * c), ty * c + tz * s];
+}
+
 export function inComfortZone(p: Vec3): boolean {
   const [x, y, z] = p;
   if (z >= 0) return false;
