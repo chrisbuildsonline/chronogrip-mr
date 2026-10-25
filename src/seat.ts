@@ -9,7 +9,15 @@ export type Vec3 = readonly [number, number, number];
  * Tray-local axes: X right, Y normal (up from the surface), Z towards the player,
  * so a level (x, y) lands at tray-local (x, lift, -y).
  */
-export const TRAY_POSE = { position: [0, -0.19, -0.32] as Vec3, /** Radians about X; far edge up. */ tilt: (50 * Math.PI) / 180 };
+export type TrayPose = {
+  position: Vec3;
+  /** Radians about X; far edge up. */
+  tilt: number;
+  /** Radians about Y, applied after the tilt; turns the tray towards the player. Default 0. */
+  yaw?: number;
+};
+
+export const TRAY_POSE: TrayPose = { position: [0, -0.19, -0.32], tilt: (50 * Math.PI) / 180 };
 
 /** Everything the player touches must sit inside this volume around the head. */
 export const COMFORT = { maxDistance: 0.6, maxYaw: 35, minPitch: -50, maxPitch: 10 } as const;
@@ -28,12 +36,16 @@ export const layerLift = (layer: number) => 0.006 + layer * 0.014;
 export const trayLocal = (x: number, y: number, lift = 0): Vec3 => [x, lift, -y];
 
 /** World position (reference space) of a level coordinate, `lift` metres above the tray surface. */
-export function trayToWorld(x: number, y: number, lift = 0): Vec3 {
+export function trayToWorld(x: number, y: number, lift = 0, pose: TrayPose = TRAY_POSE): Vec3 {
   const [lx, ly, lz] = trayLocal(x, y, lift);
-  const c = Math.cos(TRAY_POSE.tilt);
-  const s = Math.sin(TRAY_POSE.tilt);
-  const [px, py, pz] = TRAY_POSE.position;
-  return [px + lx, py + ly * c - lz * s, pz + ly * s + lz * c];
+  const c = Math.cos(pose.tilt);
+  const s = Math.sin(pose.tilt);
+  const ty = ly * c - lz * s;
+  const tz = ly * s + lz * c;
+  const cy = Math.cos(pose.yaw ?? 0);
+  const sy = Math.sin(pose.yaw ?? 0);
+  const [px, py, pz] = pose.position;
+  return [px + lx * cy + tz * sy, py + ty, pz - lx * sy + tz * cy];
 }
 
 export function inComfortZone(p: Vec3): boolean {
@@ -81,14 +93,14 @@ export function partsStrip(level: Level): Circle[] {
 }
 
 /** Every point the player can grab or aim at, in world space. */
-export function interactables(level: Level): Vec3[] {
+export function interactables(level: Level, pose: TrayPose = TRAY_POSE): Vec3[] {
   const axleAt = new Map(level.axles.map((a) => [a.id, a]));
   return [
-    ...level.axles.map((a) => trayToWorld(a.x, a.y, layerLift(0))),
+    ...level.axles.map((a) => trayToWorld(a.x, a.y, layerLift(0), pose)),
     ...level.fixed.map((f) => {
       const a = axleAt.get(f.axle)!;
-      return trayToWorld(a.x, a.y, layerLift(f.layer));
+      return trayToWorld(a.x, a.y, layerLift(f.layer), pose);
     }),
-    ...partsStrip(level).map((s) => trayToWorld(s.x, s.y, layerLift(0))),
+    ...partsStrip(level).map((s) => trayToWorld(s.x, s.y, layerLift(0), pose)),
   ];
 }

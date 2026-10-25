@@ -76,6 +76,14 @@ describe('tray pose and mapping', () => {
     expect(far[2]).toBeLessThan(near[2]);
     expect(far[1]).toBeGreaterThan(near[1]);
   });
+  it('takes an optional pose, default TRAY_POSE', () => {
+    expect(trayToWorld(0.1, 0.05, 0.01, TRAY_POSE)).toEqual(trayToWorld(0.1, 0.05, 0.01));
+    const yawed = trayToWorld(0.1, 0, 0, { position: [0, 0, -0.4], tilt: 0, yaw: Math.PI / 2 });
+    expect(yawed[0]).toBeCloseTo(0, 9);
+    expect(yawed[2]).toBeCloseTo(-0.4 - 0.1, 9);
+    const l = LEVELS[0]!;
+    expect(interactables(l, TRAY_POSE)).toEqual(interactables(l));
+  });
   it('lifts layers above the tray surface', () => {
     expect(layerLift(1)).toBeGreaterThan(layerLift(0));
     expect(layerLift(0)).toBeGreaterThan(0);
