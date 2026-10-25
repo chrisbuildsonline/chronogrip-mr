@@ -1,6 +1,7 @@
 import { World } from '@iwsdk/core';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { APP_TITLE, createWorldOptions } from './config';
+import { startSession } from './enter';
 import { LEVELS } from './levels';
 import { buildScene } from './scene';
 import { TRAY_POSE, trayToWorld } from './seat';
@@ -35,7 +36,7 @@ const supported = await (navigator.xr?.isSessionSupported('immersive-ar') ?? Pro
 if (supported) {
   enterButton.disabled = false;
   enterNote.hidden = true;
-  enterButton.addEventListener('click', () => world.launchXR());
+  enterButton.addEventListener('click', () => void startSession(() => world.launchXR(), enterNote));
 }
 
 window.__chrono = Object.freeze({
@@ -43,4 +44,7 @@ window.__chrono = Object.freeze({
   gearCount: built.gearCount,
   axleCount: built.axleCount,
   ready: true as const,
+  get xrPresenting() {
+    return world.renderer.xr.isPresenting;
+  },
 });

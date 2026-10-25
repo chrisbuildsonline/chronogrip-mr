@@ -4,6 +4,8 @@ interface ChronoHook {
   readonly gearCount: number;
   readonly axleCount: number;
   readonly ready: true;
+  /** Live: true while an XR session is running. */
+  readonly xrPresenting: boolean;
 }
 
 interface Window {

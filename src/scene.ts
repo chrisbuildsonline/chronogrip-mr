@@ -15,7 +15,7 @@ import { gearGeometry } from './gear';
 import type { Level } from './levels';
 import { PIN_RADIUS, TRAY_HALF, TRAY_POSE, layerLift, partsStrip, trayLocal } from './seat';
 
-const brass = () => new MeshStandardMaterial({ color: 0xd9a441, metalness: 1, roughness: 0.42 });
+const brass = () => new MeshStandardMaterial({ color: 0xb08d57, metalness: 1, roughness: 0.35 });
 const steel = () => new MeshStandardMaterial({ color: 0x9aa3ab, metalness: 1, roughness: 0.4 });
 const wood = () => new MeshStandardMaterial({ color: 0x4a3322, metalness: 0, roughness: 0.85 });
 
@@ -72,8 +72,8 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   pmrem.dispose();
   scene.environmentIntensity = 0.5;
-  const key = new DirectionalLight(0xffe2b0, 1.2);
-  key.position.set(-0.4, 0.8, 0.3);
+  const key = new DirectionalLight(0xffe2b0, 0.5);
+  key.position.set(-0.6, 0.7, -0.1); // off the mirror angle of the preview camera, so no gear glares
   scene.add(key, new HemisphereLight(0xfff1dd, 0x3a2a1e, 0.35));
 
   return { tray, gearCount: level.fixed.length + level.tray.length, axleCount: level.axles.length };
