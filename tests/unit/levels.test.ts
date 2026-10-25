@@ -194,12 +194,23 @@ describe('parseLevel', () => {
     expect(out.axles[0]!.x).toBe(L4.axles[0]!.x);
   });
 
-  it('a tray gear called __proto__ stays an own property of the solution', () => {
-    const l = clone(L1);
-    l.tray[0].id = '__proto__';
-    l.solution = JSON.parse('{"__proto__":"a1"}');
-    const out = parseLevel(l);
-    expect(Object.keys(out.solution)).toEqual(['__proto__']);
-    expect(checkLevel(out, out.solution).spins).toBeDefined();
-  });
+  const kinds: [string, string, (l: any, id: string) => void, string][] = [
+    ['level id', 'l1', (l, id) => (l.id = id), 'level.id'],
+    ['axle id', 'a0', (l, id) => (l.axles[0].id = id), 'level.axles[0].id'],
+    ['fixed gear id', 'drv', (l, id) => (l.fixed[0].id = id), 'level.fixed[0].id'],
+    ['tray gear id', 'br', (l, id) => (l.tray[0].id = id), 'level.tray[0].id'],
+  ];
+  for (const [kind, old, set, path] of kinds) {
+    for (const bad of ['__proto__', 'constructor', 'toString', '1abc', 'a b', 'a.b', '\u{1F642}']) {
+      it(`rejects ${JSON.stringify(bad)} as a ${kind}`, () => {
+        const l = clone(L1);
+        set(l, bad);
+        reject(l, `${path} must start with a letter`);
+      });
+    }
+    it(`accepts gear_2-b as a ${kind}`, () => {
+      const renamed = JSON.parse(JSON.stringify(L1).split(`"${old}"`).join('"gear_2-b"'));
+      expect(checkLevel(parseLevel(renamed), parseLevel(renamed).solution).solved).toBe(true);
+    });
+  }
 });

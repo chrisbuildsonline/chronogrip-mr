@@ -179,6 +179,11 @@ function int(v: unknown, path: string, min: number, max: number): number {
 function str(v: unknown, path: string, max: number): string {
   return typeof v === 'string' && v.length >= 1 && v.length <= max ? v : fail(path, `must be a string of 1 to ${max} characters`);
 }
+function ident(v: unknown, path: string): string {
+  return typeof v === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(v) && !(v in Object.prototype)
+    ? v
+    : fail(path, 'must start with a letter and use only letters, digits, _ or -');
+}
 function nonZero(v: unknown, path: string): number {
   const n = num(v, path);
   return n !== 0 ? n : fail(path, 'must not be zero');
@@ -187,7 +192,7 @@ function nonZero(v: unknown, path: string): number {
 /** Validates untrusted JSON and returns a fresh Level; the input is never returned or kept. */
 export function parseLevel(json: unknown): Level {
   const root = obj(json, '');
-  const id = str(get(root, 'id'), '.id', 64);
+  const id = ident(get(root, 'id'), '.id');
   const name = str(get(root, 'name'), '.name', 80);
   const module = num(get(root, 'module'), '.module');
   if (module < 0.002 || module > 0.02) fail('.module', 'must be from 0.002 to 0.02');
@@ -196,7 +201,7 @@ export function parseLevel(json: unknown): Level {
   const axles = arr(get(root, 'axles'), '.axles', 30).map((v, i): Axle => {
     const p = `.axles[${i}]`;
     const o = obj(v, p);
-    const aid = str(get(o, 'id'), `${p}.id`, 64);
+    const aid = ident(get(o, 'id'), `${p}.id`);
     if (axleIds.has(aid)) fail(`${p}.id`, 'must be unique');
     axleIds.add(aid);
     return { id: aid, x: num(get(o, 'x'), `${p}.x`), y: num(get(o, 'y'), `${p}.y`) };
@@ -205,7 +210,7 @@ export function parseLevel(json: unknown): Level {
   const gearIds = new Set<string>();
   const gear = (v: unknown, p: string) => {
     const o = obj(v, p);
-    const gid = str(get(o, 'id'), `${p}.id`, 64);
+    const gid = ident(get(o, 'id'), `${p}.id`);
     if (gearIds.has(gid)) fail(`${p}.id`, 'must be unique');
     gearIds.add(gid);
     return { o, id: gid, teeth: int(get(o, 'teeth'), `${p}.teeth`, 6, 80), layer: Number.isInteger(get(o, 'layer')) ? (get(o, 'layer') as number) : fail(`${p}.layer`, 'must be an integer') };
@@ -215,7 +220,7 @@ export function parseLevel(json: unknown): Level {
   const fixed = fixedRaw.map((v, i): PlacedGear => {
     const p = `.fixed[${i}]`;
     const { o, id: gid, teeth, layer } = gear(v, p);
-    const axle = str(get(o, 'axle'), `${p}.axle`, 64);
+    const axle = ident(get(o, 'axle'), `${p}.axle`);
     if (!axleIds.has(axle)) fail(`${p}.axle`, 'must be the id of an axle');
     return { id: gid, axle, teeth, layer };
   });
@@ -226,18 +231,18 @@ export function parseLevel(json: unknown): Level {
     return { id: gid, teeth, layer };
   });
 
-  const driver = str(get(root, 'driver'), '.driver', 64);
+  const driver = ident(get(root, 'driver'), '.driver');
   if (!fixed.some((f) => f.id === driver)) fail('.driver', 'must be the id of a fixed gear');
   const rpm = nonZero(get(root, 'rpm'), '.rpm');
 
   const tg = obj(get(root, 'target'), '.target');
-  const tgear = str(get(tg, 'gear'), '.target.gear', 64);
+  const tgear = ident(get(tg, 'gear'), '.target.gear');
   if (!gearIds.has(tgear)) fail('.target.gear', 'must be the id of a gear');
   const trpm = nonZero(get(tg, 'rpm'), '.target.rpm');
   const tolerance = num(get(tg, 'tolerance'), '.target.tolerance');
   if (tolerance <= 0) fail('.target.tolerance', 'must be greater than zero');
 
-  const egear = str(get(obj(get(root, 'escapement'), '.escapement'), 'gear'), '.escapement.gear', 64);
+  const egear = ident(get(obj(get(root, 'escapement'), '.escapement'), 'gear'), '.escapement.gear');
   if (!gearIds.has(egear)) fail('.escapement.gear', 'must be the id of a gear');
 
   const sol = obj(get(root, 'solution'), '.solution');
@@ -246,9 +251,9 @@ export function parseLevel(json: unknown): Level {
   for (const k of Object.keys(sol)) {
     const p = `.solution[${JSON.stringify(k)}]`;
     if (!trayIds.has(k)) fail(p, 'key must be the id of a tray gear');
-    const axle = str(sol[k], p, 64);
+    const axle = ident(sol[k], p);
     if (!axleIds.has(axle)) fail(p, 'must be the id of an axle');
-    Object.defineProperty(solution, k, { value: axle, enumerable: true, writable: true, configurable: true });
+    solution[k] = axle;
   }
 
   return {
