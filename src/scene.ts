@@ -32,6 +32,8 @@ const HINT_TEXT = 'Put the controllers down and use your hands';
 
 export type BuiltScene = {
   tray: Group;
+  /** The movable gear meshes by loose gear id, children of the tray. */
+  loose: Map<string, Mesh>;
   gearCount: number;
   axleCount: number;
   /** Moves the tray (and its riser, if the plane is low) to a placement. */
@@ -92,15 +94,17 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
     const mesh = new Mesh(gearGeometry({ module: level.module, teeth }), brassMat);
     mesh.rotation.x = -Math.PI / 2; // gear axis Z -> tray normal
     place(mesh, x, y, layerLift(layer));
+    return mesh;
   };
   const axleAt = new Map(level.axles.map((a) => [a.id, a]));
   for (const f of level.fixed) {
     const a = axleAt.get(f.axle)!;
     gear(f.teeth, a.x, a.y, f.layer);
   }
+  const loose = new Map<string, Mesh>();
   for (const s of strip) {
     const t = level.tray.find((g) => g.id === s.id)!;
-    gear(t.teeth, s.x, s.y, 0);
+    loose.set(s.id, gear(t.teeth, s.x, s.y, 0));
   }
   const hint = handHint();
   place(hint, 0, 0.0, 0.1);
@@ -130,6 +134,7 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
 
   return {
     tray,
+    loose,
     gearCount: level.fixed.length + level.tray.length,
     axleCount: level.axles.length,
     place: placeTray,

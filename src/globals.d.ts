@@ -14,6 +14,20 @@ interface ChronoHook {
   readonly recenters: number;
   /** Live: true while the in-scene "use your hands" hint is shown. */
   readonly handHint: boolean;
+  /** Live: loose gear id -> axle id for gears resting on an axle (a copy). */
+  readonly placements: Record<string, string>;
+  /** Live: id of the gear being carried, or null. */
+  readonly held: string | null;
+  /** Live: whether the current placements solve the level. */
+  readonly solved: boolean;
+  /** Live: world positions of the loose gear centres. */
+  readonly gears: Record<string, readonly [number, number, number]>;
+  /** Live: world positions of the axles, at the height of a layer 0 gear centre. */
+  readonly axles: Record<string, readonly [number, number, number]>;
+  /** Live: world pinch point of each hand while it pinches, else null. */
+  readonly pinchPoints: { readonly left: readonly [number, number, number] | null; readonly right: readonly [number, number, number] | null };
+  /** Page pixel coordinates of a world point, for driving the mouse in tests. */
+  toScreen(p: readonly [number, number, number]): [number, number];
 }
 
 interface Window {

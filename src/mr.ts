@@ -11,6 +11,8 @@ export type MrHooks = {
   /** Called with the placement in local space and the head it was chosen for. */
   onPlace(placement: Placement, head: Head): void;
   onHands(present: boolean): void;
+  /** Every frame per hand: the pinch point (midpoint of thumb and index tips) while pinching, else null (also when the hand is not tracked). */
+  onPinch(hand: 'left' | 'right', point: Vec3 | null): void;
   /** Called when a two-hand pinch hold fires, just before the tray is re-placed. */
   onRecenter(): void;
 };
@@ -35,12 +37,15 @@ function planesIn(frame: XRFrame, space: XRReferenceSpace, head: Head): Plane[] 
   });
 }
 
-function pinching(frame: XRFrame, space: XRReferenceSpace, source: XRInputSource): boolean {
+/** Midpoint of thumb tip and index tip while they touch (closer than PINCH_M), else null. */
+function pinchPoint(frame: XRFrame, space: XRReferenceSpace, source: XRInputSource): Vec3 | null {
   const thumb = source.hand?.get('thumb-tip');
   const index = source.hand?.get('index-finger-tip');
   const a = thumb && frame.getJointPose?.(thumb, space);
   const b = index && frame.getJointPose?.(index, space);
-  return !!a && !!b && Math.hypot(a.transform.position.x - b.transform.position.x, a.transform.position.y - b.transform.position.y, a.transform.position.z - b.transform.position.z) < PINCH_M;
+  if (!a || !b) return null;
+  const [p, q] = [a.transform.position, b.transform.position];
+  return Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) < PINCH_M ? [(p.x + q.x) / 2, (p.y + q.y) / 2, (p.z + q.z) / 2] : null;
 }
 
 /**
@@ -78,7 +83,9 @@ export function trackMr(renderer: WebGLRenderer, hooks: MrHooks): void {
         }
         const hands = [...session.inputSources].filter((s) => s.hand);
         hooks.onHands(hands.length > 0);
-        const both = hands.length === 2 && hands.every((s) => pinching(frame, space, s));
+        const points = hands.map((s) => ({ side: s.handedness, point: pinchPoint(frame, space, s) }));
+        for (const side of ['left', 'right'] as const) hooks.onPinch(side, points.find((p) => p.side === side)?.point ?? null);
+        const both = hands.length === 2 && points.every((p) => p.point);
         if (hold(now, both)) {
           hooks.onRecenter();
           hooks.onPlace(choose(frame, space, head), head);
