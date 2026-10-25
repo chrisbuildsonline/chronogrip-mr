@@ -8,7 +8,11 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "paths": {
+      "three": ["./node_modules/@types/three"],
+      "three/*": ["./node_modules/@types/three/*"]
+    }
   },
   "include": ["src", "tests", "*.config.ts"]
 }
