@@ -2,7 +2,7 @@ import { ReferenceSpaceType, SessionMode, type WorldOptions } from '@iwsdk/core'
 
 export const APP_TITLE = 'ChronoGrip';
 
-/** Seated passthrough session: hands only, local space, tray anchored via planes/hit-test. */
+/** Seated passthrough session: hands preferred but optional, local space, tray placed via planes (all features optional). */
 export function createWorldOptions(): WorldOptions {
   return {
     xr: {
@@ -10,9 +10,10 @@ export function createWorldOptions(): WorldOptions {
       referenceSpace: ReferenceSpaceType.Local,
       offer: 'once',
       features: {
-        handTracking: { required: true },
+        handTracking: true,
         planeDetection: true,
         hitTest: true,
+        anchors: true,
       },
     },
     features: {

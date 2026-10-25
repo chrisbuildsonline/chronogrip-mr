@@ -6,14 +6,16 @@ describe('config', () => {
     expect(APP_TITLE).toBe('ChronoGrip');
   });
 
-  it('asks for a seated passthrough session with hand tracking', () => {
+  it('asks for a seated passthrough session with optional hand tracking, planes, hit-test and anchors', () => {
     const opts = createWorldOptions();
     expect(opts.xr).not.toBe(false);
     if (opts.xr === false || opts.xr === undefined) throw new Error('xr missing');
     expect(opts.xr.sessionMode).toBe('immersive-ar');
     expect(opts.xr.referenceSpace).toBe('local');
-    expect(opts.xr.features?.handTracking).toEqual({ required: true });
+    // `true` means optional: a Quest with hands off must still start the session.
+    expect(opts.xr.features?.handTracking).toBe(true);
     expect(opts.xr.features?.planeDetection).toBe(true);
     expect(opts.xr.features?.hitTest).toBe(true);
+    expect(opts.xr.features?.anchors).toBe(true);
   });
 });
