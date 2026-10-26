@@ -7,3 +7,5 @@ dist/
 .omc/
 test-results/
 playwright-report/
+PLAN.md
+CLAUDE.md
