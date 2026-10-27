@@ -3,8 +3,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { APP_TITLE, createWorldOptions } from './config';
 import { DEFAULT_PLACEMENT, toHeadFrame, type Head } from './anchor';
 import { startSession } from './enter';
-import { Euler, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three';
+import { Euler, Plane, Quaternion, Raycaster, Vector2, Vector3, type Mesh, type MeshBasicMaterial, type MeshStandardMaterial } from 'three';
 import { occupiedAt, pickGear, snapAxle } from './grab';
+import { handNear, rayPick, validAxles } from './hover';
 import { LEVELS, checkLevel } from './levels';
 import { buildScene } from './scene';
 import { trackMr } from './mr';
@@ -44,8 +45,11 @@ const placements: Record<string, string> = {};
 let solved = checkLevel(level, placements).solved;
 let held: string | null = null;
 let holder: 'left' | 'right' | 'mouse' | null = null;
+/** A hand point this close to a gear centre makes it glow, metres. */
+const HAND_NEAR_M = 0.05;
 const pinching = { left: false, right: false };
 const pinchPoints: { left: Vec3 | null; right: Vec3 | null } = { left: null, right: null };
+const handPoints: { left: Vec3 | null; right: Vec3 | null } = { left: null, right: null };
 
 /** The tray's current pose in world space, read from the tray group (placement and recenter move it). */
 const currentPose = (): TrayPose => {
@@ -120,10 +124,16 @@ canvas.addEventListener(
   },
   { capture: true },
 );
+let mouseRay: [Vec3, Vec3] | null = null;
 canvas.addEventListener('pointermove', (e) => {
   const p = holder === 'mouse' && mouseOnTray(e);
   if (p) drag(p);
+  const rect = canvas.getBoundingClientRect();
+  const ray = new Raycaster();
+  ray.setFromCamera(new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), world.camera);
+  mouseRay = [ray.ray.origin.toArray(), ray.ray.direction.toArray()];
 });
+canvas.addEventListener('pointerleave', () => (mouseRay = null));
 const mouseUp = () => {
   if (holder !== 'mouse') return;
   release();
@@ -151,6 +161,9 @@ trackMr(world.renderer, {
     handHint = !present;
     built.showHandHint(handHint);
   },
+  onHandPoint(hand, point) {
+    handPoints[hand] = point;
+  },
   onPinch(hand, point) {
     if (point && holder === null && !pinching[hand] && grab(point)) holder = hand;
     pinching[hand] = point !== null;
@@ -168,6 +181,43 @@ world.renderer.xr.addEventListener('sessionend', () => {
   built.place(DEFAULT_PLACEMENT);
   built.showHandHint(false);
 });
+
+// Hover hints, refreshed every rendered frame: gaze tint, hand glow, and pulsing rings on valid axles.
+const GAZE_TINT = { color: 0xffe2b0, intensity: 0.3 };
+const HAND_TINT = { color: 0xff8a2a, intensity: 0.9 };
+const gazeSpheres = [...built.gears].map(([id, m]) => ({ kind: 'gear' as const, id, mesh: m, radius: (m.geometry.boundingSphere ?? m.geometry.computeBoundingSphere() ?? { radius: 0.03 }).radius }));
+const pinSpheres = [...built.pins].map(([id, m]) => ({ kind: 'axle' as const, id, mesh: m, radius: 0.015 }));
+let gazeTarget: { kind: 'gear' | 'axle'; id: string } | null = null;
+let handGlow: string[] = [];
+let validNow: string[] = [];
+const tint = (mesh: Mesh, t: { color: number; intensity: number } | null) => {
+  const mat = mesh.material as MeshStandardMaterial;
+  mat.emissive.set(t?.color ?? 0x000000);
+  mat.emissiveIntensity = t?.intensity ?? 0;
+};
+world.scene.onBeforeRender = () => {
+  // WebXR has no general eye-gaze API, so in XR the gaze ray is the head (viewer pose) forward direction.
+  const ray: [Vec3, Vec3] | null = world.renderer.xr.isPresenting
+    ? [world.camera.getWorldPosition(new Vector3()).toArray(), world.camera.getWorldDirection(new Vector3()).toArray()]
+    : mouseRay;
+  const spheres = [...gazeSpheres, ...pinSpheres].map((s) => ({ kind: s.kind, id: s.id, radius: s.radius, center: worldOf(s.mesh.position) }));
+  gazeTarget = ray && rayPick(ray[0], ray[1], spheres);
+  handGlow = handNear(
+    (['left', 'right'] as const).map((h) => (holder === h ? null : handPoints[h])),
+    [...built.loose].map(([id, m]) => ({ id, center: worldOf(m.position) })),
+    HAND_NEAR_M,
+  );
+  validNow = validAxles(level, placements, held);
+  for (const s of [...gazeSpheres, ...pinSpheres]) {
+    tint(s.mesh, s.kind === 'gear' && handGlow.includes(s.id) ? HAND_TINT : gazeTarget?.kind === s.kind && gazeTarget.id === s.id ? GAZE_TINT : null);
+  }
+  const pulse = Math.sin(performance.now() / 160);
+  for (const [id, ring] of built.rings) {
+    ring.visible = validNow.includes(id);
+    (ring.material as MeshBasicMaterial).opacity = 0.65 + 0.35 * pulse;
+    ring.scale.setScalar(1 + 0.15 * pulse);
+  }
+};
 
 const supported = await (navigator.xr?.isSessionSupported('immersive-ar') ?? Promise.resolve(false)).catch(() => false);
 if (supported) {
@@ -210,6 +260,15 @@ window.__chrono = Object.freeze({
   },
   get axles() {
     return Object.fromEntries(level.axles.map((a) => [a.id, worldOf(new Vector3(...trayLocal(a.x, a.y, layerLift(0))))]));
+  },
+  get gazeTarget() {
+    return gazeTarget;
+  },
+  get handGlow() {
+    return [...handGlow];
+  },
+  get validAxles() {
+    return [...validNow];
   },
   get pinchPoints() {
     return { ...pinchPoints };

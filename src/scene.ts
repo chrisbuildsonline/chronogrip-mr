@@ -2,6 +2,7 @@ import {
   BoxGeometry,
   CylinderGeometry,
   DirectionalLight,
+  DoubleSide,
   Group,
   HemisphereLight,
   CanvasTexture,
@@ -10,6 +11,7 @@ import {
   MeshStandardMaterial,
   PlaneGeometry,
   PMREMGenerator,
+  RingGeometry,
   type Scene,
   type WebGLRenderer,
 } from 'three';
@@ -34,6 +36,12 @@ export type BuiltScene = {
   tray: Group;
   /** The movable gear meshes by loose gear id, children of the tray. */
   loose: Map<string, Mesh>;
+  /** Every gear mesh (fixed and loose) by gear id, each with its own material. */
+  gears: Map<string, Mesh>;
+  /** Axle pin meshes by axle id, each with its own material. */
+  pins: Map<string, Mesh>;
+  /** Flat highlight rings round each pin by axle id, hidden until shown. */
+  rings: Map<string, Mesh>;
   gearCount: number;
   axleCount: number;
   /** Moves the tray (and its riser, if the plane is low) to a placement. */
@@ -68,8 +76,10 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
   tray.rotation.order = 'YXZ'; // yaw outside the tilt, as in trayToWorld
   tray.position.set(...TRAY_POSE.position);
   tray.rotation.x = TRAY_POSE.tilt;
-  const brassMat = brass();
-  const steelMat = steel();
+  // One material per mesh, so a hover tint on one gear or pin never shows on the others.
+  const pins = new Map<string, Mesh>();
+  const rings = new Map<string, Mesh>();
+  const gears = new Map<string, Mesh>();
 
   const place = (mesh: Mesh, x: number, y: number, lift: number) => {
     mesh.position.set(...trayLocal(x, y, lift));
@@ -86,25 +96,33 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
   place(ledge, 0, TRAY_HALF.y + ledgeDepth / 2, -BOARD_THICKNESS / 2);
 
   for (const a of level.axles) {
-    const pin = new Mesh(new CylinderGeometry(PIN_RADIUS, PIN_RADIUS, PIN_HEIGHT, 24), steelMat);
+    const pin = new Mesh(new CylinderGeometry(PIN_RADIUS, PIN_RADIUS, PIN_HEIGHT, 24), steel());
     place(pin, a.x, a.y, PIN_HEIGHT / 2);
+    pins.set(a.id, pin);
+    // A thin flat ring round the pin, shown (pulsing) while a held gear could land here.
+    const ring = new Mesh(new RingGeometry(PIN_RADIUS * 2, PIN_RADIUS * 2.6, 32), new MeshBasicMaterial({ color: 0xffd27a, transparent: true, depthWrite: false, side: DoubleSide }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.visible = false;
+    place(ring, a.x, a.y, 0.002);
+    rings.set(a.id, ring);
   }
 
-  const gear = (teeth: number, x: number, y: number, layer: number) => {
-    const mesh = new Mesh(gearGeometry({ module: level.module, teeth }), brassMat);
+  const gear = (id: string, teeth: number, x: number, y: number, layer: number) => {
+    const mesh = new Mesh(gearGeometry({ module: level.module, teeth }), brass());
     mesh.rotation.x = -Math.PI / 2; // gear axis Z -> tray normal
     place(mesh, x, y, layerLift(layer));
+    gears.set(id, mesh);
     return mesh;
   };
   const axleAt = new Map(level.axles.map((a) => [a.id, a]));
   for (const f of level.fixed) {
     const a = axleAt.get(f.axle)!;
-    gear(f.teeth, a.x, a.y, f.layer);
+    gear(f.id, f.teeth, a.x, a.y, f.layer);
   }
   const loose = new Map<string, Mesh>();
   for (const s of strip) {
     const t = level.tray.find((g) => g.id === s.id)!;
-    loose.set(s.id, gear(t.teeth, s.x, s.y, 0));
+    loose.set(s.id, gear(t.id, t.teeth, s.x, s.y, 0));
   }
   const hint = handHint();
   place(hint, 0, 0.0, 0.1);
@@ -135,6 +153,9 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
   return {
     tray,
     loose,
+    gears,
+    pins,
+    rings,
     gearCount: level.fixed.length + level.tray.length,
     axleCount: level.axles.length,
     place: placeTray,

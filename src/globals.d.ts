@@ -24,6 +24,12 @@ interface ChronoHook {
   readonly gears: Record<string, readonly [number, number, number]>;
   /** Live: world positions of the axles, at the height of a layer 0 gear centre. */
   readonly axles: Record<string, readonly [number, number, number]>;
+  /** Live: the gear or axle under the gaze ray (head forward in XR, mouse pointer on desktop), else null. */
+  readonly gazeTarget: { readonly kind: 'gear' | 'axle'; readonly id: string } | null;
+  /** Live: ids of loose gears glowing because a free hand is within 5 cm. */
+  readonly handGlow: readonly string[];
+  /** Live: ids of axles where the held gear could snap (pulsing); empty when nothing is held. */
+  readonly validAxles: readonly string[];
   /** Live: world pinch point of each hand while it pinches, else null. */
   readonly pinchPoints: { readonly left: readonly [number, number, number] | null; readonly right: readonly [number, number, number] | null };
   /** Page pixel coordinates of a world point, for driving the mouse in tests. */
