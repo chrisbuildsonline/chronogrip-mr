@@ -4,6 +4,7 @@ import { inComfortZone, interactables, type Vec3 } from '../../src/seat';
 
 // Runs against the dev server (project "dev"), where the IWER emulator is injected.
 test('dev server: emulator makes Enter MR work and starts an XR session', async ({ page }) => {
+  test.setTimeout(90_000); // software GL makes screenshots slow in XR
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(`console: ${m.text()}`);
