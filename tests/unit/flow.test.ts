@@ -8,14 +8,41 @@ describe('flow state machine', () => {
     expect(TITLE).toEqual({ name: 'title', level: 0 });
   });
 
-  it('start plays the current level; solve completes it', () => {
+  it('start plays the current level; solve moves on to calibrating the escapement; calibrated completes it', () => {
     expect(run([{ type: 'start' }])).toEqual({ name: 'playing', level: 0 });
-    expect(run([{ type: 'start' }, { type: 'solve' }])).toEqual({ name: 'complete', level: 0 });
+    expect(run([{ type: 'start' }, { type: 'solve' }])).toEqual({ name: 'calibrate', level: 0 });
+    expect(run([{ type: 'start' }, { type: 'solve' }, { type: 'calibrated' }])).toEqual({ name: 'complete', level: 0 });
+  });
+
+  it('calibrated only applies while calibrating; solve does nothing there', () => {
+    const playing: Flow = { name: 'playing', level: 2 };
+    expect(step(playing, { type: 'calibrated' })).toBe(playing);
+    const cal: Flow = { name: 'calibrate', level: 2 };
+    expect(step(cal, { type: 'solve' })).toBe(cal);
+    expect(step(cal, { type: 'next' })).toBe(cal);
+    expect(step(cal, { type: 'start' })).toBe(cal);
+    expect(step(cal, { type: 'select' })).toBe(cal);
+  });
+
+  it('pause while calibrating resumes back to calibrating, not to playing', () => {
+    const paused = step({ name: 'calibrate', level: 1 }, { type: 'pause' });
+    expect(paused.name).toBe('paused');
+    expect(paused.level).toBe(1);
+    expect(step(paused, { type: 'resume' })).toEqual({ name: 'calibrate', level: 1 });
+    expect(reloads(paused, { type: 'resume' }, step(paused, { type: 'resume' }))).toBe(false);
+    expect(step(paused, { type: 'restart' })).toEqual({ name: 'playing', level: 1 });
+  });
+
+  it('restart from calibrating replays the level on a fresh board', () => {
+    const cal: Flow = { name: 'calibrate', level: 3 };
+    const next = step(cal, { type: 'restart' });
+    expect(next).toEqual({ name: 'playing', level: 3 });
+    expect(reloads(cal, { type: 'restart' }, next)).toBe(true);
   });
 
   it('next moves to the following level, and from the last level back to level select', () => {
-    expect(run([{ type: 'start' }, { type: 'solve' }, { type: 'next' }])).toEqual({ name: 'playing', level: 1 });
-    expect(run([{ type: 'solve' }, { type: 'next' }], { name: 'playing', level: 4 })).toEqual({ name: 'select', level: 4 });
+    expect(run([{ type: 'start' }, { type: 'solve' }, { type: 'calibrated' }, { type: 'next' }])).toEqual({ name: 'playing', level: 1 });
+    expect(run([{ type: 'solve' }, { type: 'calibrated' }, { type: 'next' }], { name: 'playing', level: 4 })).toEqual({ name: 'select', level: 4 });
   });
 
   it('select opens level select; select with a level plays it', () => {
@@ -66,6 +93,7 @@ describe('flow state machine', () => {
     expect(screenOf(TITLE)).toBe('title');
     expect(screenOf({ name: 'select', level: 0 })).toBe('select');
     expect(screenOf({ name: 'playing', level: 0 })).toBe('hud');
+    expect(screenOf({ name: 'calibrate', level: 0 })).toBe('hud');
     expect(screenOf({ name: 'complete', level: 0 })).toBe('complete');
     expect(screenOf({ name: 'paused', level: 0 })).toBe('paused');
   });

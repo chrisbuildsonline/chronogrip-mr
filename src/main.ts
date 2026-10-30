@@ -13,9 +13,11 @@ import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
 import { buttonAt, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button } from './ui';
 import { createPanels } from './panels';
-import { createGhostHand, ghostAt } from './ghost';
-import { tweenAt } from './tween';
+import { createGhostHand, ghostAt, ghostTwistAt } from './ghost';
+import { easeOut, tweenAt } from './tween';
 import type { GearSpin } from './train';
+import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
+import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, createAutomaton, createEscapement } from './clockwork';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('#app container missing');
@@ -57,15 +59,27 @@ const HAND_NEAR_M = 0.05;
 const pinching = { left: false, right: false };
 const pinchPoints: { left: Vec3 | null; right: Vec3 | null } = { left: null, right: null };
 const handPoints: { left: Vec3 | null; right: Vec3 | null } = { left: null, right: null };
+const wrists: { left: Quat | null; right: Quat | null } = { left: null, right: null };
 const tweens = new Map<string, { from: Vec3; to: Vec3; start: number }>();
 
-// Level flow: title, playing, complete, paused, level select; plus the level clock and best times.
+// Level flow: title, playing, calibrate, complete, paused, level select; plus the level clock and best times.
+// The clock runs only while playing: it stops when the train is solved, so calibrating is not timed.
 let flow: Flow = TITLE;
 const levelClock = createClock();
 const best: (number | null)[] = LEVELS.map(() => null);
 let spins: Record<string, GearSpin> = {};
-let solvedAt = 0;
+/** When the last reward (solve, then calibrated) fired: gears flash and a ring bursts. */
+let rewardAt = -Infinity;
+let calibratedAt = 0;
 let grabbedOnce = false;
+
+// The escapement regulator: turned by a pinch and a wrist roll (or a mouse drag) while calibrating.
+const newRegulator = () => createRegulator(targetRate(level), startSetting(level));
+let regulator = newRegulator();
+let turning: 'left' | 'right' | 'mouse' | null = null;
+let lastWrist: Quat | null = null;
+let lastMouseX = 0;
+let turnedOnce = false;
 
 /** The tray's current pose in world space, read from the tray group (placement and recenter move it). */
 const currentPose = (): TrayPose => {
@@ -91,9 +105,33 @@ placePanels();
 const firstMove = () => Object.entries(level.solution)[0]!;
 const ghost = createGhostHand(built.loose.get(firstMove()[0])!.geometry);
 built.tray.add(ghost.root);
-const ghostOn = () => levelIndex === 0 && !grabbedOnce && (flow.name === 'title' || flow.name === 'playing');
+/** Level 1 only, no text: first the carry loop until the first grab, then the twist loop until the knob is first turned. */
+const ghostTwist = () => levelIndex === 0 && !turnedOnce && turning === null && flow.name === 'calibrate';
+const ghostOn = () => ghostTwist() || (levelIndex === 0 && !grabbedOnce && (flow.name === 'title' || flow.name === 'playing'));
 
-// Reward: an amber ring that bursts from the target gear when the level is solved.
+const escapement = createEscapement();
+const automaton = createAutomaton();
+built.tray.add(escapement.root, automaton.root);
+/** The knob's centre in tray space [x, y, lift]. */
+const KNOB: Vec3 = [DIAL_AT[0], DIAL_AT[1], KNOB_TOP / 2];
+const nearKnob = (world: Vec3) => {
+  const [x, y, lift] = worldToTray(world, currentPose());
+  return Math.hypot(x - KNOB[0], y - KNOB[1], lift - KNOB[2]) <= KNOB_GRAB_M;
+};
+/** Takes hold of the regulator knob if calibrating and the point is on it. */
+function grabKnob(world: Vec3, who: 'left' | 'right' | 'mouse'): boolean {
+  if (flow.name !== 'calibrate' || turning !== null || !nearKnob(world)) return false;
+  turning = who;
+  turnedOnce = true;
+  return true;
+}
+function letGoKnob(): void {
+  if (turning === 'mouse') controls.enabled = true;
+  turning = null;
+  lastWrist = null;
+}
+
+// Reward: an amber ring that bursts from the target gear when the train is solved, and round the dial when calibrated.
 const burst = new Mesh(new RingGeometry(0.03, 0.036, 48), new MeshBasicMaterial({ color: 0xd99a2b, transparent: true, depthWrite: false, side: DoubleSide }));
 burst.rotation.x = -Math.PI / 2;
 burst.visible = false;
@@ -123,6 +161,9 @@ function loadLevel(i: number): void {
   holder = null;
   tweens.clear();
   burst.visible = false;
+  rewardAt = -Infinity;
+  letGoKnob();
+  regulator = newRegulator();
   levelClock.reset();
   ghost.gear.geometry = built.loose.get(firstMove()[0])!.geometry;
   collectTargets();
@@ -148,17 +189,26 @@ function putBack(): void {
 function send(e: FlowEvent): void {
   const next = step(flow, e);
   if (next === flow) return;
-  if (next.name === 'paused') putBack();
+  if (next.name === 'paused') {
+    putBack();
+    letGoKnob();
+  }
   if (reloads(flow, e, next)) loadLevel(next.level);
+  const entering = next.name !== flow.name && flow.name !== 'paused';
   flow = next;
-  if (next.name === 'complete') {
-    solvedAt = performance.now();
+  if (next.name === 'calibrate' && entering) {
+    rewardAt = performance.now();
     spins = checkLevel(level, placements).spins;
-    const prev = best[levelIndex];
-    best[levelIndex] = prev == null ? levelClock.seconds : Math.min(prev, levelClock.seconds);
     const tgt = level.fixed.find((f) => f.id === level.target.gear);
     const at = tgt && axleOf.get(tgt.axle);
     if (at) burst.position.set(...trayLocal(at.x, at.y, layerLift(tgt.layer) + 0.004));
+  }
+  if (next.name === 'complete') {
+    rewardAt = calibratedAt = performance.now();
+    letGoKnob();
+    const prev = best[levelIndex];
+    best[levelIndex] = prev == null ? levelClock.seconds : Math.min(prev, levelClock.seconds);
+    burst.position.set(...trayLocal(DIAL_AT[0], DIAL_AT[1], 0.008));
   }
 }
 
@@ -182,8 +232,8 @@ function press(id: string): void {
 }
 /** Board parts move only on the title (touching a gear starts the level) and while playing. */
 const live = () => flow.name === 'title' || flow.name === 'playing';
-/** The complete card waits for the reward to play first. */
-const REWARD_MS = 700;
+/** The complete card waits while the automaton and the running train play the reward. */
+const COMPLETE_DELAY_MS = 2000;
 const shownButtons = (): Button[] => (panels.panelMesh.visible ? (panels.current?.layout.buttons ?? []) : []);
 
 /** Picks up the loose gear nearest a world point, if one is within reach; freeing its axle. */
@@ -256,7 +306,7 @@ let panelDown = false;
 canvas.addEventListener(
   'pointerdown',
   (e) => {
-    if (e.button !== 0 || world.renderer.xr.isPresenting || holder !== null) return;
+    if (e.button !== 0 || world.renderer.xr.isPresenting || holder !== null || turning !== null) return;
     const hit = onPanel(rayAt(e));
     if (hit) {
       panelDown = true;
@@ -266,7 +316,11 @@ canvas.addEventListener(
       return;
     }
     const p = mouseOnTray(e);
-    if (p && grab(p)) {
+    if (p && grabKnob(p, 'mouse')) {
+      lastMouseX = e.clientX;
+      controls.enabled = false;
+      canvas.setPointerCapture(e.pointerId);
+    } else if (p && grab(p)) {
       holder = 'mouse';
       controls.enabled = false;
       canvas.setPointerCapture(e.pointerId);
@@ -276,20 +330,31 @@ canvas.addEventListener(
 );
 let mouseRay: [Vec3, Vec3] | null = null;
 let mouseButton: string | null = null;
+let mouseKnob = false;
 canvas.addEventListener('pointermove', (e) => {
   const p = holder === 'mouse' && mouseOnTray(e);
   if (p) drag(p);
+  if (turning === 'mouse') {
+    regulator.turn(dragTwist(e.clientX - lastMouseX));
+    lastMouseX = e.clientX;
+  }
   mouseRay = rayAt(e);
   const hit = onPanel(mouseRay);
   mouseButton = hit && buttonAt(hit, shownButtons());
-  canvas.style.cursor = mouseButton ? 'pointer' : '';
+  const onTray = !mouseButton && flow.name === 'calibrate' && mouseOnTray(e);
+  mouseKnob = turning === 'mouse' || (!!onTray && nearKnob(onTray));
+  canvas.style.cursor = mouseButton ? 'pointer' : mouseKnob ? 'ew-resize' : '';
 });
-canvas.addEventListener('pointerleave', () => (mouseRay = mouseButton = null));
+canvas.addEventListener('pointerleave', () => {
+  mouseRay = mouseButton = null;
+  mouseKnob = false;
+});
 const mouseUp = () => {
   if (panelDown) {
     panelDown = false;
     controls.enabled = true;
   }
+  if (turning === 'mouse') letGoKnob();
   if (holder !== 'mouse') return;
   release();
   controls.enabled = true;
@@ -319,7 +384,7 @@ trackMr(world.renderer, {
   onRecenter() {
     recenters++;
   },
-  holding: () => holder === 'left' || holder === 'right',
+  holding: () => holder === 'left' || holder === 'right' || turning === 'left' || turning === 'right',
   onPlace(next, head: Head) {
     placement = next;
     const [x, y, z] = toHeadFrame(next.pose.position, head);
@@ -340,13 +405,24 @@ trackMr(world.renderer, {
     lastTipZ[hand] = local ? local[2] : null;
     if (poked) press(poked);
   },
-  onPinch(hand, point) {
+  onPinch(hand, point, wrist) {
+    wrists[hand] = wrist;
     const starts = point !== null && !pinching[hand] && holder === null;
     const onButton = starts && buttonAt(worldToPanel(anchor, point), shownButtons(), 0.03);
     if (onButton) press(onButton);
+    else if (starts && grabKnob(point, hand)) lastWrist = wrist;
     else if (starts && grab(point)) holder = hand;
     pinching[hand] = point !== null;
     pinchPoints[hand] = point;
+    if (turning === hand) {
+      // The knob turns with the wrist's roll, frame by frame, while the pinch holds.
+      if (!point) letGoKnob();
+      else if (wrist) {
+        if (lastWrist) regulator.turn(twistOf(lastWrist, wrist));
+        lastWrist = wrist;
+      }
+      return;
+    }
     if (holder !== hand) return;
     if (point) drag(point);
     else release();
@@ -374,6 +450,11 @@ const tint = (mesh: Mesh, t: { color: number; intensity: number } | null) => {
   mat.emissive.set(t?.color ?? 0x000000);
   mat.emissiveIntensity = t?.intensity ?? 0;
 };
+/** Tick count as the train sees it: each tick is a quick 90 ms step, then a rest until the next. */
+const stepped = (phase: number, rate: number) => {
+  const whole = Math.floor(phase);
+  return whole + easeOut((phase - whole) / Math.min(1, 0.09 * rate));
+};
 let lastFrame = performance.now();
 world.scene.onBeforeRender = () => {
   const now = performance.now();
@@ -399,22 +480,35 @@ world.scene.onBeforeRender = () => {
   );
   validNow = validAxles(level, placements, held);
 
-  // Reward: the train turns at its true speeds and every gear flashes amber, fading out.
-  const sinceSolve = (now - solvedAt) / 1000;
-  const flash = flow.name === 'complete' ? Math.max(0, 1 - sinceSolve / 1.2) : 0;
-  if (flow.name === 'complete') {
+  // Escapement: it ticks once the train is solved. While calibrating, the train steps forward on each tick
+  // (a step is what it turns in one tick at the target rate); once calibrated it runs smoothly at its true speeds.
+  const ticking = flow.name === 'calibrate' || flow.name === 'complete';
+  const before = stepped(regulator.phase, regulator.rate);
+  if (ticking && regulator.tick(dt) && flow.name === 'calibrate') send({ type: 'calibrated' });
+  if (ticking) {
+    const ticks = flow.name === 'complete' ? dt * regulator.target : stepped(regulator.phase, regulator.rate) - before;
     for (const [id, m] of built.gears) {
       const rpm = spins[id];
-      if (typeof rpm === 'number') m.rotation.z += ((rpm * Math.PI) / 60) * dt;
+      if (typeof rpm === 'number') m.rotation.z += ((rpm * Math.PI) / 60 / regulator.target) * ticks;
     }
   }
-  burst.visible = flow.name === 'complete' && sinceSolve < 0.9;
-  burst.scale.setScalar(1 + 3 * sinceSolve);
-  (burst.material as MeshBasicMaterial).opacity = Math.max(0, 1 - sinceSolve / 0.9);
+  const knobLit = turning !== null || (flow.name === 'calibrate' && (mouseKnob || (['left', 'right'] as const).some((h) => handPoints[h] && nearKnob(handPoints[h]!))));
+  escapement.update({ setting: regulator.setting, target: regulator.target, phase: regulator.phase, ticking, hold: regulator.hold, inBand: regulator.inBand, calibrated: regulator.calibrated, lit: knobLit });
+  automaton.update(now / 1000, regulator.phase, regulator.calibrated, built.tray.rotation.x);
+
+  // Reward, on solve and again on calibrated: every gear flashes amber, fading out, and a ring bursts.
+  const sinceReward = (now - rewardAt) / 1000;
+  const flash = ticking ? Math.max(0, 1 - sinceReward / 1.2) : 0;
+  burst.visible = ticking && sinceReward < 0.9;
+  burst.scale.setScalar(1 + 3 * sinceReward);
+  (burst.material as MeshBasicMaterial).opacity = Math.max(0, 1 - sinceReward / 0.9);
+  // While calibrating the escapement gear glints on every tick.
+  const glint = flow.name === 'calibrate' ? 0.6 * (1 - (regulator.phase % 1)) ** 3 : 0;
 
   for (const s of [...gazeSpheres, ...pinSpheres]) {
     const lit = s.kind === 'gear' && handGlow.includes(s.id) ? HAND_TINT : gazeTarget?.kind === s.kind && gazeTarget.id === s.id ? GAZE_TINT : null;
-    tint(s.mesh, flash > 0 && s.kind === 'gear' ? { color: 0xd99a2b, intensity: 1.2 * flash } : lit);
+    const amber = s.kind === 'gear' ? Math.max(1.2 * flash, s.id === level.escapement.gear ? glint : 0) : 0;
+    tint(s.mesh, amber > 0.01 ? { color: 0xd99a2b, intensity: amber } : lit);
   }
   const pulse = Math.sin(now / 160);
   for (const [id, ring] of built.rings) {
@@ -425,13 +519,16 @@ world.scene.onBeforeRender = () => {
 
   const [from, to] = firstMove();
   ghost.root.visible = ghostOn();
-  if (ghostOn()) {
+  if (ghostTwist()) {
+    const s = ghostTwistAt(now / 1000, DIAL_AT, settingOf(regulator.target) >= regulator.setting ? 1 : -1);
+    ghost.update({ ...s, pos: [s.pos[0], s.pos[1], s.pos[2] + KNOB_TOP - 0.006] });
+  } else if (ghostOn()) {
     const slot = slots.get(from)!;
     const axle = axleOf.get(to)!;
     ghost.update(ghostAt(now / 1000, [slot.x, slot.y], [axle.x, axle.y]));
   }
 
-  const waiting = flow.name === 'complete' && now - solvedAt < REWARD_MS;
+  const waiting = flow.name === 'complete' && now - calibratedAt < COMPLETE_DELAY_MS;
   panels.show(waiting ? null : screenOf(flow), {
     level: levelIndex,
     levels: LEVELS.length,
@@ -502,7 +599,7 @@ window.__chrono = Object.freeze({
     return [...handGlow];
   },
   get validAxles() {
-    return [...validNow];
+    return validAxles(level, placements, held);
   },
   get pinchPoints() {
     return { ...pinchPoints };
@@ -521,6 +618,33 @@ window.__chrono = Object.freeze({
   },
   get ghostHand() {
     return ghostOn();
+  },
+  get ghostTwist() {
+    return ghostTwist();
+  },
+  get regulator() {
+    return regulator.setting;
+  },
+  get tickRate() {
+    return regulator.rate;
+  },
+  get targetRate() {
+    return regulator.target;
+  },
+  get inBand() {
+    return regulator.inBand;
+  },
+  get turning() {
+    return turning;
+  },
+  get wrists() {
+    return { ...wrists };
+  },
+  get automatonRunning() {
+    return regulator.calibrated;
+  },
+  get regulatorAt() {
+    return worldOf(new Vector3(...trayLocal(KNOB[0], KNOB[1], KNOB_TOP)));
   },
   buttons() {
     return shownButtons().map((b) => {

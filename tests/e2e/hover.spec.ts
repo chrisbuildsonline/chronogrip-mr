@@ -20,6 +20,7 @@ const screen = (page: Page, kind: 'gears' | 'axles', id: string) =>
   page.evaluate(([k, i]) => window.__chrono!.toScreen(window.__chrono![k as 'gears' | 'axles'][i!]!), [kind, id] as const);
 
 test('desktop: hovering a gear marks it as the gaze target; dragging pulses the valid axles', async ({ page }) => {
+  test.setTimeout(90_000); // software GL under parallel workers
   const errors = await open(page);
   expect(await page.evaluate(() => window.__chrono!.gazeTarget)).toBeNull();
   expect(await page.evaluate(() => window.__chrono!.validAxles)).toEqual([]);

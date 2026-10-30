@@ -1,6 +1,7 @@
 import type { WebGLRenderer } from 'three';
 import { createRecenterHold, placeTray, poseToWorld, toHeadFrame, type Head, type Placement, type Plane } from './anchor';
 import type { Vec3 } from './seat';
+import type { Quat } from './escapement';
 
 /** Thumb tip to index tip closer than this counts as a pinch, metres. */
 const PINCH_M = 0.02;
@@ -11,8 +12,11 @@ export type MrHooks = {
   /** Called with the placement in local space and the head it was chosen for. */
   onPlace(placement: Placement, head: Head): void;
   onHands(present: boolean): void;
-  /** Every frame per hand: the pinch point (midpoint of thumb and index tips) while pinching, else null (also when the hand is not tracked). */
-  onPinch(hand: 'left' | 'right', point: Vec3 | null): void;
+  /**
+   * Every frame per hand: the pinch point (midpoint of thumb and index tips) while pinching, else null (also when the
+   * hand is not tracked), and the wrist joint's orientation [x, y, z, w] when tracked.
+   */
+  onPinch(hand: 'left' | 'right', point: Vec3 | null, wrist: Quat | null): void;
   /** Every frame per hand: the thumb/index midpoint pinching or not, and the index tip; null when the hand is not tracked. */
   onHandPoint(hand: 'left' | 'right', point: Vec3 | null, tip: Vec3 | null): void;
   /** Called when a two-hand pinch hold fires, just before the tray is re-placed. */
@@ -41,15 +45,22 @@ function planesIn(frame: XRFrame, space: XRReferenceSpace, head: Head): Plane[] 
   });
 }
 
-/** Midpoint of thumb tip and index tip, and whether they touch (closer than PINCH_M); null when untracked. */
-function tipsMid(frame: XRFrame, space: XRReferenceSpace, source: XRInputSource): { point: Vec3; tip: Vec3; pinching: boolean } | null {
+/** Midpoint of thumb tip and index tip, whether they touch (closer than PINCH_M), and the wrist orientation; null when untracked. */
+function tipsMid(frame: XRFrame, space: XRReferenceSpace, source: XRInputSource): { point: Vec3; tip: Vec3; pinching: boolean; wrist: Quat | null } | null {
   const thumb = source.hand?.get('thumb-tip');
   const index = source.hand?.get('index-finger-tip');
+  const wristJoint = source.hand?.get('wrist');
   const a = thumb && frame.getJointPose?.(thumb, space);
   const b = index && frame.getJointPose?.(index, space);
   if (!a || !b) return null;
+  const w = wristJoint && frame.getJointPose?.(wristJoint, space)?.transform.orientation;
   const [p, q] = [a.transform.position, b.transform.position];
-  return { point: [(p.x + q.x) / 2, (p.y + q.y) / 2, (p.z + q.z) / 2], tip: [q.x, q.y, q.z], pinching: Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) < PINCH_M };
+  return {
+    point: [(p.x + q.x) / 2, (p.y + q.y) / 2, (p.z + q.z) / 2],
+    tip: [q.x, q.y, q.z],
+    pinching: Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) < PINCH_M,
+    wrist: w ? [w.x, w.y, w.z, w.w] : null,
+  };
 }
 
 /**
@@ -92,7 +103,7 @@ export function trackMr(renderer: WebGLRenderer, hooks: MrHooks): void {
         for (const side of ['left', 'right'] as const) {
           const tip = tips.find((t) => t.side === side)?.tip;
           hooks.onHandPoint(side, tip?.point ?? null, tip?.tip ?? null);
-          hooks.onPinch(side, points.find((p) => p.side === side)?.point ?? null);
+          hooks.onPinch(side, points.find((p) => p.side === side)?.point ?? null, tip?.wrist ?? null);
         }
         const both = hands.length === 2 && points.every((p) => p.point);
         if (hold(now, both && !hooks.holding())) {

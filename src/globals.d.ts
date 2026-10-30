@@ -33,7 +33,24 @@ interface ChronoHook {
   /** Live: world pinch point of each hand while it pinches, else null. */
   readonly pinchPoints: { readonly left: readonly [number, number, number] | null; readonly right: readonly [number, number, number] | null };
   /** Live: level flow state. */
-  readonly flow: 'title' | 'select' | 'playing' | 'complete' | 'paused';
+  readonly flow: 'title' | 'select' | 'playing' | 'calibrate' | 'complete' | 'paused';
+  /** Live: true while the level 1 ghost hand demonstrates the regulator twist. */
+  readonly ghostTwist: boolean;
+  /** Live: the escapement regulator setting, 0..1 across the knob's travel. */
+  readonly regulator: number;
+  /** Live: the escapement's tick rate now and the level's target, ticks per second. */
+  readonly tickRate: number;
+  readonly targetRate: number;
+  /** Live: whether the tick rate is inside the target band. */
+  readonly inBand: boolean;
+  /** Live: who is turning the regulator knob, or null. */
+  readonly turning: 'left' | 'right' | 'mouse' | null;
+  /** Live: world orientation [x, y, z, w] of each tracked wrist joint, else null. */
+  readonly wrists: { readonly left: readonly [number, number, number, number] | null; readonly right: readonly [number, number, number, number] | null };
+  /** Live: true once the escapement is calibrated and the automaton runs. */
+  readonly automatonRunning: boolean;
+  /** Live: world position of the top of the regulator knob, where a pinch grabs it. */
+  readonly regulatorAt: readonly [number, number, number];
   /** Live: index of the loaded level in LEVELS. */
   readonly levelIndex: number;
   /** Live: seconds played on this level; runs only while playing. */

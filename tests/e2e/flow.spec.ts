@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { LEVELS } from '../../src/levels';
+import { calibrateByMouse } from './calibrate';
 
 async function open(page: Page) {
   const errors: string[] = [];
@@ -47,6 +48,7 @@ test('desktop: title, start, solve level 1, complete card, next loads level 2', 
 
   const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
   await place(page, gear, axle);
+  await calibrateByMouse(page);
   await page.waitForFunction(() => window.__chrono!.flow === 'complete');
   expect(await page.evaluate(() => window.__chrono!.ghostHand)).toBe(false);
   await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GHOST_PERIOD_S, ghostAt } from '../../src/ghost';
+import { GHOST_PERIOD_S, GHOST_TWIST_S, ghostAt, ghostTwistAt } from '../../src/ghost';
 import { easeOut, tweenAt } from '../../src/tween';
 
 const from = [0, 0.2] as const;
@@ -29,6 +29,33 @@ describe('ghost hand loop', () => {
     expect(ghostAt(GHOST_PERIOD_S * 0.45, from, to).opacity).toBe(1);
     expect(ghostAt(GHOST_PERIOD_S * 0.98, from, to).opacity).toBe(0);
     expect(ghostAt(1.3 + GHOST_PERIOD_S, from, to)).toEqual(ghostAt(1.3, from, to));
+  });
+});
+
+describe('ghost twist loop', () => {
+  const knob = [0.14, -0.1] as const;
+
+  it('comes down onto the knob, pinches, rolls the wrist the way to turn, lets go and fades', () => {
+    const start = ghostTwistAt(GHOST_TWIST_S * 0.05, knob, 1);
+    expect(start.pinch).toBe(0);
+    expect(start.roll).toBe(0);
+    const turned = ghostTwistAt(GHOST_TWIST_S * 0.65, knob, 1);
+    expect(turned.pos[0]).toBeCloseTo(knob[0]);
+    expect(turned.pos[1]).toBeCloseTo(knob[1]);
+    expect(turned.pinch).toBe(1);
+    expect(turned.roll).toBeGreaterThan(0.5);
+    expect(turned.carrying).toBe(false);
+    expect(ghostTwistAt(GHOST_TWIST_S * 0.65, knob, -1).roll).toBeCloseTo(-turned.roll!);
+    const done = ghostTwistAt(GHOST_TWIST_S * 0.9, knob, 1);
+    expect(done.pinch).toBe(0);
+    expect(done.pos[2]).toBeGreaterThan(turned.pos[2]); // lifts off
+  });
+
+  it('loops with its period and fades in and out', () => {
+    expect(ghostTwistAt(0, knob, 1).opacity).toBe(0);
+    expect(ghostTwistAt(GHOST_TWIST_S * 0.5, knob, 1).opacity).toBe(1);
+    expect(ghostTwistAt(GHOST_TWIST_S * 0.99, knob, 1).opacity).toBeLessThan(0.1);
+    expect(ghostTwistAt(0.9 + GHOST_TWIST_S, knob, 1)).toEqual(ghostTwistAt(0.9, knob, 1));
   });
 });
 

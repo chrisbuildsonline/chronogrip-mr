@@ -90,8 +90,8 @@ test('dev server: pinching a loose gear carries it to its axle and solves level 
   }, [gearId, axle] as const, { timeout: 10_000 });
   await page.screenshot({ path: 'test-results/f7-dev-snapped.png' });
 
-  // Solved is complete: the board is locked, a pinch on the placed gear does not lift it.
-  expect(await page.evaluate(() => window.__chrono!.flow)).toBe('complete');
+  // Solved goes on to calibrating the escapement: the board is locked, a pinch on the placed gear does not lift it.
+  expect(await page.evaluate(() => window.__chrono!.flow)).toBe('calibrate');
   await pinchAt(page, axle);
   expect(await page.evaluate(() => window.__chrono!.held)).toBeNull();
   expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({ [gearId]: axleId });

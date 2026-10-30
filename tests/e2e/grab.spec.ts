@@ -27,6 +27,7 @@ async function drag(page: Page, from: readonly [number, number], to: readonly [n
 }
 
 test('desktop: dragging the loose gear onto its axle snaps it and solves the level', async ({ page }) => {
+  test.setTimeout(90_000); // software GL under parallel workers
   const errors = await open(page);
   const from = await screen(page, 'gears', gearId);
   const to = await screen(page, 'axles', axleId);
@@ -48,8 +49,8 @@ test('desktop: dragging the loose gear onto its axle snaps it and solves the lev
   );
   await page.screenshot({ path: 'test-results/f7-snapped.png' });
 
-  // Solved is complete: the board is locked, so the gear does not lift off again.
-  expect(await page.evaluate(() => window.__chrono!.flow)).toBe('complete');
+  // Solved goes on to calibrating the escapement: the board is locked, so the gear does not lift off again.
+  expect(await page.evaluate(() => window.__chrono!.flow)).toBe('calibrate');
   await drag(page, to, [to[0], to[1] + 140]);
   expect(await page.evaluate(() => window.__chrono!.held)).toBeNull();
   await page.mouse.up();

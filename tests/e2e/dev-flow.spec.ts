@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { LEVELS } from '../../src/levels';
 import type { Vec3 } from '../../src/seat';
+import { twistRight, twistToTarget } from './calibrate';
 
 type Hand = { updatePinchValue(v: number): void; position: { x: number; y: number; z: number; set(x: number, y: number, z: number): void } };
 type Device = { primaryInputMode: string; hands: { left?: Hand; right?: Hand }; updateVisibilityState(s: string): void; activeSession?: { end(): Promise<void> } };
@@ -107,11 +108,29 @@ test('dev server: poke Start, the ghost hand shows until the first grab, solve l
   expect(await page.evaluate(() => window.__chrono!.ghostHand)).toBe(false);
   await movePinchTo(page, await axleAt(page, axle));
   await pinch(page, 'right', 0);
-  await page.waitForFunction(() => window.__chrono!.flow === 'complete', undefined, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__chrono!.flow === 'calibrate', undefined, { timeout: 10_000 });
   // First gear placed within 30 s, by the level clock (wall-clock under parallel software GL is no measure of play).
   expect(await page.evaluate(() => window.__chrono!.levelTime)).toBeLessThan(30);
   expect(Date.now() - t0).toBeLessThan(60_000);
   expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({ [gear]: axle });
+
+  // Calibrate: the twist cue shows over the knob; pinch the knob, roll the wrist into the band and hold.
+  expect(await page.evaluate(() => window.__chrono!.ghostTwist)).toBe(true);
+  expect(await page.evaluate(() => window.__chrono!.inBand)).toBe(false);
+  await nudge(page, CLEAR);
+  await pinchAt(page, await page.evaluate(() => window.__chrono!.regulatorAt));
+  await page.waitForFunction(() => window.__chrono!.turning === 'right', undefined, { timeout: 10_000 });
+  expect(await page.evaluate(() => window.__chrono!.ghostTwist)).toBe(false);
+  await page.screenshot({ path: 'test-results/f10-dev-calibrate.png' });
+  const before = await page.evaluate(() => window.__chrono!.regulator);
+  await twistRight(page, await twistToTarget(page));
+  await page.waitForFunction(() => window.__chrono!.inBand, undefined, { timeout: 10_000 });
+  expect(await page.evaluate(() => window.__chrono!.regulator)).toBeGreaterThan(before);
+  await page.waitForFunction(() => window.__chrono!.flow === 'complete', undefined, { timeout: 10_000 });
+  expect(await page.evaluate(() => window.__chrono!.automatonRunning)).toBe(true);
+  await pinch(page, 'right', 0);
+  await page.waitForFunction(() => window.__chrono!.turning === null, undefined, { timeout: 10_000 });
+  await page.screenshot({ path: 'test-results/f10-dev-calibrated.png' });
   await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'), undefined, { timeout: 10_000 });
   await page.screenshot({ path: 'test-results/f9-dev-complete.png' });
 
