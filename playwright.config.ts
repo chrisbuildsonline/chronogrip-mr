@@ -7,6 +7,8 @@ const launchOptions = {
 export default defineConfig({
   testDir: 'tests/e2e',
   outputDir: 'test-results/artifacts',
+  // ponytail: software GL is CPU-bound; 10 workers starve each other into timeouts (fails before and after sound). Raise if CI has a GPU.
+  workers: 4,
   reporter: 'list',
   projects: [
     // Production build, no emulator.
