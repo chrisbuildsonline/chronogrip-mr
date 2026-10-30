@@ -5,11 +5,9 @@ import {
   DoubleSide,
   Group,
   HemisphereLight,
-  CanvasTexture,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
-  PlaneGeometry,
   PMREMGenerator,
   RingGeometry,
   type Scene,
@@ -19,7 +17,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { gearGeometry } from './gear';
 import type { Level } from './levels';
 import type { Placement } from './anchor';
-import { PIN_RADIUS, TRAY_HALF, TRAY_POSE, layerLift, partsStrip, trayLocal } from './seat';
+import { PIN_RADIUS, TRAY_HALF, TRAY_POSE, layerLift, ledgeFar, partsStrip, trayLocal } from './seat';
 
 const brass = () => new MeshStandardMaterial({ color: 0xb08d57, metalness: 1, roughness: 0.35 });
 const steel = () => new MeshStandardMaterial({ color: 0x9aa3ab, metalness: 1, roughness: 0.4 });
@@ -30,7 +28,6 @@ const PIN_HEIGHT = 0.04;
 
 /** Where the near edge of the tilted tray hangs below its centre: the riser stops this far under the centre. */
 const NEAR_EDGE_DROP = 0.13;
-const HINT_TEXT = 'Put the controllers down and use your hands';
 
 export type BuiltScene = {
   tray: Group;
@@ -46,28 +43,9 @@ export type BuiltScene = {
   axleCount: number;
   /** Moves the tray (and its riser, if the plane is low) to a placement. */
   place(placement: Placement): void;
-  /** Shows or hides the "use your hands" panel on the tray. */
-  showHandHint(visible: boolean): void;
+  /** Swaps the board for a fresh one of another level; the maps above are refilled in place. */
+  load(level: Level): void;
 };
-
-/** A small canvas-texture panel lying on the tray, hidden until needed. */
-function handHint(): Mesh {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 128;
-  const g = canvas.getContext('2d')!;
-  g.fillStyle = 'rgba(20, 14, 9, 0.85)';
-  g.fillRect(0, 0, canvas.width, canvas.height);
-  g.fillStyle = '#f3dfb8';
-  g.font = '600 44px sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(HINT_TEXT, canvas.width / 2, canvas.height / 2);
-  const mesh = new Mesh(new PlaneGeometry(0.36, 0.045), new MeshBasicMaterial({ map: new CanvasTexture(canvas), transparent: true }));
-  mesh.rotation.x = -Math.PI / 2; // face the tray normal
-  mesh.visible = false;
-  return mesh;
-}
 
 /** Builds the tray, pins and gears of a level, posed per TRAY_POSE, and warm lights. */
 export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer): BuiltScene {
@@ -80,52 +58,56 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
   const pins = new Map<string, Mesh>();
   const rings = new Map<string, Mesh>();
   const gears = new Map<string, Mesh>();
+  const loose = new Map<string, Mesh>();
+  let parts: Mesh[] = [];
 
   const place = (mesh: Mesh, x: number, y: number, lift: number) => {
     mesh.position.set(...trayLocal(x, y, lift));
     tray.add(mesh);
+    parts.push(mesh);
   };
 
-  const strip = partsStrip(level);
-  const ledgeFar = Math.max(TRAY_HALF.y, ...strip.map((s) => s.y + s.radius)) + 0.02;
-  const ledgeWidth = Math.max(2 * TRAY_HALF.x, ...strip.map((s) => 2 * Math.abs(s.x) + 2 * s.radius)) + 0.04;
-  const board = new Mesh(new BoxGeometry(2 * TRAY_HALF.x + 0.02, BOARD_THICKNESS, 2 * TRAY_HALF.y + 0.02), wood());
-  place(board, 0, 0, -BOARD_THICKNESS / 2);
-  const ledgeDepth = ledgeFar - TRAY_HALF.y;
-  const ledge = new Mesh(new BoxGeometry(ledgeWidth, BOARD_THICKNESS, ledgeDepth), wood());
-  place(ledge, 0, TRAY_HALF.y + ledgeDepth / 2, -BOARD_THICKNESS / 2);
+  const fill = (level: Level) => {
+    const strip = partsStrip(level);
+    const far = ledgeFar(level);
+    const ledgeWidth = Math.max(2 * TRAY_HALF.x, ...strip.map((s) => 2 * Math.abs(s.x) + 2 * s.radius)) + 0.04;
+    const board = new Mesh(new BoxGeometry(2 * TRAY_HALF.x + 0.02, BOARD_THICKNESS, 2 * TRAY_HALF.y + 0.02), wood());
+    place(board, 0, 0, -BOARD_THICKNESS / 2);
+    const ledgeDepth = far - TRAY_HALF.y;
+    const ledge = new Mesh(new BoxGeometry(ledgeWidth, BOARD_THICKNESS, ledgeDepth), wood());
+    place(ledge, 0, TRAY_HALF.y + ledgeDepth / 2, -BOARD_THICKNESS / 2);
 
-  for (const a of level.axles) {
-    const pin = new Mesh(new CylinderGeometry(PIN_RADIUS, PIN_RADIUS, PIN_HEIGHT, 24), steel());
-    place(pin, a.x, a.y, PIN_HEIGHT / 2);
-    pins.set(a.id, pin);
-    // A thin flat ring round the pin, shown (pulsing) while a held gear could land here.
-    const ring = new Mesh(new RingGeometry(PIN_RADIUS * 2, PIN_RADIUS * 2.6, 32), new MeshBasicMaterial({ color: 0xffd27a, transparent: true, depthWrite: false, side: DoubleSide }));
-    ring.rotation.x = -Math.PI / 2;
-    ring.visible = false;
-    place(ring, a.x, a.y, 0.002);
-    rings.set(a.id, ring);
-  }
+    for (const a of level.axles) {
+      const pin = new Mesh(new CylinderGeometry(PIN_RADIUS, PIN_RADIUS, PIN_HEIGHT, 24), steel());
+      place(pin, a.x, a.y, PIN_HEIGHT / 2);
+      pins.set(a.id, pin);
+      // A thin flat ring round the pin, shown (pulsing) while a held gear could land here.
+      const ring = new Mesh(new RingGeometry(PIN_RADIUS * 2, PIN_RADIUS * 2.6, 32), new MeshBasicMaterial({ color: 0xffd27a, transparent: true, depthWrite: false, side: DoubleSide }));
+      ring.rotation.x = -Math.PI / 2;
+      ring.visible = false;
+      place(ring, a.x, a.y, 0.002);
+      rings.set(a.id, ring);
+    }
 
-  const gear = (id: string, teeth: number, x: number, y: number, layer: number) => {
-    const mesh = new Mesh(gearGeometry({ module: level.module, teeth }), brass());
-    mesh.rotation.x = -Math.PI / 2; // gear axis Z -> tray normal
-    place(mesh, x, y, layerLift(layer));
-    gears.set(id, mesh);
-    return mesh;
+    const gear = (id: string, teeth: number, x: number, y: number, layer: number) => {
+      const mesh = new Mesh(gearGeometry({ module: level.module, teeth }), brass());
+      mesh.rotation.x = -Math.PI / 2; // gear axis Z -> tray normal
+      place(mesh, x, y, layerLift(layer));
+      gears.set(id, mesh);
+      return mesh;
+    };
+    const axleAt = new Map(level.axles.map((a) => [a.id, a]));
+    for (const f of level.fixed) {
+      const a = axleAt.get(f.axle)!;
+      gear(f.id, f.teeth, a.x, a.y, f.layer);
+    }
+    for (const s of strip) {
+      const t = level.tray.find((g) => g.id === s.id)!;
+      loose.set(s.id, gear(t.id, t.teeth, s.x, s.y, 0));
+    }
+    built.gearCount = level.fixed.length + level.tray.length;
+    built.axleCount = level.axles.length;
   };
-  const axleAt = new Map(level.axles.map((a) => [a.id, a]));
-  for (const f of level.fixed) {
-    const a = axleAt.get(f.axle)!;
-    gear(f.id, f.teeth, a.x, a.y, f.layer);
-  }
-  const loose = new Map<string, Mesh>();
-  for (const s of strip) {
-    const t = level.tray.find((g) => g.id === s.id)!;
-    loose.set(s.id, gear(t.id, t.teeth, s.x, s.y, 0));
-  }
-  const hint = handHint();
-  place(hint, 0, 0.0, 0.1);
   scene.add(tray);
 
   // A plain block from the plane up to the near edge of the tray, only drawn when the plane is low.
@@ -150,15 +132,26 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
   key.position.set(-0.6, 0.7, -0.1); // off the mirror angle of the preview camera, so no gear glares
   scene.add(key, new HemisphereLight(0xfff1dd, 0x3a2a1e, 0.35));
 
-  return {
+  const built: BuiltScene = {
     tray,
     loose,
     gears,
     pins,
     rings,
-    gearCount: level.fixed.length + level.tray.length,
-    axleCount: level.axles.length,
+    gearCount: 0,
+    axleCount: 0,
     place: placeTray,
-    showHandHint: (visible) => (hint.visible = visible),
+    load(next) {
+      for (const m of parts) {
+        tray.remove(m);
+        m.geometry.dispose();
+        (m.material as MeshStandardMaterial).dispose();
+      }
+      parts = [];
+      for (const map of [pins, rings, gears, loose]) map.clear();
+      fill(next);
+    },
   };
+  fill(level);
+  return built;
 }

@@ -84,14 +84,17 @@ test('dev server: pinching a loose gear carries it to its axle and solves level 
   expect(await page.evaluate(() => window.__chrono!.held)).toBeNull();
   expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({ [gearId]: axleId });
   expect(await page.evaluate(() => window.__chrono!.solved)).toBe(true);
-  expect(near(await gearAt(page), axle, 0.001)).toBe(true);
+  await page.waitForFunction(([g, a]) => {
+    const p = window.__chrono!.gears[g!]!;
+    return Math.hypot(p[0] - a![0]!, p[1] - a![1]!, p[2] - a![2]!) < 0.001;
+  }, [gearId, axle] as const, { timeout: 10_000 });
   await page.screenshot({ path: 'test-results/f7-dev-snapped.png' });
 
-  // Pick it up again: the axle is freed and the level is unsolved.
+  // Solved is complete: the board is locked, a pinch on the placed gear does not lift it.
+  expect(await page.evaluate(() => window.__chrono!.flow)).toBe('complete');
   await pinchAt(page, axle);
-  expect(await page.evaluate(() => window.__chrono!.held)).toBe(gearId);
-  expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({});
-  expect(await page.evaluate(() => window.__chrono!.solved)).toBe(false);
+  expect(await page.evaluate(() => window.__chrono!.held)).toBeNull();
+  expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({ [gearId]: axleId });
   expect(errors).toEqual([]);
 });
 
@@ -112,7 +115,10 @@ test('dev server: releasing far from any axle floats the gear back to the strip'
   expect(await page.evaluate(() => window.__chrono!.held)).toBeNull();
   expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({});
   expect(await page.evaluate(() => window.__chrono!.solved)).toBe(false);
-  expect(near(await gearAt(page), start, 0.001)).toBe(true);
+  await page.waitForFunction(([g, s]) => {
+    const p = window.__chrono!.gears[g!]!;
+    return Math.hypot(p[0] - s![0]!, p[1] - s![1]!, p[2] - s![2]!) < 0.001;
+  }, [gearId, start] as const, { timeout: 10_000 });
   await page.screenshot({ path: 'test-results/f7-dev-back.png' });
   expect(errors).toEqual([]);
 });

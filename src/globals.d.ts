@@ -32,6 +32,18 @@ interface ChronoHook {
   readonly validAxles: readonly string[];
   /** Live: world pinch point of each hand while it pinches, else null. */
   readonly pinchPoints: { readonly left: readonly [number, number, number] | null; readonly right: readonly [number, number, number] | null };
+  /** Live: level flow state. */
+  readonly flow: 'title' | 'select' | 'playing' | 'complete' | 'paused';
+  /** Live: index of the loaded level in LEVELS. */
+  readonly levelIndex: number;
+  /** Live: seconds played on this level; runs only while playing. */
+  readonly levelTime: number;
+  /** Live: true while the pause card is up. */
+  readonly paused: boolean;
+  /** Live: true while the level 1 ghost hand demonstrates the first move. */
+  readonly ghostHand: boolean;
+  /** Buttons on the panel now shown, with world centre and page pixel position. */
+  buttons(): { id: string; label: string; world: readonly [number, number, number]; screen: [number, number] }[];
   /** Page pixel coordinates of a world point, for driving the mouse in tests. */
   toScreen(p: readonly [number, number, number]): [number, number];
 }

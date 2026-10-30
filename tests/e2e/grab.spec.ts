@@ -37,15 +37,23 @@ test('desktop: dragging the loose gear onto its axle snaps it and solves the lev
   expect(await page.evaluate(() => window.__chrono!.held)).toBeNull();
   expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({ [gearId]: axleId });
   expect(await page.evaluate(() => window.__chrono!.solved)).toBe(true);
+  // The gear glides onto the axle rather than jumping.
+  await page.waitForFunction(
+    ([g, a]) => {
+      const p = window.__chrono!.gears[g!]!;
+      const q = window.__chrono!.axles[a!]!;
+      return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < 0.001;
+    },
+    [gearId, axleId],
+  );
   await page.screenshot({ path: 'test-results/f7-snapped.png' });
 
-  // Lift it off again: the axle is freed at once; dropped in empty space it floats back to the strip.
+  // Solved is complete: the board is locked, so the gear does not lift off again.
+  expect(await page.evaluate(() => window.__chrono!.flow)).toBe('complete');
   await drag(page, to, [to[0], to[1] + 140]);
-  expect(await page.evaluate(() => window.__chrono!.held)).toBe(gearId);
-  expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({});
+  expect(await page.evaluate(() => window.__chrono!.held)).toBeNull();
   await page.mouse.up();
-  expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({});
-  expect(await page.evaluate(() => window.__chrono!.solved)).toBe(false);
+  expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({ [gearId]: axleId });
   expect(errors).toEqual([]);
 });
 
@@ -57,7 +65,7 @@ test('desktop: dropping a gear in empty space sends it back to the strip; draggi
   expect(await page.evaluate(() => window.__chrono!.held)).toBe(gearId);
   await page.mouse.up();
   expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({});
-  expect(await page.evaluate((id) => window.__chrono!.gears[id]!, gearId)).toEqual(home);
+  await page.waitForFunction(([id, h]) => JSON.stringify(window.__chrono!.gears[id as string]) === JSON.stringify(h), [gearId, home] as const);
 
   // Empty canvas corner: no gear held, the camera moves.
   const cam = () => page.evaluate(() => window.__chrono!.toScreen(window.__chrono!.axles['a0']!));

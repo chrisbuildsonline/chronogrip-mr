@@ -60,17 +60,20 @@ export function worldToTray(p: Vec3, pose: TrayPose = TRAY_POSE): Vec3 {
   return [lx, -(-ty * s + tz * c), ty * c + tz * s];
 }
 
-export function inComfortZone(p: Vec3): boolean {
+export const inComfortZone = (p: Vec3): boolean => inZone(p, COMFORT);
+
+/** Inside a cone around the head: distance, yaw and pitch limits in metres and degrees. */
+export function inZone(p: Vec3, zone: { maxDistance: number; maxYaw: number; minPitch: number; maxPitch: number }): boolean {
   const [x, y, z] = p;
   if (z >= 0) return false;
   const deg = 180 / Math.PI;
   const yaw = Math.abs(Math.atan2(x, -z)) * deg;
   const pitch = Math.atan2(y, Math.hypot(x, z)) * deg;
   return (
-    Math.hypot(x, y, z) <= COMFORT.maxDistance &&
-    yaw <= COMFORT.maxYaw &&
-    pitch >= COMFORT.minPitch &&
-    pitch <= COMFORT.maxPitch
+    Math.hypot(x, y, z) <= zone.maxDistance &&
+    yaw <= zone.maxYaw &&
+    pitch >= zone.minPitch &&
+    pitch <= zone.maxPitch
   );
 }
 
@@ -102,6 +105,11 @@ export function partsStrip(level: Level): Circle[] {
     x += 2 * radius + STRIP_GAP;
     return c;
   });
+}
+
+/** Level y of the far edge of the ledge that holds the parts strip. */
+export function ledgeFar(level: Level): number {
+  return Math.max(TRAY_HALF.y, ...partsStrip(level).map((s) => s.y + s.radius)) + 0.02;
 }
 
 /** Every point the player can grab or aim at, in world space. */
