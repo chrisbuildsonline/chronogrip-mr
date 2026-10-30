@@ -17,6 +17,7 @@ import { createGhostHand, ghostAt, ghostTwistAt } from './ghost';
 import { easeOut, tweenAt } from './tween';
 import type { GearSpin } from './train';
 import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
+import { createSound, ticksBetween } from './sound';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, createAutomaton, createEscapement } from './clockwork';
 
 const container = document.getElementById('app');
@@ -95,6 +96,9 @@ const worldOf = (v: Vector3): Vec3 => {
   const w = built.tray.localToWorld(v.clone());
   return [w.x, w.y, w.z];
 };
+
+// Sound: procedural WebAudio, created and unlocked on the first press (mouse or pinch); silent before that.
+const sound = createSound();
 
 const panels = createPanels();
 world.scene.add(panels.root);
@@ -192,7 +196,8 @@ function send(e: FlowEvent): void {
   if (next.name === 'paused') {
     putBack();
     letGoKnob();
-  }
+    sound.suspend();
+  } else if (flow.name === 'paused') sound.resume();
   if (reloads(flow, e, next)) loadLevel(next.level);
   const entering = next.name !== flow.name && flow.name !== 'paused';
   flow = next;
@@ -204,6 +209,7 @@ function send(e: FlowEvent): void {
     if (at) burst.position.set(...trayLocal(at.x, at.y, layerLift(tgt.layer) + 0.004));
   }
   if (next.name === 'complete') {
+    sound.chime();
     rewardAt = calibratedAt = performance.now();
     letGoKnob();
     const prev = best[levelIndex];
@@ -271,12 +277,18 @@ function release(): void {
   const to = axle ? trayLocal(axleOf.get(axle)!.x, axleOf.get(axle)!.y, layerLift(layer)) : trayLocal(slots.get(id)!.x, slots.get(id)!.y, layerLift(0));
   if (axle) placements[id] = axle;
   tweens.set(id, { from: [m.position.x, m.position.y, m.position.z], to, start: performance.now() });
-  solved = checkLevel(level, placements).solved;
+  const check = checkLevel(level, placements);
+  solved = check.solved;
+  if (axle) {
+    sound.click();
+    if (Object.values(check.spins).includes('jammed')) sound.grind();
+  }
   if (solved) send({ type: 'solve' });
 }
 
 // Desktop: click panel buttons, drag a loose gear across the tray plane; dragging empty space still orbits.
 const canvas = world.renderer.domElement;
+canvas.addEventListener('pointerdown', () => sound.unlock(), { capture: true });
 const rayAt = (e: PointerEvent): [Vec3, Vec3] => {
   const rect = canvas.getBoundingClientRect();
   const ray = new Raycaster();
@@ -408,6 +420,7 @@ trackMr(world.renderer, {
   onPinch(hand, point, wrist) {
     wrists[hand] = wrist;
     const starts = point !== null && !pinching[hand] && holder === null;
+    if (starts) sound.unlock();
     const onButton = starts && buttonAt(worldToPanel(anchor, point), shownButtons(), 0.03);
     if (onButton) press(onButton);
     else if (starts && grabKnob(point, hand)) lastWrist = wrist;
@@ -455,6 +468,7 @@ const stepped = (phase: number, rate: number) => {
   const whole = Math.floor(phase);
   return whole + easeOut((phase - whole) / Math.min(1, 0.09 * rate));
 };
+let soundPhase = 0;
 let lastFrame = performance.now();
 world.scene.onBeforeRender = () => {
   const now = performance.now();
@@ -484,6 +498,7 @@ world.scene.onBeforeRender = () => {
   // (a step is what it turns in one tick at the target rate); once calibrated it runs smoothly at its true speeds.
   const ticking = flow.name === 'calibrate' || flow.name === 'complete';
   const before = stepped(regulator.phase, regulator.rate);
+  const phaseBefore = regulator.phase;
   if (ticking && regulator.tick(dt) && flow.name === 'calibrate') send({ type: 'calibrated' });
   if (ticking) {
     const ticks = flow.name === 'complete' ? dt * regulator.target : stepped(regulator.phase, regulator.rate) - before;
@@ -492,6 +507,16 @@ world.scene.onBeforeRender = () => {
       if (typeof rpm === 'number') m.rotation.z += ((rpm * Math.PI) / 60 / regulator.target) * ticks;
     }
   }
+  // One tick of sound per step of the escapement, from the dial; once calibrated the target rate keeps it.
+  sound.setSource(worldOf(new Vector3(...trayLocal(KNOB[0], KNOB[1], KNOB_TOP))));
+  sound.setListener(world.camera.getWorldPosition(new Vector3()).toArray(), world.camera.getWorldDirection(new Vector3()).toArray(), new Vector3(0, 1, 0).applyQuaternion(world.camera.getWorldQuaternion(new Quaternion())).toArray());
+  let owed = flow.name === 'calibrate' ? ticksBetween(phaseBefore, regulator.phase) : 0;
+  if (flow.name === 'complete') {
+    soundPhase += dt * regulator.target;
+    owed = Math.floor(soundPhase);
+    soundPhase -= owed;
+  }
+  for (let i = 0; i < Math.min(owed, 2); i++) sound.tick();
   const knobLit = turning !== null || (flow.name === 'calibrate' && (mouseKnob || (['left', 'right'] as const).some((h) => handPoints[h] && nearKnob(handPoints[h]!))));
   escapement.update({ setting: regulator.setting, target: regulator.target, phase: regulator.phase, ticking, hold: regulator.hold, inBand: regulator.inBand, calibrated: regulator.calibrated, lit: knobLit });
   automaton.update(now / 1000, regulator.phase, regulator.calibrated, built.tray.rotation.x);
@@ -542,6 +567,7 @@ const supported = await (navigator.xr?.isSessionSupported('immersive-ar') ?? Pro
 if (supported) {
   enterButton.disabled = false;
   enterNote.hidden = true;
+  enterButton.addEventListener('click', () => sound.unlock());
   enterButton.addEventListener('click', () => void startSession(() => world.launchXR(), enterNote));
 }
 
@@ -639,6 +665,9 @@ window.__chrono = Object.freeze({
   },
   get wrists() {
     return { ...wrists };
+  },
+  get audio() {
+    return { state: sound.state(), ...sound.counts };
   },
   get automatonRunning() {
     return regulator.calibrated;

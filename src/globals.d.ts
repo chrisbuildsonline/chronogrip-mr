@@ -47,6 +47,8 @@ interface ChronoHook {
   readonly turning: 'left' | 'right' | 'mouse' | null;
   /** Live: world orientation [x, y, z, w] of each tracked wrist joint, else null. */
   readonly wrists: { readonly left: readonly [number, number, number, number] | null; readonly right: readonly [number, number, number, number] | null };
+  /** Live: audio context state and how many of each sound have played. */
+  readonly audio: { readonly state: 'none' | 'suspended' | 'running' | 'closed'; readonly ticks: number; readonly clicks: number; readonly grinds: number; readonly chimes: number };
   /** Live: true once the escapement is calibrated and the automaton runs. */
   readonly automatonRunning: boolean;
   /** Live: world position of the top of the regulator knob, where a pinch grabs it. */
