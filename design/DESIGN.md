@@ -45,11 +45,14 @@ No hairline borders. Depth comes from the shadow and the cream-on-walnut contras
 ## Screens
 | Screen | Size (m) | Layout |
 |---|---|---|
-| Title | 0.34 x 0.15 | eyebrow "A clockwork puzzle"; Display "ChronoGrip"; row: Start (primary 13 cm), Levels |
-| Level select | 0.36 x 0.15 | Heading "Levels"; five 58 x 70 mm tiles: big level number, amber best-time pill when solved |
-| HUD (playing, calibrate) | 0.20 x 0.062 | eyebrow "Level" over Number XL level; Number XL time; round pause button right |
-| Level complete | 0.35 x 0.17 | amber "Solved" pill; Heading "Level N complete"; Number XL time right; row: Next (primary), Restart, Levels |
+| Title | 0.34 x 0.15 | eyebrow "A clockwork puzzle"; Display "ChronoGrip"; row: Start (primary 13 cm; "Continue" once anything is solved), Levels |
+| Level select | 0.488 x 0.15 | Heading "Levels" with muted "N of 6 solved"; one row: Back pill, then six 50 x 70 mm tiles (1-5, then "Daily" with an amber top edge). A solved tile shows its best m:ss in muted text and a small amber check |
+| HUD (playing, calibrate) | 0.20 x 0.062 | eyebrow "Level" over Number XL level (or "Daily"); Number XL time; round pause button right |
+| Level complete | 0.35 x 0.17 | amber "Solved" pill; Heading "Level N complete"; Number XL time right, an amber "New best" pill under it when a saved time was beaten, else muted "Best m:ss"; row: Next (primary), Restart, Levels. On the daily: Levels (primary), Restart |
 | Pause | 0.35 x 0.15 | Heading "Paused"; muted "Level N - m:ss"; row: Resume (primary), Restart, Levels |
+
+Progress (best times) is saved in localStorage; the title board is the first unsolved level, so Continue picks up there.
+The daily is a seeded "tinker" puzzle generated from the local date and played as a sixth level.
 
 The title screen leaves the board live: touching a gear starts the level. Level 1 has no text at all: a translucent
 cream ghost hand loops pinch, carry, drop from the first loose gear to its axle until the player first grabs a gear.
