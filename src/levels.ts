@@ -179,8 +179,10 @@ function int(v: unknown, path: string, min: number, max: number): number {
 function str(v: unknown, path: string, max: number): string {
   return typeof v === 'string' && v.length >= 1 && v.length <= max ? v : fail(path, `must be a string of 1 to ${max} characters`);
 }
+/** A sane id: starts with a letter, no prototype names. */
+export const isIdent = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(v) && !(v in Object.prototype);
 function ident(v: unknown, path: string): string {
-  return typeof v === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(v) && !(v in Object.prototype)
+  return isIdent(v)
     ? v
     : fail(path, 'must start with a letter and use only letters, digits, _ or -');
 }
