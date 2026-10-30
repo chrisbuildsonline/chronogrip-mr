@@ -1,0 +1,63 @@
+# ChronoGrip UI design
+
+The board is the game; UI is a quiet cream card that floats above it. Warm walnut and brass world, one card at a time.
+
+## Colour
+| Role | Hex | Use |
+|---|---|---|
+| Walnut | `#4a3322` | tray, ledge (world) |
+| Brass | `#b08d57` | gears (world) |
+| Cream | `#f6efe2` | every panel surface |
+| Cream deep | `#ebe0cc` | secondary buttons, level tiles |
+| Ink | `#1c1712` | titles, numbers, the primary pill |
+| Muted | `#7d6f5f` | secondary text, eyebrows |
+| Amber | `#d99a2b` | the one accent: selection, progress, hover ring, reward glow |
+| Amber tint | `#f3dcae` on `#7a4e0e` | status pills ("Solved", best times) |
+| Shadow | `rgba(20,12,4,0.35)` | soft drop shadow, 30 px blur, 10 px down |
+
+No hairline borders. Depth comes from the shadow and the cream-on-walnut contrast.
+
+## Type (panel millimetres; canvas at 3 px per mm)
+| Style | Size | Face |
+|---|---|---|
+| Display (game title) | 26 mm | Georgia, serif, 600 |
+| Number XL (level number, time) | 24 mm | system sans, 700 |
+| Heading | 16 mm | Georgia, serif, 600 |
+| Button | 12 mm | system sans, 600 |
+| Body / secondary | 9.5 mm | system sans, 500, muted |
+| Eyebrow / pill | 8 mm | system sans, 700, caps, +1 px tracking |
+
+## Shape
+- Panel corner radius 18 mm, padding 16 mm. Buttons are pills (radius = half height), 46 mm tall.
+- Every touch target is at least 40 mm on its short side (poke or pinch). Gap between targets 12 mm.
+- One near-black primary pill per screen; everything else is a cream-deep secondary.
+- Hover (gaze, hand near, mouse): amber 3 mm ring on the target.
+
+## Placement (XR)
+- Panels share one anchor: bottom-centre 46 cm from the head, 1.5 degrees above the board's highest line of sight
+  (far ledge or the parts on it), tilted to face the head, carried along with the tray. A panel never hides the board.
+- Board parts use the touch cone (pitch -50..+10 degrees); the board fills it, so menu buttons live in the band just
+  above it: yaw within 35 degrees, distance within 60 cm, pitch up to +18 degrees (`PANEL_ZONE`).
+- Press: index tip arriving at the button face from the front (within 15 mm), or a pinch that starts on it.
+  A hand carrying a gear presses nothing.
+- The "use your hands" hint is a cream pill floating just above the current panel, never on the board.
+
+## Screens
+| Screen | Size (m) | Layout |
+|---|---|---|
+| Title | 0.34 x 0.15 | eyebrow "A clockwork puzzle"; Display "ChronoGrip"; row: Start (primary 13 cm), Levels |
+| Level select | 0.36 x 0.15 | Heading "Levels"; five 58 x 70 mm tiles: big level number, amber best-time pill when solved |
+| HUD (playing) | 0.20 x 0.062 | eyebrow "Level" over Number XL level; Number XL time; round pause button right |
+| Level complete | 0.35 x 0.17 | amber "Solved" pill; Heading "Level N complete"; Number XL time right; row: Next (primary), Restart, Levels |
+| Pause | 0.35 x 0.15 | Heading "Paused"; muted "Level N - m:ss"; row: Resume (primary), Restart, Levels |
+
+The title screen leaves the board live: touching a gear starts the level. Level 1 has no text at all: a translucent
+cream ghost hand loops pinch, carry, drop from the first loose gear to its axle until the player first grabs a gear.
+
+## Reward
+On solve the train spins at its true speeds, every gear flashes amber and fades over 1.2 s, and an amber ring
+bursts from the target gear; then the complete card shows.
+
+## Desktop
+The same in-world panels, clicked with the mouse (ray cast). The HTML chrome is only the small serif wordmark and the
+Enter MR pill, in the same palette.
