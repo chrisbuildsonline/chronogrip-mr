@@ -47,16 +47,31 @@ No hairline borders. Depth comes from the shadow and the cream-on-walnut contras
 |---|---|---|
 | Title | 0.34 x 0.15 | eyebrow "A clockwork puzzle"; Display "ChronoGrip"; row: Start (primary 13 cm), Levels |
 | Level select | 0.36 x 0.15 | Heading "Levels"; five 58 x 70 mm tiles: big level number, amber best-time pill when solved |
-| HUD (playing) | 0.20 x 0.062 | eyebrow "Level" over Number XL level; Number XL time; round pause button right |
+| HUD (playing, calibrate) | 0.20 x 0.062 | eyebrow "Level" over Number XL level; Number XL time; round pause button right |
 | Level complete | 0.35 x 0.17 | amber "Solved" pill; Heading "Level N complete"; Number XL time right; row: Next (primary), Restart, Levels |
 | Pause | 0.35 x 0.15 | Heading "Paused"; muted "Level N - m:ss"; row: Resume (primary), Restart, Levels |
 
 The title screen leaves the board live: touching a gear starts the level. Level 1 has no text at all: a translucent
 cream ghost hand loops pinch, carry, drop from the first loose gear to its axle until the player first grabs a gear.
 
+## Escapement and automaton (on the board)
+- Near-right corner of the tray, on a bronze plate: the regulator dial (72 mm cream face, brass bezel) and a small brass
+  balance wheel beside it. The dial face has a muted scale over a 160 degree sweep, a minus at the slow end and a plus at
+  the fast end, and the target arc in amber tint. No words.
+- The knurled brass knob in the dial's centre carries a dark bronze needle; it turns one to one with the wrist roll
+  (160 degrees end to end). The whole dial is the pinch target (40 mm grab radius); hover and grab tint the knob amber.
+- Calibrate screen: the HUD stays up (clock stopped at solve). The balance wheel swings once per tick, the escapement
+  gear glints amber on each tick and the train steps forward with it. With the needle in the band the arc turns a
+  deeper amber and fills with full amber over the 0.8 s hold.
+- Desktop: press the knob and drag sideways (right = faster); the cursor shows a horizontal resize arrow over it.
+- Level 1: the ghost hand comes down onto the knob, pinches and rolls its wrist the way to turn, until the first grab.
+- Automaton: a brass bird on a perch in the far-right corner, standing upright whatever the tray's tilt. Idle it looks
+  about; once calibrated it flaps and bobs on every tick.
+
 ## Reward
-On solve the train spins at its true speeds, every gear flashes amber and fades over 1.2 s, and an amber ring
-bursts from the target gear; then the complete card shows.
+On solve every gear flashes amber and fades over 1.2 s and an amber ring bursts from the target gear; the escapement
+starts ticking. On calibrated the gears flash again, a ring bursts round the dial, the train runs smoothly at its true
+speeds and the bird flaps in time; the complete card shows 2 s later.
 
 ## Desktop
 The same in-world panels, clicked with the mouse (ray cast). The HTML chrome is only the small serif wordmark and the
