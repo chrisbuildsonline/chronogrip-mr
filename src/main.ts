@@ -19,6 +19,8 @@ import type { GearSpin } from './train';
 import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
 import { createSound, ticksBetween } from './sound';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, createAutomaton, createEscapement } from './clockwork';
+import { firstUnsolved, loadProgress, recordSolve, saveProgress, type Progress } from './progress';
+import { dailySeed, tinkerLevel } from './tinker';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('#app container missing');
@@ -33,8 +35,26 @@ if (!enterButton || !enterNote) throw new Error('Enter MR controls missing');
 
 const world = await World.create(container, createWorldOptions());
 
-let levelIndex = 0;
-let level: Level = LEVELS[0]!;
+// The five levels, then today's daily tinker puzzle as a sixth.
+const levels: readonly Level[] = [...LEVELS, tinkerLevel(dailySeed(new Date()))];
+const levelIds = levels.map((l) => l.id);
+// Saved best times. Reading localStorage itself can throw (storage blocked), so fall back to none.
+const storage = (() => {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+})();
+let progress: Progress = loadProgress(storage);
+/** True on the complete card when this solve beat a saved time. */
+let newBest = false;
+/** The title board is the level Continue plays: the first one not yet solved. */
+const continueAt = () => firstUnsolved(progress, levelIds);
+const resume = () => levelIds.some((id) => Object.hasOwn(progress.best, id));
+
+let levelIndex = continueAt();
+let level: Level = levels[levelIndex]!;
 const built = buildScene(level, world.scene, world.renderer);
 
 // Desktop preview: from a little above and behind the seated head, framing the board and the panel above it.
@@ -63,11 +83,10 @@ const handPoints: { left: Vec3 | null; right: Vec3 | null } = { left: null, righ
 const wrists: { left: Quat | null; right: Quat | null } = { left: null, right: null };
 const tweens = new Map<string, { from: Vec3; to: Vec3; start: number }>();
 
-// Level flow: title, playing, calibrate, complete, paused, level select; plus the level clock and best times.
+// Level flow: title, playing, calibrate, complete, paused, level select; plus the level clock.
 // The clock runs only while playing: it stops when the train is solved, so calibrating is not timed.
-let flow: Flow = TITLE;
+let flow: Flow = { ...TITLE, level: levelIndex };
 const levelClock = createClock();
-const best: (number | null)[] = LEVELS.map(() => null);
 let spins: Record<string, GearSpin> = {};
 /** When the last reward (solve, then calibrated) fired: gears flash and a ring bursts. */
 let rewardAt = -Infinity;
@@ -152,7 +171,8 @@ collectTargets();
 /** A fresh board for a level: every gear back on the strip, the clock at zero. */
 function loadLevel(i: number): void {
   levelIndex = i;
-  level = LEVELS[i]!;
+  level = levels[i]!;
+  newBest = false;
   built.load(level);
   axleOf = new Map(level.axles.map((a) => [a.id, a]));
   layerOf = new Map(level.tray.map((g) => [g.id, g.layer]));
@@ -191,7 +211,7 @@ function putBack(): void {
 }
 
 function send(e: FlowEvent): void {
-  const next = step(flow, e);
+  const next = step(flow, e, levels.length);
   if (next === flow) return;
   if (next.name === 'paused') {
     putBack();
@@ -212,10 +232,15 @@ function send(e: FlowEvent): void {
     sound.chime();
     rewardAt = calibratedAt = performance.now();
     letGoKnob();
-    const prev = best[levelIndex];
-    best[levelIndex] = prev == null ? levelClock.seconds : Math.min(prev, levelClock.seconds);
+    // A first solve is just solved; New best is for beating a time already saved.
+    const had = Object.hasOwn(progress.best, level.id);
+    const r = recordSolve(progress, level.id, levelClock.seconds);
+    progress = r.progress;
+    newBest = had && r.newBest;
+    if (r.newBest) saveProgress(storage, progress);
     burst.position.set(...trayLocal(DIAL_AT[0], DIAL_AT[1], 0.008));
   }
+  showPanel();
 }
 
 const PRESS: Record<string, FlowEvent> = {
@@ -226,15 +251,20 @@ const PRESS: Record<string, FlowEvent> = {
   restart: { type: 'restart' },
   next: { type: 'next' },
 };
-/** One press per touch: a poke and a pinch in the same moment, or a card swapping under the finger, never double-fire. */
+/**
+ * One press per touch: a poke and a pinch in the same moment, or a card swapping under the finger, never double-fire.
+ * A mouse click is one discrete pointerdown, so it skips the gap: quick clicks through the menus all land.
+ */
 const PRESS_GAP_MS = 300;
 let pressedAt = -Infinity;
-function press(id: string): void {
+function press(id: string, by: 'hand' | 'mouse' = 'hand'): void {
   const now = performance.now();
-  if (now - pressedAt < PRESS_GAP_MS) return;
+  if (by === 'hand' && now - pressedAt < PRESS_GAP_MS) return;
   pressedAt = now;
   const n = /^level-(\d+)$/.exec(id);
-  send(n ? { type: 'select', level: Number(n[1]) - 1 } : PRESS[id]!);
+  if (n) send({ type: 'select', level: Number(n[1]) - 1 });
+  else if (id === 'back') send({ type: 'back', level: continueAt() });
+  else send(PRESS[id]!);
 }
 /** Board parts move only on the title (touching a gear starts the level) and while playing. */
 const live = () => flow.name === 'title' || flow.name === 'playing';
@@ -324,7 +354,7 @@ canvas.addEventListener(
       panelDown = true;
       controls.enabled = false;
       const id = buttonAt(hit, shownButtons());
-      if (id) press(id);
+      if (id) press(id, 'mouse');
       return;
     }
     const p = mouseOnTray(e);
@@ -553,15 +583,23 @@ world.scene.onBeforeRender = () => {
     ghost.update(ghostAt(now / 1000, [slot.x, slot.y], [axle.x, axle.y]));
   }
 
+  showPanel(now);
+};
+
+/** Draws the card for the current state; run every frame and after every transition, so the buttons on show never lag the flow. */
+function showPanel(now = performance.now()): void {
   const waiting = flow.name === 'complete' && now - calibratedAt < COMPLETE_DELAY_MS;
   panels.show(waiting ? null : screenOf(flow), {
     level: levelIndex,
-    levels: LEVELS.length,
+    levels: levels.length,
+    daily: true,
+    resume: resume(),
+    newBest,
     time: levelClock.seconds,
-    best,
+    best: levelIds.map((id) => progress.best[id] ?? null),
     hover: mouseButton ?? tipButton.left ?? tipButton.right,
   });
-};
+}
 
 const supported = await (navigator.xr?.isSessionSupported('immersive-ar') ?? Promise.resolve(false)).catch(() => false);
 if (supported) {
@@ -638,6 +676,12 @@ window.__chrono = Object.freeze({
   },
   get levelTime() {
     return levelClock.seconds;
+  },
+  get progress() {
+    return { best: { ...progress.best } };
+  },
+  get newBest() {
+    return newBest;
   },
   get paused() {
     return flow.name === 'paused';

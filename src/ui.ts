@@ -31,24 +31,41 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
   });
 }
 
-export function layout(screen: Screen, ctx: { level: number; levels: number }): Layout {
+/** `daily`: the last level is today's tinker puzzle. `resume`: a level is solved, so the title offers Continue. */
+export type LayoutCtx = { level: number; levels: number; daily?: boolean; resume?: boolean };
+
+const TILE_W = 0.05;
+const TILE_H = 0.07;
+const BACK_W = 0.076;
+/** Back is navigation, not a level: a little more room sets it apart from the tiles. */
+const BACK_GAP = 0.02;
+
+export function layout(screen: Screen, ctx: LayoutCtx): Layout {
   const low = PAD + BH / 2;
   switch (screen) {
     case 'title':
-      return { width: 0.34, height: 0.15, buttons: row(low, [['start', 'Start', 'primary', 0.13], ['levels', 'Levels', 'secondary', 0.1]]) };
+      return { width: 0.34, height: 0.15, buttons: row(low, [['start', ctx.resume ? 'Continue' : 'Start', 'primary', 0.13], ['levels', 'Levels', 'secondary', 0.1]]) };
     case 'select': {
-      const tiles = row(PAD + 0.035, Array.from({ length: ctx.levels }, (_, i) => [`level-${i + 1}`, String(i + 1), 'tile' as const, 0.058]));
-      return { width: 0.36, height: 0.15, buttons: tiles.map((b) => ({ ...b, h: 0.07 })) };
+      // One row, low on the card so every target stays in reach: the Back pill, a wider gap, then one tile per level.
+      const n = ctx.levels;
+      const width = 2 * PAD + BACK_W + BACK_GAP + n * TILE_W + (n - 1) * GAP;
+      const y = PAD + TILE_H / 2;
+      const label = (i: number) => (ctx.daily && i === n - 1 ? 'Daily' : String(i + 1));
+      const left = -width / 2 + PAD;
+      const back: Button = { id: 'back', label: 'Back', kind: 'secondary', x: left + BACK_W / 2, y, w: BACK_W, h: BH };
+      const tiles = Array.from({ length: n }, (_, i): Button => ({
+        id: `level-${i + 1}`, label: label(i), kind: 'tile', x: left + BACK_W + BACK_GAP + i * (TILE_W + GAP) + TILE_W / 2, y, w: TILE_W, h: TILE_H,
+      }));
+      return { width, height: 0.15, buttons: [back, ...tiles] };
     }
     case 'hud':
       return { width: 0.2, height: 0.062, buttons: [{ id: 'pause', label: 'Pause', kind: 'icon', x: 0.1 - 0.008 - BH / 2, y: 0.031, w: BH, h: BH }] };
     case 'complete': {
+      // After the last level the primary already goes to level select, so there is no second Levels button.
       const last = ctx.level + 1 >= ctx.levels;
-      return {
-        width: 0.35,
-        height: 0.17,
-        buttons: row(low, [['next', last ? 'Levels' : 'Next', 'primary', 0.11], ['restart', 'Restart', 'secondary', 0.088], ['levels', 'Levels', 'secondary', 0.088]]),
-      };
+      const items: Parameters<typeof row>[1] = [['next', last ? 'Levels' : 'Next', 'primary', 0.11], ['restart', 'Restart', 'secondary', 0.088]];
+      if (!last) items.push(['levels', 'Levels', 'secondary', 0.088]);
+      return { width: 0.35, height: 0.17, buttons: row(low, items) };
     }
     case 'paused':
       return { width: 0.35, height: 0.15, buttons: row(low, [['resume', 'Resume', 'primary', 0.11], ['restart', 'Restart', 'secondary', 0.088], ['levels', 'Levels', 'secondary', 0.088]]) };

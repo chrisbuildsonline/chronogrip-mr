@@ -57,6 +57,10 @@ interface ChronoHook {
   readonly levelIndex: number;
   /** Live: seconds played on this level; runs only while playing. */
   readonly levelTime: number;
+  /** Live: saved best times in seconds per level id (a copy). */
+  readonly progress: { readonly best: Readonly<Record<string, number>> };
+  /** Live: true on the complete card when this solve beat a saved time; false on a first solve. */
+  readonly newBest: boolean;
   /** Live: true while the pause card is up. */
   readonly paused: boolean;
   /** Live: true while the level 1 ghost hand demonstrates the first move. */

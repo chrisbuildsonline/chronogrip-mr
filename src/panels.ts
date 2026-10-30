@@ -12,7 +12,10 @@ const mm = (v: number) => v * 3;
 const T = { display: 26, xl: 24, heading: 16, button: 12, body: 9.5, eyebrow: 8 };
 const font = (weight: number, sizeMm: number, face = SANS) => `${weight} ${mm(sizeMm)}px ${face}`;
 
-export type PanelCtx = { level: number; levels: number; time: number; best: readonly (number | null)[]; hover: string | null };
+/** `best` is per level index; `newBest`: this solve beat a saved time. */
+export type PanelCtx = { level: number; levels: number; daily: boolean; resume: boolean; newBest: boolean; time: number; best: readonly (number | null)[]; hover: string | null };
+
+const isDaily = (ctx: PanelCtx, i: number) => ctx.daily && i === ctx.levels - 1;
 
 type Draw = CanvasRenderingContext2D;
 
@@ -31,20 +34,69 @@ function text(g: Draw, s: string, x: number, y: number, f: string, color: string
   g.letterSpacing = '0px';
 }
 
-/** A short tinted status pill centred (or left/right aligned) at x, y. */
-function status(g: Draw, s: string, x: number, y: number, align: 'left' | 'center' = 'center') {
-  g.font = font(700, 6.5);
+/** A short tinted status pill centred (or left/right aligned) at x, y; `size` is its text height in mm. */
+function status(g: Draw, s: string, x: number, y: number, align: 'left' | 'center' | 'right' = 'center', size = T.eyebrow) {
+  const k = size / T.eyebrow;
+  g.font = font(700, 6.5 * k);
   g.letterSpacing = '1px';
-  const w = g.measureText(s).width + mm(7);
+  const w = g.measureText(s).width + mm(7 * k);
   g.letterSpacing = '0px';
-  const cx = align === 'left' ? x + w / 2 : x;
-  pill(g, cx, y, w, mm(12));
+  const cx = align === 'left' ? x + w / 2 : align === 'right' ? x - w / 2 : x;
+  pill(g, cx, y, w, mm(12 * k));
   g.fillStyle = C.tint;
   g.fill();
-  text(g, s, cx, y + 1, font(700, T.eyebrow), C.tintInk, 'center', 1);
+  text(g, s, cx, y + 1, font(700, size), C.tintInk, 'center', 1);
 }
 
-function button(g: Draw, b: Button, at: (x: number, y: number) => [number, number], ctx: PanelCtx, index: number) {
+/** A level tile: its number (or 'Daily'); once solved, the best time in muted text under it and a small amber check. */
+function tile(g: Draw, b: Button, x: number, y: number, w: number, h: number, ctx: PanelCtx) {
+  const i = Number(b.id.slice('level-'.length)) - 1;
+  const best = ctx.best[i];
+  const daily = isDaily(ctx, i);
+  if (daily) {
+    // The daily is set apart by an amber edge along its top.
+    g.save();
+    pill(g, x, y, w, h, mm(12));
+    g.clip();
+    g.fillStyle = C.amber;
+    g.fillRect(x - w / 2, y - h / 2, w, mm(4));
+    g.restore();
+  }
+  text(g, b.label, x, y - (best == null ? 0 : mm(8)), daily ? font(600, T.heading, SERIF) : font(700, T.xl), C.ink);
+  if (best == null) return;
+  text(g, clock(best), x, y + mm(15), font(700, T.button), C.muted);
+  const [cx, cy] = [x + w / 2 - mm(9), y - h / 2 + mm(10)];
+  g.beginPath();
+  g.arc(cx, cy, mm(5), 0, Math.PI * 2);
+  g.fillStyle = C.amber;
+  g.fill();
+  g.beginPath();
+  g.moveTo(cx - mm(2.4), cy + mm(0.1));
+  g.lineTo(cx - mm(0.7), cy + mm(1.9));
+  g.lineTo(cx + mm(2.5), cy - mm(1.8));
+  g.lineWidth = mm(1.2);
+  g.lineCap = g.lineJoin = 'round';
+  g.strokeStyle = C.cream;
+  g.stroke();
+}
+
+/** 'Back' with a small chevron before it. */
+function backLabel(g: Draw, label: string, x: number, y: number) {
+  g.font = font(600, T.button);
+  const [chev, gap] = [mm(3.5), mm(3)];
+  const left = x - (chev + gap + g.measureText(label).width) / 2;
+  g.beginPath();
+  g.moveTo(left + chev, y - mm(4));
+  g.lineTo(left, y);
+  g.lineTo(left + chev, y + mm(4));
+  g.lineWidth = mm(1.4);
+  g.lineCap = g.lineJoin = 'round';
+  g.strokeStyle = C.ink;
+  g.stroke();
+  text(g, label, left + chev + gap, y + 1, font(600, T.button), C.ink, 'left');
+}
+
+function button(g: Draw, b: Button, at: (x: number, y: number) => [number, number], ctx: PanelCtx) {
   const [x, y] = at(b.x, b.y);
   const [w, h] = [b.w * PX, b.h * PX];
   const hover = ctx.hover === b.id;
@@ -63,11 +115,9 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
   if (b.kind === 'icon') {
     g.fillStyle = C.ink;
     for (const dx of [-mm(3.2), mm(3.2)]) g.fillRect(x + dx - mm(1.5), y - mm(6), mm(3), mm(12));
-  } else if (b.kind === 'tile') {
-    const best = ctx.best[index];
-    text(g, b.label, x, y - (best == null ? 0 : mm(9)), font(700, T.xl), C.ink);
-    if (best != null) status(g, clock(best), x, y + mm(20));
-  } else text(g, b.label, x, y + 1, font(600, T.button), b.kind === 'primary' ? C.cream : C.ink);
+  } else if (b.kind === 'tile') tile(g, b, x, y, w, h, ctx);
+  else if (b.id === 'back') backLabel(g, b.label, x, y);
+  else text(g, b.label, x, y + 1, font(600, T.button), b.kind === 'primary' ? C.cream : C.ink);
 }
 
 function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
@@ -88,33 +138,44 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   const right = (x: number) => at(l.width / 2 - x, 0)[0];
   const y = (v: number) => at(0, v)[1];
   const cx = at(0, 0)[0];
+  const daily = isDaily(ctx, ctx.level);
   const level = String(ctx.level + 1);
+  const name = daily ? 'Daily' : `Level ${level}`;
   switch (screen) {
     case 'title':
       text(g, 'A CLOCKWORK PUZZLE', cx, y(0.128), font(700, T.eyebrow), C.muted, 'center', 3);
       text(g, 'ChronoGrip', cx, y(0.093), font(600, T.display, SERIF), C.ink);
       break;
-    case 'select':
-      text(g, 'Levels', cx, y(0.12), font(600, T.heading, SERIF), C.ink);
+    case 'select': {
+      const solved = ctx.best.filter((b) => b != null).length;
+      text(g, 'Levels', left(0.016), y(0.118), font(600, T.heading, SERIF), C.ink, 'left');
+      text(g, `${solved} of ${ctx.levels} solved`, right(0.016), y(0.118), font(600, T.button), C.muted, 'right');
       break;
+    }
     case 'hud':
       text(g, 'LEVEL', left(0.016), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
-      text(g, level, left(0.016), y(0.022), font(700, T.xl), C.ink, 'left');
+      if (daily) text(g, 'Daily', left(0.016), y(0.022), font(600, T.heading, SERIF), C.ink, 'left');
+      else text(g, level, left(0.016), y(0.022), font(700, T.xl), C.ink, 'left');
       text(g, 'TIME', left(0.066), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
       text(g, clock(ctx.time), left(0.066), y(0.022), font(700, T.xl), C.ink, 'left');
       break;
-    case 'complete':
+    case 'complete': {
       status(g, 'SOLVED', left(0.016), y(0.148), 'left');
-      text(g, `Level ${level} complete`, left(0.016), y(0.11), font(600, T.heading, SERIF), C.ink, 'left');
+      text(g, `${name} complete`, left(0.016), y(0.11), font(600, T.heading, SERIF), C.ink, 'left');
       text(g, 'TIME', right(0.016), y(0.148), font(700, T.eyebrow), C.muted, 'right', 1);
       text(g, clock(ctx.time), right(0.016), y(0.11), font(700, T.xl), C.ink, 'right');
+      // Under the time: the New best pill, or the saved best this run did not beat.
+      const best = ctx.best[ctx.level];
+      if (ctx.newBest) status(g, 'NEW BEST', right(0.016), y(0.08), 'right', T.body);
+      else if (best != null && best < ctx.time) text(g, `Best ${clock(best)}`, right(0.016), y(0.08), font(600, T.button), C.muted, 'right');
       break;
+    }
     case 'paused':
       text(g, 'Paused', cx, y(0.118), font(600, T.heading, SERIF), C.ink);
-      text(g, `Level ${level}  ·  ${clock(ctx.time)}`, cx, y(0.087), font(500, T.body), C.muted);
+      text(g, `${name}  ·  ${clock(ctx.time)}`, cx, y(0.087), font(500, T.body), C.muted);
       break;
   }
-  l.buttons.forEach((b, i) => button(g, b, at, ctx, i));
+  for (const b of l.buttons) button(g, b, at, ctx);
 }
 
 function canvasPlane(): { mesh: Mesh; g: Draw; tex: CanvasTexture } {
@@ -178,7 +239,7 @@ export function createPanels() {
       root.rotation.set(a.pitch, a.yaw, 0);
     },
     show(screen: Screen | null, ctx: PanelCtx) {
-      const next = screen && JSON.stringify([screen, ctx.level, ctx.levels, Math.floor(ctx.time), ctx.best, ctx.hover]);
+      const next = screen && JSON.stringify([screen, { ...ctx, time: Math.floor(ctx.time) }]);
       if (next === key) return;
       key = next ?? '';
       panel.mesh.visible = screen !== null;

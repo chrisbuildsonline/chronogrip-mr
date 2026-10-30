@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LEVELS } from '../../src/levels';
+import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { TRAY_POSE, inZone, ledgeFar, trayToWorld, type Vec3 } from '../../src/seat';
 import { BUTTON_MIN_M, PANEL_ZONE, SCREENS, buttonAt, clock, layout, panelAnchor, panelToWorld, pokeHit, worldToPanel } from '../../src/ui';
 
@@ -22,7 +23,7 @@ describe('panel layouts', () => {
   it('has the buttons each screen needs', () => {
     const ids = (s: (typeof SCREENS)[number], level = 0) => layout(s, { level, levels: 5 }).buttons.map((b) => b.id);
     expect(ids('title')).toEqual(['start', 'levels']);
-    expect(ids('select')).toEqual(['level-1', 'level-2', 'level-3', 'level-4', 'level-5']);
+    expect(ids('select')).toEqual(['back', 'level-1', 'level-2', 'level-3', 'level-4', 'level-5']);
     expect(ids('hud')).toEqual(['pause']);
     expect(ids('complete')).toEqual(['next', 'restart', 'levels']);
     expect(ids('paused')).toEqual(['resume', 'restart', 'levels']);
@@ -38,6 +39,53 @@ describe('panel layouts', () => {
         expect(apart).toBe(true);
       }
     }
+  });
+});
+
+describe('level select with the daily', () => {
+  const sel = layout('select', { level: 0, levels: 6, daily: true });
+
+  it('has a Back pill and six tiles, the last one the daily', () => {
+    expect(sel.buttons.map((b) => b.id)).toEqual(['back', 'level-1', 'level-2', 'level-3', 'level-4', 'level-5', 'level-6']);
+    expect(sel.buttons.map((b) => b.label)).toEqual(['Back', '1', '2', '3', '4', '5', 'Daily']);
+    expect(sel.buttons.filter((b) => b.kind === 'tile')).toHaveLength(6);
+  });
+
+  it('every target is at least 4 cm, 12 mm apart, inside the panel', () => {
+    for (const b of sel.buttons) {
+      expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(BUTTON_MIN_M);
+      expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(sel.width / 2 - 0.016 + 1e-9);
+      expect(b.y - b.h / 2).toBeGreaterThanOrEqual(0.016 - 1e-9);
+      expect(b.y + b.h / 2).toBeLessThanOrEqual(sel.height - 0.016 + 1e-9);
+    }
+    for (const a of sel.buttons) for (const b of sel.buttons) {
+      if (a === b) continue;
+      const apart = Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= 0.012 - 1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= 0.012 - 1e-9;
+      expect(apart).toBe(true);
+    }
+  });
+
+  it('every target is within reach above every level, the daily included', () => {
+    for (const level of [...LEVELS, tinkerLevel(dailySeed(new Date(2026, 9, 30))), tinkerLevel(dailySeed(new Date(2027, 0, 1)))]) {
+      const a = panelAnchor(level);
+      for (const b of sel.buttons) {
+        const w = panelToWorld(a, [b.x, b.y, 0]);
+        expect(inZone(w, PANEL_ZONE)).toBe(true);
+        expect(Math.hypot(...w)).toBeLessThanOrEqual(0.6);
+      }
+    }
+  });
+});
+
+describe('title', () => {
+  it('reads Start with nothing solved and Continue once a level is solved', () => {
+    expect(layout('title', { level: 0, levels: 6 }).buttons[0]!.label).toBe('Start');
+    expect(layout('title', { level: 1, levels: 6, resume: true }).buttons[0]).toMatchObject({ id: 'start', label: 'Continue', kind: 'primary' });
+  });
+
+  it('the complete card on the daily leads back to level select', () => {
+    expect(layout('complete', { level: 4, levels: 6, daily: true }).buttons[0]!.label).toBe('Next');
+    expect(layout('complete', { level: 5, levels: 6, daily: true }).buttons[0]!.label).toBe('Levels');
   });
 });
 
