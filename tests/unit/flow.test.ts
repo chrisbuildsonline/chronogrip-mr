@@ -45,6 +45,27 @@ describe('flow state machine', () => {
     expect(run([{ type: 'solve' }, { type: 'calibrated' }, { type: 'next' }], { name: 'playing', level: 4 })).toEqual({ name: 'select', level: 4 });
   });
 
+  it('with the daily as a sixth level, next after level 5 plays the daily and next after the daily opens level select', () => {
+    const done = (level: number): Flow => ({ name: 'complete', level });
+    expect(step(done(4), { type: 'next' }, 6)).toEqual({ name: 'playing', level: 5 });
+    expect(step(done(5), { type: 'next' }, 6)).toEqual({ name: 'select', level: 5 });
+    expect(step({ name: 'select', level: 0 }, { type: 'select', level: 5 }, 6)).toEqual({ name: 'playing', level: 5 });
+    expect(step({ name: 'select', level: 0 }, { type: 'select', level: 6 }, 6)).toEqual({ name: 'select', level: 0 });
+  });
+
+  it('back leaves level select for the title, on a fresh board at the given level', () => {
+    const s: Flow = { name: 'select', level: 3 };
+    const back = step(s, { type: 'back', level: 1 });
+    expect(back).toEqual({ name: 'title', level: 1 });
+    expect(reloads(s, { type: 'back', level: 1 }, back)).toBe(true);
+    expect(step(back, { type: 'start' })).toEqual({ name: 'playing', level: 1 });
+    for (const name of ['title', 'playing', 'calibrate', 'complete', 'paused'] as const) {
+      const f: Flow = { name, level: 2 };
+      expect(step(f, { type: 'back', level: 0 })).toBe(f);
+    }
+    expect(step(s, { type: 'back', level: 9 }, 6)).toBe(s);
+  });
+
   it('select opens level select; select with a level plays it', () => {
     expect(run([{ type: 'select' }])).toEqual({ name: 'select', level: 0 });
     expect(run([{ type: 'select' }, { type: 'select', level: 2 }])).toEqual({ name: 'playing', level: 2 });

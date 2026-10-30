@@ -31,6 +31,11 @@ export function recordSolve(p: Progress, levelId: string, seconds: number): { pr
   return { progress: { best: { ...p.best, [levelId]: seconds } }, newBest: true };
 }
 
+/** Index of the first level id with no best time; 0 once every one is solved. Pass today's daily id, so older dailies never count. */
+export function firstUnsolved(p: Progress, ids: readonly string[]): number {
+  return Math.max(0, ids.findIndex((id) => !Object.hasOwn(p.best, id)));
+}
+
 export function saveProgress(storage: Pick<Storage, 'setItem'> | null | undefined, p: Progress): void {
   try {
     storage?.setItem(KEY, JSON.stringify(p));

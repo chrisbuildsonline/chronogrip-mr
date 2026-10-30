@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadProgress, recordSolve, saveProgress } from '../../src/progress';
+import { firstUnsolved, loadProgress, recordSolve, saveProgress } from '../../src/progress';
 
 const KEY = 'chronogrip.progress.v1';
 const store = (raw: string | null) => ({ getItem: (k: string) => (k === KEY ? raw : null) });
@@ -98,5 +98,24 @@ describe('saveProgress', () => {
     expect(() => saveProgress(boom, { best: {} })).not.toThrow();
     expect(() => saveProgress(null, { best: {} })).not.toThrow();
     expect(() => saveProgress(undefined, { best: {} })).not.toThrow();
+  });
+});
+
+describe('firstUnsolved', () => {
+  const ids = ['l1', 'l2', 'l3', 'l4', 'l5', 't20261030'];
+  it('is the first level with no best time', () => {
+    expect(firstUnsolved({ best: {} }, ids)).toBe(0);
+    expect(firstUnsolved({ best: { l1: 9 } }, ids)).toBe(1);
+    expect(firstUnsolved({ best: { l1: 9, l3: 4 } }, ids)).toBe(1);
+  });
+
+  it('reaches the daily once the five are done, and wraps to level 1 when all are solved', () => {
+    const five = { l1: 1, l2: 2, l3: 3, l4: 4, l5: 5 };
+    expect(firstUnsolved({ best: five }, ids)).toBe(5);
+    expect(firstUnsolved({ best: { ...five, t20261030: 6 } }, ids)).toBe(0);
+  });
+
+  it('a best for an older daily does not count for today', () => {
+    expect(firstUnsolved({ best: { l1: 1, l2: 2, l3: 3, l4: 4, l5: 5, t20261029: 6 } }, ids)).toBe(5);
   });
 });

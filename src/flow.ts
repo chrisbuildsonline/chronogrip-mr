@@ -5,7 +5,8 @@ export type FlowName = 'title' | 'select' | 'playing' | 'calibrate' | 'complete'
 export type Flow = { readonly name: FlowName; readonly level: number; readonly resumeTo?: 'calibrate' };
 export type FlowEvent =
   | { type: 'start' | 'solve' | 'calibrated' | 'next' | 'restart' | 'pause' | 'resume' }
-  | { type: 'select'; level?: number };
+  | { type: 'select'; level?: number }
+  | { type: 'back'; level: number };
 
 export const TITLE: Flow = { name: 'title', level: 0 };
 export const LEVEL_COUNT = 5;
@@ -38,13 +39,17 @@ export function step(f: Flow, e: FlowEvent, levels = LEVEL_COUNT): Flow {
       return f.name === 'paused' ? to(f.resumeTo ?? 'playing', f.level) : f;
     case 'select':
       if (e.level === undefined) return inLevel(f) ? f : to('select', f.level);
-      return Number.isInteger(e.level) && e.level >= 0 && e.level < levels ? to('playing', e.level) : f;
+      return inRange(e.level, levels) ? to('playing', e.level) : f;
+    case 'back':
+      return f.name === 'select' && inRange(e.level, levels) ? to('title', e.level) : f;
   }
 }
 
-/** Whether a transition starts a level on a fresh board. */
+const inRange = (level: number, levels: number) => Number.isInteger(level) && level >= 0 && level < levels;
+
+/** Whether a transition puts a fresh board up: a level (re)starting, or back to the title on the level Continue plays. */
 export const reloads = (prev: Flow, e: FlowEvent, next: Flow) =>
-  next !== prev && next.name === 'playing' && (e.type === 'restart' || e.type === 'next' || e.type === 'select');
+  next !== prev && (e.type === 'back' || (next.name === 'playing' && (e.type === 'restart' || e.type === 'next' || e.type === 'select')));
 
 const SCREEN: Record<FlowName, Screen> = { title: 'title', select: 'select', playing: 'hud', calibrate: 'hud', complete: 'complete', paused: 'paused' };
 export const screenOf = (f: Flow): Screen => SCREEN[f.name];
