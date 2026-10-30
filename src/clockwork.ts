@@ -29,6 +29,12 @@ export const DIAL_AT = [0.13, -0.106] as const;
 const DIAL_R = 0.036;
 const BALANCE_AT = [0.183, -0.106] as const;
 const BIRD_AT = [0.163, 0.108] as const;
+/** Keep-out circles (level metres, with margin) that generated gears must stay clear of: dial, balance wheel, bird. */
+export const PROPS: readonly { x: number; y: number; r: number }[] = [
+  { x: DIAL_AT[0], y: DIAL_AT[1], r: DIAL_R + 0.008 },
+  { x: BALANCE_AT[0], y: BALANCE_AT[1], r: 0.03 },
+  { x: BIRD_AT[0], y: BIRD_AT[1], r: 0.03 },
+];
 /** The bird is modelled at about 6 cm tall and shown larger so it reads from the seat. */
 const BIRD_SCALE = 1.4;
 /** Height of the knob's top above the tray surface; a pinch is aimed here. */
