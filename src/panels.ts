@@ -9,7 +9,7 @@ const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Ar
 const SERIF = 'Georgia, "Times New Roman", serif';
 const mm = (v: number) => v * 3;
 /** Type scale in panel millimetres (design/DESIGN.md). */
-const T = { display: 26, xl: 24, heading: 16, button: 12, body: 9.5, eyebrow: 8 };
+const T = { display: 36, xl: 24, heading: 18, button: 12.5, body: 13.5, eyebrow: 8.5 };
 const font = (weight: number, sizeMm: number, face = SANS) => `${weight} ${mm(sizeMm)}px ${face}`;
 
 /** `best` is per level index; `newBest`: this solve beat a saved time. */
@@ -37,7 +37,7 @@ function text(g: Draw, s: string, x: number, y: number, f: string, color: string
 /** A short tinted status pill centred (or left/right aligned) at x, y; `size` is its text height in mm. */
 function status(g: Draw, s: string, x: number, y: number, align: 'left' | 'center' | 'right' = 'center', size = T.eyebrow) {
   const k = size / T.eyebrow;
-  g.font = font(700, 6.5 * k);
+  g.font = font(700, size);
   g.letterSpacing = '1px';
   const w = g.measureText(s).width + mm(7 * k);
   g.letterSpacing = '0px';
@@ -64,7 +64,7 @@ function tile(g: Draw, b: Button, x: number, y: number, w: number, h: number, ct
   }
   text(g, b.label, x, y - (best == null ? 0 : mm(8)), daily ? font(600, T.heading, SERIF) : font(700, T.xl), C.ink);
   if (best == null) return;
-  text(g, clock(best), x, y + mm(15), font(700, T.button), C.muted);
+  text(g, clock(best), x, y + mm(16), font(700, T.body), C.muted);
   const [cx, cy] = [x + w / 2 - mm(9), y - h / 2 + mm(10)];
   g.beginPath();
   g.arc(cx, cy, mm(5), 0, Math.PI * 2);
@@ -149,7 +149,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
     case 'select': {
       const solved = ctx.best.filter((b) => b != null).length;
       text(g, 'Levels', left(0.016), y(0.118), font(600, T.heading, SERIF), C.ink, 'left');
-      text(g, `${solved} of ${ctx.levels} solved`, right(0.016), y(0.118), font(600, T.button), C.muted, 'right');
+      text(g, `${solved} of ${ctx.levels} solved`, right(0.016), y(0.118), font(600, T.body), C.muted, 'right');
       break;
     }
     case 'hud':
@@ -160,14 +160,14 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       text(g, clock(ctx.time), left(0.066), y(0.022), font(700, T.xl), C.ink, 'left');
       break;
     case 'complete': {
-      status(g, 'SOLVED', left(0.016), y(0.148), 'left');
+      status(g, 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);
       text(g, `${name} complete`, left(0.016), y(0.11), font(600, T.heading, SERIF), C.ink, 'left');
       text(g, 'TIME', right(0.016), y(0.148), font(700, T.eyebrow), C.muted, 'right', 1);
       text(g, clock(ctx.time), right(0.016), y(0.11), font(700, T.xl), C.ink, 'right');
       // Under the time: the New best pill, or the saved best this run did not beat.
       const best = ctx.best[ctx.level];
-      if (ctx.newBest) status(g, 'NEW BEST', right(0.016), y(0.08), 'right', T.body);
-      else if (best != null && best < ctx.time) text(g, `Best ${clock(best)}`, right(0.016), y(0.08), font(600, T.button), C.muted, 'right');
+      if (ctx.newBest) status(g, 'NEW BEST', right(0.016), y(0.08), 'right', T.body * 0.8);
+      else if (best != null && best < ctx.time) text(g, `Best ${clock(best)}`, right(0.016), y(0.08), font(600, T.body), C.muted, 'right');
       break;
     }
     case 'paused':
@@ -239,7 +239,7 @@ export function createPanels() {
       root.rotation.set(a.pitch, a.yaw, 0);
     },
     show(screen: Screen | null, ctx: PanelCtx) {
-      const next = screen && JSON.stringify([screen, { ...ctx, time: Math.floor(ctx.time) }]);
+      const next = screen && JSON.stringify([screen, { ...ctx, time: clock(ctx.time) }]);
       if (next === key) return;
       key = next ?? '';
       panel.mesh.visible = screen !== null;

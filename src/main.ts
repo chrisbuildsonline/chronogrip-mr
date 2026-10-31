@@ -57,10 +57,11 @@ let levelIndex = continueAt();
 let level: Level = levels[levelIndex]!;
 const built = buildScene(level, world.scene, world.renderer);
 
-// Desktop preview: from a little above and behind the seated head, framing the board and the panel above it.
-world.camera.position.set(0.05, 0.13, 0.42);
+// Desktop preview: from above, behind and a little right of the seated head, so the board reads in depth (bevel,
+// gear thickness, the bird standing up) and the panel above it stays in frame.
+world.camera.position.set(0.107, 0.225, 0.364);
 const controls = new OrbitControls(world.camera, world.renderer.domElement);
-controls.target.set(0, -0.07, -0.36);
+controls.target.set(0.015, -0.08, -0.36);
 controls.update();
 world.renderer.xr.addEventListener('sessionstart', () => (controls.enabled = false));
 world.renderer.xr.addEventListener('sessionend', () => (controls.enabled = true));
@@ -547,6 +548,7 @@ world.scene.onBeforeRender = () => {
     built.loose.get(id)?.position.set(...pos);
     if (done) tweens.delete(id);
   }
+  built.updateShadows();
 
   // WebXR has no general eye-gaze API, so in XR the gaze ray is the head (viewer pose) forward direction.
   let ray: [Vec3, Vec3] | null = mouseRay;
@@ -773,6 +775,11 @@ window.__chrono = Object.freeze({
       const w = panelToWorld(anchor, [b.x, b.y, 0]);
       return { id: b.id, label: b.label, world: w, screen: toScreen(w) };
     });
+  },
+  panelCorners() {
+    const l = panels.panelMesh.visible ? panels.current?.layout : undefined;
+    if (!l) return [];
+    return ([[-1, 0], [1, 0], [-1, 1], [1, 1]] as const).map(([sx, k]) => toScreen(panelToWorld(anchor, [(sx * l.width) / 2, k * l.height, 0])));
   },
   toScreen,
 });

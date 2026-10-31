@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ChronoGrip MR</title>
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: #14110d; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #14110d radial-gradient(ellipse 60% 70% at 50% 58%, #3a2a1c 0%, #241a12 55%, #120f0b 100%); }
       #app { position: fixed; inset: 0; }
       #app canvas { display: block; width: 100%; height: 100%; }
       /* Palette and type: design/DESIGN.md */
@@ -13,9 +13,10 @@
         position: fixed; top: 18px; left: 24px; margin: 0; z-index: 1;
         font: 600 1.35rem/1 Georgia, serif; color: #f6efe2; pointer-events: none;
       }
+      /* Top right, opposite the wordmark, so it never covers the board in the desktop view. */
       #xr-entry {
-        position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1;
-        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        position: fixed; top: 14px; right: 24px; z-index: 1; max-width: 320px; text-align: right;
+        display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
         font: 500 0.85rem/1.3 system-ui, sans-serif; color: #c9bba6;
       }
       #enter-mr {

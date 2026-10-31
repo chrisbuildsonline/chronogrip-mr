@@ -69,6 +69,8 @@ interface ChronoHook {
   readonly ghostHand: boolean;
   /** Buttons on the panel now shown, with world centre and page pixel position. */
   buttons(): { id: string; label: string; world: readonly [number, number, number]; screen: [number, number] }[];
+  /** Page pixel positions of the shown panel's four corners (bottom left, bottom right, top left, top right); empty when none is up. */
+  panelCorners(): [number, number][];
   /** Page pixel coordinates of a world point, for driving the mouse in tests. */
   toScreen(p: readonly [number, number, number]): [number, number];
 }
