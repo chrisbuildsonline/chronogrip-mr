@@ -1,0 +1,12 @@
+node_modules
+dist
+test-results
+playwright-report
+.git
+.omc
+.claude
+.env
+.env.*
+design/refs
+*.log
+.DS_Store
