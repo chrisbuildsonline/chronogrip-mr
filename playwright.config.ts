@@ -9,6 +9,8 @@ export default defineConfig({
   outputDir: 'test-results/artifacts',
   // ponytail: software GL is CPU-bound; 10 workers starve each other into timeouts (fails before and after sound). Raise if CI has a GPU.
   workers: 4,
+  // ponytail: cold servers plus software GL push default-30s specs over (home, grab); 90s matches the per-test budgets. Lower it if CI has a GPU.
+  timeout: 90_000,
   reporter: 'list',
   projects: [
     // Production build, no emulator.
