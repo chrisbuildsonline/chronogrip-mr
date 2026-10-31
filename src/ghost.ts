@@ -1,4 +1,4 @@
-import { CapsuleGeometry, Group, Mesh, MeshStandardMaterial, Quaternion, Vector3, type BufferGeometry } from 'three';
+import { CapsuleGeometry, Group, Mesh, MeshStandardMaterial, Vector3, type BufferGeometry } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { easeOut } from './tween';
 import { trayLocal, type Vec3 } from './seat';
@@ -46,36 +46,66 @@ export function ghostTwistAt(t: number, at: readonly [number, number], dir: 1 | 
 const v = (x: number, y: number, z: number) => new Vector3(x, y, z);
 const UP = v(0, 1, 0);
 
+/** Cream skin with an amber Fresnel rim: the hand's outline and each finger's edge glow, so it reads against wood and brass. */
+function ghostSkin() {
+  const m = new MeshStandardMaterial({ color: 0xcdbfa8, roughness: 0.7, transparent: true });
+  m.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(0.85, 0.5, 0.1) * 2.2 * pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 1.8);',
+    );
+  };
+  return m;
+}
+
 /**
  * A translucent stylised right hand, pinch point at its origin; +Y is the tray normal, +Z towards the player.
- * Fingers are capsules swung from their knuckles, so a pinch closes thumb and index on the origin.
+ * Seen from the seat it shows the back of the hand: a palm, four jointed fingers reaching up the board and a thumb
+ * from the near side. A pinch closes the tips of thumb and index on the origin.
  */
 export function createGhostHand(gearGeometry: BufferGeometry) {
-  const skin = new MeshStandardMaterial({ color: 0xf6efe2, emissive: 0xf6efe2, emissiveIntensity: 0.35, roughness: 0.6, transparent: true, depthWrite: false });
+  const skin = ghostSkin();
   const ghostBrass = new MeshStandardMaterial({ color: 0xd9b26a, emissive: 0xd99a2b, emissiveIntensity: 0.4, metalness: 0.6, roughness: 0.4, transparent: true, depthWrite: false });
   const hand = new Group();
   const root = new Group();
   root.name = 'ghost-hand';
   root.add(hand);
-  const limb = (length: number, radius: number) => {
+  const scratch = new Vector3();
+  /** A capsule from a to b; it stretches a little when a pinch moves its ends. */
+  const bone = (radius: number, a: Vector3, b: Vector3) => {
+    const length = a.distanceTo(b);
     const m = new Mesh(new CapsuleGeometry(radius, length, 4, 10), skin);
     hand.add(m);
-    return { m, length };
+    const set = (from: Vector3, to: Vector3) => {
+      const dir = scratch.copy(to).sub(from);
+      m.scale.y = dir.length() / length;
+      m.quaternion.setFromUnitVectors(UP, dir.normalize());
+      m.position.copy(from).add(to).multiplyScalar(0.5);
+    };
+    set(a, b);
+    return set;
   };
-  const swing = ({ m, length }: { m: Mesh; length: number }, knuckle: Vector3, toward: Vector3) => {
-    const dir = toward.clone().sub(knuckle).normalize();
-    m.quaternion.copy(new Quaternion().setFromUnitVectors(UP, dir));
-    m.position.copy(knuckle).addScaledVector(dir, length / 2);
+  /** Two bones through knuckle, joint and tip. */
+  const finger = (radius: number, knuckle: Vector3, joint: Vector3, tip: Vector3) => {
+    const near = bone(radius, knuckle, joint);
+    const far = bone(radius * 0.92, joint, tip);
+    return (j: Vector3, t: Vector3) => (near(knuckle, j), far(j, t));
   };
-  const index = limb(0.052, 0.0085);
-  const thumb = limb(0.044, 0.0095);
-  const curled = [0.019, 0.036, 0.051].map((x) => ({ x, l: limb(0.026, 0.0085) }));
-  const palm = new Mesh(new RoundedBoxGeometry(0.068, 0.024, 0.07, 3, 0.011), skin);
-  palm.position.set(0.026, 0.078, 0.004);
-  const wrist = limb(0.05, 0.016);
-  swing(wrist, v(0.028, 0.085, 0.035), v(0.03, 0.13, 0.1));
+
+  const palm = new Mesh(new RoundedBoxGeometry(0.066, 0.02, 0.072, 3, 0.009), skin);
+  palm.position.set(0.032, 0.068, 0.056);
+  palm.rotation.x = -0.4; // far end low, towards the fingers
   hand.add(palm);
-  for (const { x, l } of curled) swing(l, v(x, 0.066, -0.026), v(x, 0.034, -0.004));
+  bone(0.016, v(0.034, 0.08, 0.088), v(0.038, 0.1, 0.13)); // wrist
+  // Middle, ring and little fingers, loosely curled up the board past the pinch.
+  finger(0.0074, v(0.026, 0.054, 0.02), v(0.027, 0.042, -0.012), v(0.027, 0.022, -0.032));
+  finger(0.0071, v(0.042, 0.053, 0.022), v(0.044, 0.041, -0.006), v(0.045, 0.024, -0.024));
+  finger(0.0062, v(0.057, 0.05, 0.026), v(0.06, 0.04, 0.006), v(0.061, 0.027, -0.008));
+  const knuckle = { index: v(0.008, 0.055, 0.02), thumb: v(-0.004, 0.05, 0.066) };
+  const index = finger(0.0076, knuckle.index, v(0.005, 0.036, -0.012), v(0, 0, -0.022));
+  const thumb = finger(0.0086, knuckle.thumb, v(-0.016, 0.026, 0.034), v(0, 0, 0.022));
+  const [joint, tip] = [new Vector3(), new Vector3()];
+
   const gear = new Mesh(gearGeometry, ghostBrass);
   gear.rotation.x = -Math.PI / 2;
   root.add(gear);
@@ -87,14 +117,14 @@ export function createGhostHand(gearGeometry: BufferGeometry) {
     update(s: GhostState) {
       root.visible = s.opacity > 0.01;
       root.position.set(...trayLocal(s.pos[0], s.pos[1], s.pos[2]));
-      skin.opacity = 0.62 * s.opacity;
+      skin.opacity = 0.78 * s.opacity;
       ghostBrass.opacity = 0.5 * s.opacity;
       gear.visible = s.carrying;
       gear.position.y = -0.004;
       hand.rotation.y = -(s.roll ?? 0);
       const gap = 0.004 + 0.018 * (1 - s.pinch);
-      swing(index, v(0.002, 0.066, -0.03), v(0, 0, -gap));
-      swing(thumb, v(0.026, 0.05, 0.034), v(0, 0, gap));
+      index(joint.set(0.005, 0.036, -0.004 - 0.4 * gap), tip.set(0, 0, -gap));
+      thumb(joint.set(-0.016, 0.026, 0.026 + 0.4 * gap), tip.set(0, 0, gap));
     },
   };
 }
