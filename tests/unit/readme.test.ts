@@ -22,3 +22,48 @@ describe('README', () => {
     expect(readme).not.toMatch(r);
   });
 });
+
+const MONTH = '(January|February|March|April|May|June|July|August|September|October|November|December)';
+
+/** The write-up the rules ask for (inspiration, build, plans, launch date, track) and a test path for judges. */
+describe('README submission write-up', () => {
+  it.each([
+    ['Inspiration', /^##+ Inspiration\b/m],
+    ['How we built it', /^##+ How we built it\b/im],
+    ['Challenges', /^##+ Challenges\b/m],
+    ["What's next", /^##+ What['’]s next\b/im],
+    ['How it fits the judging', /^##+ How it fits the judging\b/im],
+    ['Testing it', /^##+ Testing it\b/im],
+  ])('has a %s section', (_, r) => {
+    expect(readme).toMatch(r);
+  });
+
+  it('names the track and division', () => {
+    expect(readme).toMatch(/Track:?\**:? ?\**Gaming\b/);
+    expect(readme).toMatch(/Division:?\**:? ?\**New Experience\b/);
+  });
+
+  it('gives a target launch date with month and year', () => {
+    expect(readme).toMatch(new RegExp(`Target launch date:?\\**:? ?\\**${MONTH} 20\\d\\d\\b`));
+  });
+
+  it.each(['Innovation & Creativity', 'Experience Design', 'Technical Implementation', 'Polish & Presentation'])(
+    'maps the %s criterion',
+    (criterion) => {
+      expect(readme).toContain(criterion);
+    },
+  );
+
+  it('tells judges how to run it in Docker and run every check', () => {
+    expect(readme).toContain('docker run --rm -p 4173:4173');
+    expect(readme).toContain('bun run docker:build');
+    expect(readme).toContain('http://localhost:4173');
+    expect(readme).toContain('bun run check');
+  });
+
+  it('claims nothing that was not built or measured', () => {
+    expect(readme).not.toMatch(/MRUK/);
+    expect(readme).not.toMatch(/persistent anchors? (are|is) (used|supported)/i);
+    expect(readme).not.toMatch(/(runs|holds|measured|hits|steady) (at )?(a )?(steady )?60 ?fps/i);
+  });
+});

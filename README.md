@@ -4,11 +4,17 @@ A seated mixed-reality clockwork puzzle you play with your bare hands: pinch bra
 
 **Play it:** https://chrisbuildsonline.github.io/chronogrip-mr/ (open it in the Quest browser and press **Enter MR**; any desktop browser gets a mouse-driven preview).
 
-Built for the [Meta VR Start Developer Competition 2026](https://start-developer-competition-26.devpost.com/).
+Built for the [Meta VR Start Developer Competition 2026](https://start-developer-competition-26.devpost.com/). **Track:** Gaming. **Division:** New Experience.
 
 ## What it is and who it is for
 
 ChronoGrip is a small puzzle game for people who are sitting down: on a plane, on a bus, on the couch. Everything sits on a 40 x 30 cm tray in front of you, within arm's reach and inside a comfortable view cone (the tests check every part of every level against the cone in `src/seat.ts`), so you never stand, turn or stretch. You see your real surroundings through passthrough. There are five hand-made levels and a new seeded daily puzzle each day.
+
+## Inspiration
+
+Most VR games want you standing in an empty room. A lot of the time you are not: you are in an airplane seat with your forearms on the armrests, or on a bench at a bus stop, with not much space in front of you. We wanted something you could play right there.
+
+A pocket watch felt right. It is small, it sits on your lap, and fixing one is all fingertips and wrists. So ChronoGrip is a pocket-sized clockwork repair: a brass tray stands on your lap tray or table in passthrough, and you fix it with your hands only. No controllers, no standing, no turning around.
 
 ## How to play (Quest browser)
 
@@ -50,6 +56,27 @@ The same scene and cards run in any desktop browser with WebGL. Where the browse
 - **Levels** shows six tiles: levels 1-5 and **Daily**. Solved tiles show your best time and a check. Beating a saved time shows **New best**.
 - The **Daily** is a puzzle generated from today's local date: the same for everyone on a given day, different the next. If the game is left open past midnight, the new daily swaps in the next time you are on the title or level select.
 
+## Testing it (for judges)
+
+**On a Quest 3 (the real thing).** Open https://chrisbuildsonline.github.io/chronogrip-mr/ in the Quest browser. Put the controllers down, sit with a table or tray table in front of you and press **Enter MR**. Then follow [How to play](#how-to-play-quest-browser): pinch a gear onto its axle, then pinch the dial and roll your wrist.
+
+**In any desktop browser (preview).** Open the same URL. Enter MR stays disabled, but the whole game runs with the mouse (there are no keyboard controls):
+
+- Click **Start**, then drag the loose gear from the ledge onto a free axle.
+- When the escapement starts ticking, press the dial's knob and drag sideways (right is faster) until the needle sits in the amber band.
+- Drag empty space to orbit, scroll to zoom.
+
+**Locally with Docker.** No Bun or browsers needed on the host:
+
+```
+bun run docker:build             # or: docker build -t chronogrip-mr .
+docker run --rm -p 4173:4173 chronogrip-mr
+```
+
+Then open http://localhost:4173.
+
+**The test suite.** `bun run check` runs the typecheck, the unit tests and both Playwright e2e projects (after `bun install`; the e2e run takes about 7 minutes on software GL). `bun run docker:test` runs the same inside the image.
+
 ## Run, build, test
 
 Needs [Bun](https://bun.sh).
@@ -85,9 +112,19 @@ The unit tests cover the gear geometry, the train solver, the levels, tray place
 
 Deploys: `.github/workflows/deploy.yml` typechecks, runs the unit tests, builds and publishes `dist/` to GitHub Pages on every push to `main` (the repo's Pages source must be set to "GitHub Actions"). The build uses relative asset paths, so it works under `/chronogrip-mr/`.
 
-## How it is built
+## How we built it
 
-TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK) for the WebXR session, three.js for rendering, Vite for the build.
+ChronoGrip is a web app: TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK) for the WebXR `immersive-ar` session, three.js for rendering and Vite for the build. It runs in the Quest browser with nothing to install.
+
+- **Hands.** Every frame `mr.ts` reads the thumb tip, index tip and wrist joints straight from the XR frame. Tips closer than 2 cm are a pinch; the index tip pokes card buttons; the wrist's roll turns the regulator.
+- **Tray placement.** With plane detection, `anchor.ts` stands the tray on the nearest usable horizontal plane, adding a riser if it is low. If no plane qualifies, the tray takes a fixed comfort pose in front of you.
+- **Gears.** `gear.ts` draws real involute tooth outlines in code and extrudes them into meshes. There are no model files.
+- **Gear train.** `train.ts` is a deterministic solver: it walks the meshed gears, works out each speed and direction, and reports a jam when a loop disagrees or gears collide.
+- **Escapement.** `escapement.ts` maps wrist twist to a tick rate from 1 to 5 ticks a second, and checks you hold it in the target band.
+- **Sound.** `sound.ts` synthesises every tick, click, grind and chime with WebAudio oscillators and noise; the ticks are placed at the dial.
+- **Tests.** Vitest unit, fuzz and Given/When/Then tests cover the geometry, solver, levels, placement and flow. Playwright e2e tests drive the game in the IWER emulator posing as a Quest 3, with hands. A Docker image serves the build and runs the whole suite.
+
+### Code map
 
 | Module | Does |
 | --- | --- |
@@ -107,6 +144,30 @@ TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK) for the WebXR session, 
 
 - **Render budget:** at most 100 draw calls and 60,000 triangles a frame while playing (measured at 47-52 calls and 25,000-33,000 triangles in software GL); gears with the same tooth count share one geometry, and the hover and sound updates in the frame loop reuse scratch vectors. An e2e test checks every level and the daily.
 - **Headless XR tests:** the IWER emulator (`@iwsdk/vite-plugin-iwer`) is injected by `bun run dev` only, so the dev e2e project can drive hands and pinches without a headset. Production builds do not include it.
+
+## Challenges
+
+- **No pinch point to read.** IWSDK's grab system can turn a pinch into a generic grab, but we needed the pinch point, the index tip for pokes and the wrist's roll. So we switched its grabbing off and read the joints ourselves.
+- **Testing hands without a headset.** The IWER emulator has hands, but a test has to set each hand's pinch value and move the emulated hand one step at a time, then wait for the game to see it. Shared helpers for pinch, carry and poke let the whole demo story run headless, end to end.
+- **Slow software GL.** In containers there is no GPU, so WebGL runs on the CPU. Too many parallel workers starved each other into timeouts. We cut the worker count and gave each e2e test 90 to 120 seconds.
+- **Seated comfort.** Every card, gear, axle and dial has to stay inside a comfortable view cone and within arm's reach. `seat.ts` defines the cone and a unit test checks every part of every level against it.
+- **Two copies of three.js.** IWSDK brought its own three.js, and two copies break `instanceof` checks between them. Vite's `resolve.dedupe` keeps one.
+
+## What's next
+
+Target launch date: January 2027, free in the Quest browser at the live URL.
+
+- Real-hand occlusion, so your fingers hide the tray where they pass in front of it.
+- A tray pose that persists between sessions, so the board comes back where you left it.
+- More levels, and a level editor so players can share puzzles.
+- On-device profiling on a Quest 3 to hold 60 fps on every level. The render budget so far is measured in software GL only.
+
+## How it fits the judging
+
+- **Innovation & Creativity:** a hands-only clockwork repair built for seated passthrough. Turning the regulator is a real wrist twist, like winding a key.
+- **Experience Design:** nothing asks you to stand, turn or stretch; tests keep every part inside a comfort cone. Level 1 teaches by a ghost hand, with no text.
+- **Technical Implementation:** joint-level hand input, plane-based tray placement with a fallback pose, involute gear geometry and a deterministic gear-train solver with jam detection, covered by unit, fuzz and emulated-headset e2e tests.
+- **Polish & Presentation:** synthesised sound placed at the dial, a bird that comes to life, a render budget checked on every level, saved best times and a daily puzzle. One live URL, one Docker command.
 
 ## Credits and license
 
