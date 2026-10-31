@@ -150,10 +150,19 @@ describe('panel placement', () => {
 });
 
 describe('clock text', () => {
-  it('formats seconds as m:ss', () => {
-    expect(clock(0)).toBe('0:00');
-    expect(clock(9.7)).toBe('0:09');
+  it('formats 10 s and over as m:ss', () => {
+    expect(clock(10)).toBe('0:10');
+    expect(clock(59.99)).toBe('0:59');
     expect(clock(75)).toBe('1:15');
     expect(clock(3600)).toBe('60:00');
+  });
+
+  it('shows tenths under 10 s, so a quick solve never reads 0:00', () => {
+    expect(clock(0.4)).toBe('0:00.4');
+    expect(clock(0.05)).toBe('0:00.0');
+    expect(clock(0)).toBe('0:00.0');
+    expect(clock(0.7)).toBe('0:00.7');
+    expect(clock(7.25)).toBe('0:07.2');
+    expect(clock(9.97)).toBe('0:09.9'); // truncated, never rounded up past what was played
   });
 });

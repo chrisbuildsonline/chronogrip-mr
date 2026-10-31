@@ -59,7 +59,8 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       return { width, height: 0.15, buttons: [back, ...tiles] };
     }
     case 'hud':
-      return { width: 0.2, height: 0.062, buttons: [{ id: 'pause', label: 'Pause', kind: 'icon', x: 0.1 - 0.008 - BH / 2, y: 0.031, w: BH, h: BH }] };
+      // Wide enough for a time with tenths (0:04.7) clear of the pause button.
+      return { width: 0.23, height: 0.062, buttons: [{ id: 'pause', label: 'Pause', kind: 'icon', x: 0.115 - 0.008 - BH / 2, y: 0.031, w: BH, h: BH }] };
     case 'complete': {
       // After the last level the primary already goes to level select, so there is no second Levels button.
       const last = ctx.level + 1 >= ctx.levels;
@@ -118,5 +119,6 @@ export function worldToPanel(a: Anchor, p: Vec3): Vec3 {
   return [x, dy * cp + tz * sp, -dy * sp + tz * cp];
 }
 
-/** Seconds as m:ss. */
-export const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+/** Seconds as m:ss, with tenths under 10 s (0:04.7) so a quick solve never reads 0:00. Truncated, never rounded up. */
+export const clock = (s: number) =>
+  s < 10 ? `0:0${(Math.floor(s * 10 + 1e-6) / 10).toFixed(1)}` : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
