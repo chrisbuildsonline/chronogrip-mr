@@ -23,20 +23,29 @@ import { trayLocal } from './seat';
 
 /**
  * The escapement corner of the tray (regulator dial and balance wheel) and the automaton bird, per design/DESIGN.md.
- * Both sit in level coordinates clear of every level's gears and inside the touch cone.
+ * The escapement sits in level coordinates clear of every level's gears and inside the touch cone; the bird stands off the board.
  */
-export const DIAL_AT = [0.13, -0.106] as const;
-const DIAL_R = 0.036;
+export const DIAL_AT = [0.122, -0.104] as const;
+const DIAL_R = 0.044;
 const BALANCE_AT = [0.183, -0.106] as const;
-const BIRD_AT = [0.163, 0.108] as const;
+/**
+ * On a bronze bracket off the tray's right edge: on the board it stood among the gears, and standing upright on the
+ * tilted tray its head leaned over the parts strip.
+ */
+const BIRD_AT = [0.252, 0.028] as const;
+/** The bird is modelled at about 6 cm tall and shown larger so it reads from the seat. */
+const BIRD_SCALE = 1.6;
+/**
+ * The bird's reach, metres: it stands `height` tall (plinth to the top of its head, wings up) and no part of it is
+ * further than `radius` from its post. It stands upright, so on the tilted tray it leans up the board.
+ */
+export const BIRD = { x: BIRD_AT[0], y: BIRD_AT[1], height: 0.067 * BIRD_SCALE, radius: 0.027 * BIRD_SCALE } as const;
 /** Keep-out circles (level metres, with margin) that generated gears must stay clear of: dial, balance wheel, bird. */
 export const PROPS: readonly { x: number; y: number; r: number }[] = [
   { x: DIAL_AT[0], y: DIAL_AT[1], r: DIAL_R + 0.008 },
   { x: BALANCE_AT[0], y: BALANCE_AT[1], r: 0.03 },
   { x: BIRD_AT[0], y: BIRD_AT[1], r: 0.03 },
 ];
-/** The bird is modelled at about 6 cm tall and shown larger so it reads from the seat. */
-const BIRD_SCALE = 1.4;
 /** Height of the knob's top above the tray surface; a pinch is aimed here. */
 export const KNOB_TOP = 0.019;
 /** A pinch (or a mouse press) this close to the knob grabs it: the whole dial is the target, metres. */
@@ -88,15 +97,22 @@ function dialFace() {
       g.fillStyle = C.cream;
       g.fill();
       g.beginPath();
-      g.arc(c, c, R * 0.99, 0, Math.PI * 2);
-      g.lineWidth = R * 0.05;
+      g.arc(c, c, R * 0.97, 0, Math.PI * 2);
+      g.lineWidth = R * 0.06;
       g.strokeStyle = C.deep;
       g.stroke();
 
       const [lo, hi] = [angleOf(settingOf(target * (1 - BAND))), angleOf(settingOf(target * (1 + BAND)))];
       g.lineCap = 'butt';
-      arc(lo, hi, R * 0.72, R * 0.16, inBand ? '#ecc883' : C.tint);
-      if (hold > 0) arc(lo, lo + (hi - lo) * hold, R * 0.72, R * 0.16, C.amber);
+      arc(lo, hi, R * 0.68, R * 0.24, inBand ? '#ecc883' : C.tint);
+      // In the band the fill shows at once (a quarter of the arc) and grows over the hold, and a progress ring round
+      // the knob sweeps once with it: the hold reads from any angle, needle or not.
+      if (inBand || hold > 0) {
+        arc(lo, lo + (hi - lo) * (0.25 + 0.75 * hold), R * 0.68, R * 0.24, C.amber);
+        arc(0, Math.PI * 2, R * 0.43, R * 0.1, C.tint);
+        g.lineCap = 'round';
+        arc(0, Math.PI * 2 * Math.max(0.06, hold), R * 0.43, R * 0.1, C.amber);
+      }
 
       g.lineCap = 'round';
       arc(angleOf(0), angleOf(1), R * 0.84, R * 0.018, C.muted);
@@ -222,16 +238,21 @@ export function createEscapement() {
 export function createAutomaton() {
   const root = new Group();
   root.name = 'automaton';
-  root.position.set(...trayLocal(BIRD_AT[0], BIRD_AT[1], 0));
-  root.scale.setScalar(BIRD_SCALE);
+  // A bronze bracket, like the escapement plate, butts onto the board's right side, its top just over the tray surface.
+  const bracket = new Mesh(new RoundedBoxGeometry(0.084, 0.008, 0.076, 2, 0.004), bronze());
+  root.add(flat(bracket, -0.002, BIRD_AT));
+  const stand = new Group();
+  stand.position.set(...trayLocal(BIRD_AT[0], BIRD_AT[1], 0));
+  stand.scale.setScalar(BIRD_SCALE);
+  root.add(stand);
   const plinth = new Mesh(new CylinderGeometry(0.014, 0.017, 0.006, 32), bronze());
   plinth.position.y = 0.003;
-  root.add(plinth);
+  stand.add(plinth);
 
   // Stands upright in the room whatever the tray's tilt (set per frame).
   const upright = new Group();
   upright.position.y = 0.006;
-  root.add(upright);
+  stand.add(upright);
   const post = new Mesh(new CylinderGeometry(0.0019, 0.0024, 0.026, 12), brass());
   post.position.y = 0.013;
   const perch = new Mesh(new CylinderGeometry(0.0016, 0.0016, 0.022, 10), brass());
