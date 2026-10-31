@@ -1,5 +1,6 @@
 import {
   BoxGeometry,
+  type BufferGeometry,
   CylinderGeometry,
   DirectionalLight,
   DoubleSide,
@@ -60,6 +61,10 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
   const gears = new Map<string, Mesh>();
   const loose = new Map<string, Mesh>();
   let parts: Mesh[] = [];
+  // Every pin and ring has one shape, and gears of one tooth count share one: built once, not per mesh.
+  const pinGeometry = new CylinderGeometry(PIN_RADIUS, PIN_RADIUS, PIN_HEIGHT, 24);
+  const ringGeometry = new RingGeometry(PIN_RADIUS * 2, PIN_RADIUS * 2.6, 32);
+  const gearGeometries = new Map<number, BufferGeometry>();
 
   const place = (mesh: Mesh, x: number, y: number, lift: number) => {
     mesh.position.set(...trayLocal(x, y, lift));
@@ -78,11 +83,11 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
     place(ledge, 0, TRAY_HALF.y + ledgeDepth / 2, -BOARD_THICKNESS / 2);
 
     for (const a of level.axles) {
-      const pin = new Mesh(new CylinderGeometry(PIN_RADIUS, PIN_RADIUS, PIN_HEIGHT, 24), steel());
+      const pin = new Mesh(pinGeometry, steel());
       place(pin, a.x, a.y, PIN_HEIGHT / 2);
       pins.set(a.id, pin);
       // A thin flat ring round the pin, shown (pulsing) while a held gear could land here.
-      const ring = new Mesh(new RingGeometry(PIN_RADIUS * 2, PIN_RADIUS * 2.6, 32), new MeshBasicMaterial({ color: 0xffd27a, transparent: true, depthWrite: false, side: DoubleSide }));
+      const ring = new Mesh(ringGeometry, new MeshBasicMaterial({ color: 0xffd27a, transparent: true, depthWrite: false, side: DoubleSide }));
       ring.rotation.x = -Math.PI / 2;
       ring.visible = false;
       place(ring, a.x, a.y, 0.002);
@@ -90,7 +95,8 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
     }
 
     const gear = (id: string, teeth: number, x: number, y: number, layer: number) => {
-      const mesh = new Mesh(gearGeometry({ module: level.module, teeth }), brass());
+      if (!gearGeometries.has(teeth)) gearGeometries.set(teeth, gearGeometry({ module: level.module, teeth }));
+      const mesh = new Mesh(gearGeometries.get(teeth), brass());
       mesh.rotation.x = -Math.PI / 2; // gear axis Z -> tray normal
       place(mesh, x, y, layerLift(layer));
       gears.set(id, mesh);
@@ -144,10 +150,11 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
     load(next) {
       for (const m of parts) {
         tray.remove(m);
-        m.geometry.dispose();
+        if (m.geometry !== pinGeometry && m.geometry !== ringGeometry) m.geometry.dispose();
         (m.material as MeshStandardMaterial).dispose();
       }
       parts = [];
+      gearGeometries.clear();
       for (const map of [pins, rings, gears, loose]) map.clear();
       fill(next);
     },

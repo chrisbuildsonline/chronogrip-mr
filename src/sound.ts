@@ -15,7 +15,7 @@ export function createSound() {
   let out: GainNode;
   let panner: PannerNode;
   let noise: AudioBuffer;
-  let source: Vec3 = [0, 0, 0];
+  const source: [number, number, number] = [0, 0, 0];
   const counts: SoundCounts = { ticks: 0, clicks: 0, grinds: 0, chimes: 0 };
 
   /** A one-shot voice: a source into a gain that falls to silence over `len` seconds, into `to`. */
@@ -111,15 +111,25 @@ export function createSound() {
     setListener(pos: Vec3, forward: Vec3, up: Vec3): void {
       const l = ctx?.listener;
       if (!l) return;
-      [l.positionX, l.positionY, l.positionZ, l.forwardX, l.forwardY, l.forwardZ, l.upX, l.upY, l.upZ].forEach((p, i) => {
-        p.value = [...pos, ...forward, ...up][i]!;
-      });
+      l.positionX.value = pos[0];
+      l.positionY.value = pos[1];
+      l.positionZ.value = pos[2];
+      l.forwardX.value = forward[0];
+      l.forwardY.value = forward[1];
+      l.forwardZ.value = forward[2];
+      l.upX.value = up[0];
+      l.upY.value = up[1];
+      l.upZ.value = up[2];
     },
-    /** Where the ticks come from, in world space. */
+    /** Where the ticks come from, in world space. The caller may reuse `pos`: it is copied. */
     setSource(pos: Vec3): void {
-      source = pos;
+      source[0] = pos[0];
+      source[1] = pos[1];
+      source[2] = pos[2];
       if (!ctx) return;
-      [panner.positionX.value, panner.positionY.value, panner.positionZ.value] = pos;
+      panner.positionX.value = pos[0];
+      panner.positionY.value = pos[1];
+      panner.positionZ.value = pos[2];
     },
     suspend(): void {
       if (ctx?.state === 'running') void ctx.suspend().catch(() => undefined);

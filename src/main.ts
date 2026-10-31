@@ -5,7 +5,7 @@ import { DEFAULT_PLACEMENT, toHeadFrame, type Head } from './anchor';
 import { startSession } from './enter';
 import { DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial } from 'three';
 import { occupiedAt, pickGear, snapAxle } from './grab';
-import { handNear, rayPick, validAxles } from './hover';
+import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
 import { buildScene } from './scene';
 import { trackMr } from './mr';
@@ -20,7 +20,7 @@ import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistO
 import { createSound, ticksBetween } from './sound';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, createAutomaton, createEscapement } from './clockwork';
 import { firstUnsolved, loadProgress, recordSolve, saveProgress, type Progress } from './progress';
-import { dailySeed, tinkerLevel } from './tinker';
+import { dailySeed, tinkerLevel, withDaily } from './tinker';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('#app container missing');
@@ -36,8 +36,8 @@ if (!enterButton || !enterNote) throw new Error('Enter MR controls missing');
 const world = await World.create(container, createWorldOptions());
 
 // The five levels, then today's daily tinker puzzle as a sixth.
-const levels: readonly Level[] = [...LEVELS, tinkerLevel(dailySeed(new Date()))];
-const levelIds = levels.map((l) => l.id);
+let levels: readonly Level[] = [...LEVELS, tinkerLevel(dailySeed(new Date()))];
+let levelIds = levels.map((l) => l.id);
 // Saved best times. Reading localStorage itself can throw (storage blocked), so fall back to none.
 const storage = (() => {
   try {
@@ -160,11 +160,17 @@ burst.rotation.x = -Math.PI / 2;
 burst.visible = false;
 built.tray.add(burst);
 
-let gazeSpheres: { kind: 'gear'; id: string; mesh: Mesh; radius: number }[] = [];
-let pinSpheres: { kind: 'axle'; id: string; mesh: Mesh; radius: number }[] = [];
+/** Every gear and pin a gaze or hand can land on; `center` is refilled each frame (world space), so nothing is allocated per frame. */
+type Mut3 = [number, number, number];
+type Target = Omit<HoverTarget, 'center'> & { center: Mut3; mesh: Mesh };
+let hoverTargets: Target[] = [];
+/** The loose gears among them, which a free hand can make glow. */
+let looseTargets: Target[] = [];
 const collectTargets = () => {
-  gazeSpheres = [...built.gears].map(([id, m]) => ({ kind: 'gear' as const, id, mesh: m, radius: (m.geometry.boundingSphere ?? m.geometry.computeBoundingSphere() ?? { radius: 0.03 }).radius }));
-  pinSpheres = [...built.pins].map(([id, m]) => ({ kind: 'axle' as const, id, mesh: m, radius: 0.015 }));
+  const gears = [...built.gears].map(([id, m]): Target => ({ kind: 'gear', id, mesh: m, radius: (m.geometry.boundingSphere ?? m.geometry.computeBoundingSphere() ?? { radius: 0.03 }).radius, center: [0, 0, 0] }));
+  const pins = [...built.pins].map(([id, m]): Target => ({ kind: 'axle', id, mesh: m, radius: 0.015, center: [0, 0, 0] }));
+  hoverTargets = [...gears, ...pins];
+  looseTargets = gears.filter((g) => built.loose.has(g.id));
 };
 collectTargets();
 
@@ -210,6 +216,19 @@ function putBack(): void {
   solved = checkLevel(level, placements).solved;
 }
 
+/** On the title or level select, swaps in today's daily if the date has rolled over since it was picked (a session left open past midnight). */
+function rolloverDaily(): void {
+  if (flow.name !== 'title' && flow.name !== 'select') return;
+  const fresh = withDaily(levels, new Date());
+  if (fresh === levels) return;
+  levels = fresh;
+  levelIds = levels.map((l) => l.id);
+  if (flow.name === 'title') {
+    loadLevel(continueAt());
+    flow = { ...flow, level: levelIndex };
+  }
+}
+
 function send(e: FlowEvent): void {
   const next = step(flow, e, levels.length);
   if (next === flow) return;
@@ -221,6 +240,7 @@ function send(e: FlowEvent): void {
   if (reloads(flow, e, next)) loadLevel(next.level);
   const entering = next.name !== flow.name && flow.name !== 'paused';
   flow = next;
+  rolloverDaily();
   if (next.name === 'calibrate' && entering) {
     rewardAt = performance.now();
     spins = checkLevel(level, placements).spins;
@@ -258,6 +278,7 @@ const PRESS: Record<string, FlowEvent> = {
 const PRESS_GAP_MS = 300;
 let pressedAt = -Infinity;
 function press(id: string, by: 'hand' | 'mouse' = 'hand'): void {
+  rolloverDaily();
   const now = performance.now();
   if (by === 'hand' && now - pressedAt < PRESS_GAP_MS) return;
   pressedAt = now;
@@ -407,6 +428,7 @@ canvas.addEventListener('pointercancel', mouseUp);
 // Pause whenever the player is pulled away: tab hidden, headset menu or headset off, session over.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') send({ type: 'pause' });
+  else rolloverDaily();
 });
 world.renderer.xr.addEventListener('sessionstart', () => {
   const session = world.renderer.xr.getSession();
@@ -486,8 +508,23 @@ world.renderer.xr.addEventListener('sessionend', () => {
 const GAZE_TINT = { color: 0xffe2b0, intensity: 0.3 };
 const HAND_TINT = { color: 0xff8a2a, intensity: 0.9 };
 let gazeTarget: { kind: 'gear' | 'axle'; id: string } | null = null;
-let handGlow: string[] = [];
+const handGlow: string[] = [];
 let validNow: string[] = [];
+// Scratch for the per-frame loop below, so a frame allocates nothing here.
+const scratchA = new Vector3();
+const scratchB = new Vector3();
+const scratchC = new Vector3();
+const scratchQ = new Quaternion();
+const UP = new Vector3(0, 1, 0);
+const gazeRay: [Mut3, Mut3] = [[0, 0, 0], [0, 0, 0]];
+const freeHands: (Vec3 | null)[] = [null, null];
+const soundAt: Mut3 = [0, 0, 0];
+const listenAt: Mut3 = [0, 0, 0];
+const listenForward: Mut3 = [0, 0, 0];
+const listenUp: Mut3 = [0, 0, 0];
+const set3 = (out: Mut3, v: Vector3): Mut3 => ((out[0] = v.x), (out[1] = v.y), (out[2] = v.z), out);
+/** The escapement dial's top, in tray space, where the ticks come from. */
+const knobTop = new Vector3(...trayLocal(KNOB[0], KNOB[1], KNOB_TOP));
 const tint = (mesh: Mesh, t: { color: number; intensity: number } | null) => {
   const mat = mesh.material as MeshStandardMaterial;
   mat.emissive.set(t?.color ?? 0x000000);
@@ -512,17 +549,20 @@ world.scene.onBeforeRender = () => {
   }
 
   // WebXR has no general eye-gaze API, so in XR the gaze ray is the head (viewer pose) forward direction.
-  const ray: [Vec3, Vec3] | null = world.renderer.xr.isPresenting
-    ? [world.camera.getWorldPosition(new Vector3()).toArray(), world.camera.getWorldDirection(new Vector3()).toArray()]
-    : mouseRay;
-  const spheres = [...gazeSpheres, ...pinSpheres].map((s) => ({ kind: s.kind, id: s.id, radius: s.radius, center: worldOf(s.mesh.position) }));
-  gazeTarget = ray && rayPick(ray[0], ray[1], spheres);
-  handGlow = handNear(
-    (['left', 'right'] as const).map((h) => (holder === h ? null : handPoints[h])),
-    [...built.loose].map(([id, m]) => ({ id, center: worldOf(m.position) })),
-    HAND_NEAR_M,
-  );
-  validNow = validAxles(level, placements, held);
+  let ray: [Vec3, Vec3] | null = mouseRay;
+  if (world.renderer.xr.isPresenting) {
+    set3(gazeRay[0], world.camera.getWorldPosition(scratchA));
+    set3(gazeRay[1], world.camera.getWorldDirection(scratchB));
+    ray = gazeRay;
+  }
+  built.tray.updateMatrixWorld();
+  for (const s of hoverTargets) set3(s.center, built.tray.localToWorld(scratchA.copy(s.mesh.position)));
+  gazeTarget = ray && rayPick(ray[0], ray[1], hoverTargets);
+  freeHands[0] = holder === 'left' ? null : handPoints.left;
+  freeHands[1] = holder === 'right' ? null : handPoints.right;
+  handNear(freeHands, looseTargets, HAND_NEAR_M, handGlow);
+  if (held) validNow = validAxles(level, placements, held);
+  else validNow.length = 0;
 
   // Escapement: it ticks once the train is solved. While calibrating, the train steps forward on each tick
   // (a step is what it turns in one tick at the target rate); once calibrated it runs smoothly at its true speeds.
@@ -538,8 +578,12 @@ world.scene.onBeforeRender = () => {
     }
   }
   // One tick of sound per step of the escapement, from the dial; once calibrated the target rate keeps it.
-  sound.setSource(worldOf(new Vector3(...trayLocal(KNOB[0], KNOB[1], KNOB_TOP))));
-  sound.setListener(world.camera.getWorldPosition(new Vector3()).toArray(), world.camera.getWorldDirection(new Vector3()).toArray(), new Vector3(0, 1, 0).applyQuaternion(world.camera.getWorldQuaternion(new Quaternion())).toArray());
+  sound.setSource(set3(soundAt, built.tray.localToWorld(scratchA.copy(knobTop))));
+  sound.setListener(
+    set3(listenAt, world.camera.getWorldPosition(scratchA)),
+    set3(listenForward, world.camera.getWorldDirection(scratchB)),
+    set3(listenUp, scratchC.copy(UP).applyQuaternion(world.camera.getWorldQuaternion(scratchQ))),
+  );
   let owed = flow.name === 'calibrate' ? ticksBetween(phaseBefore, regulator.phase) : 0;
   if (flow.name === 'complete') {
     soundPhase += dt * regulator.target;
@@ -560,7 +604,7 @@ world.scene.onBeforeRender = () => {
   // While calibrating the escapement gear glints on every tick.
   const glint = flow.name === 'calibrate' ? 0.6 * (1 - (regulator.phase % 1)) ** 3 : 0;
 
-  for (const s of [...gazeSpheres, ...pinSpheres]) {
+  for (const s of hoverTargets) {
     const lit = s.kind === 'gear' && handGlow.includes(s.id) ? HAND_TINT : gazeTarget?.kind === s.kind && gazeTarget.id === s.id ? GAZE_TINT : null;
     const amber = s.kind === 'gear' ? Math.max(1.2 * flash, s.id === level.escapement.gear ? glint : 0) : 0;
     tint(s.mesh, amber > 0.01 ? { color: 0xd99a2b, intensity: amber } : lit);
@@ -712,6 +756,11 @@ window.__chrono = Object.freeze({
   },
   get audio() {
     return { state: sound.state(), ...sound.counts };
+  },
+  // info.autoReset (the default) zeroes the counters at the start of each render, so these are the last frame's.
+  get render() {
+    const { calls, triangles } = world.renderer.info.render;
+    return { calls, triangles };
   },
   get automatonRunning() {
     return regulator.calibrated;

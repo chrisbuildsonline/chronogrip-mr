@@ -8,14 +8,18 @@ export type HoverTarget = { kind: 'gear' | 'axle'; id: string; center: Vec3; rad
 export function rayPick(origin: Vec3, dir: Vec3, targets: readonly HoverTarget[]): { kind: 'gear' | 'axle'; id: string } | null {
   const len = Math.hypot(dir[0], dir[1], dir[2]);
   if (len === 0) return null;
-  const d = [dir[0] / len, dir[1] / len, dir[2] / len];
+  const dx = dir[0] / len;
+  const dy = dir[1] / len;
+  const dz = dir[2] / len;
   let best: { kind: 'gear' | 'axle'; id: string } | null = null;
   let bestT = Infinity;
   for (const t of targets) {
-    const oc = [t.center[0] - origin[0], t.center[1] - origin[1], t.center[2] - origin[2]];
-    const along = oc[0]! * d[0]! + oc[1]! * d[1]! + oc[2]! * d[2]!;
+    const ox = t.center[0] - origin[0];
+    const oy = t.center[1] - origin[1];
+    const oz = t.center[2] - origin[2];
+    const along = ox * dx + oy * dy + oz * dz;
     if (along < 0) continue;
-    const miss2 = oc[0]! ** 2 + oc[1]! ** 2 + oc[2]! ** 2 - along * along;
+    const miss2 = ox ** 2 + oy ** 2 + oz ** 2 - along * along;
     if (miss2 > t.radius * t.radius) continue;
     const hit = along - Math.sqrt(t.radius * t.radius - miss2);
     if (hit < bestT) {
@@ -26,11 +30,18 @@ export function rayPick(origin: Vec3, dir: Vec3, targets: readonly HoverTarget[]
   return best;
 }
 
-/** Ids of the gears with a (tracked) hand point within `radius` of their centre. */
-export function handNear(points: readonly (Vec3 | null)[], gears: readonly { id: string; center: Vec3 }[], radius: number): string[] {
-  return gears
-    .filter((g) => points.some((p) => p && Math.hypot(p[0] - g.center[0], p[1] - g.center[1], p[2] - g.center[2]) <= radius))
-    .map((g) => g.id);
+/** Ids of the gears with a (tracked) hand point within `radius` of their centre; `out` is cleared and filled when given (no allocation). */
+export function handNear(points: readonly (Vec3 | null)[], gears: readonly { id: string; center: Vec3 }[], radius: number, out: string[] = []): string[] {
+  out.length = 0;
+  for (const g of gears) {
+    for (const p of points) {
+      if (p && Math.hypot(p[0] - g.center[0], p[1] - g.center[1], p[2] - g.center[2]) <= radius) {
+        out.push(g.id);
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 /** Axles where the held gear could snap: free at its layer, by the same rule as a release (`snapAxle`). */
