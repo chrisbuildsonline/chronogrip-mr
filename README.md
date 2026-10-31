@@ -65,6 +65,17 @@ bun run test        # unit tests (Vitest)
 bun run e2e         # Playwright, both projects; starts its own servers (about 7 minutes on software GL)
 ```
 
+Or in Docker, with no browsers or Node tools on the host:
+
+```
+docker build -t chronogrip-mr .
+docker run --rm --ipc=host chronogrip-mr
+```
+
+(`bun run docker:build` and `bun run docker:test` are the same two commands.)
+
+That runs typecheck, the unit tests and both e2e projects inside the image (about 10 minutes, mostly the e2e run).
+
 `bun run e2e` runs two Playwright projects (pick one with `bun run e2e --project=preview` or `--project=dev`):
 
 - **preview**: the production build on port 4173, no emulator, mouse only. Page load with a clean console, rendering, drag-and-drop gears, hover hints, the level flow, calibration, saved progress and the daily, sound, and the render budget on every level.
