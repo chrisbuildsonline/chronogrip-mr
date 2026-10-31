@@ -86,10 +86,14 @@ test('dev server: the headset menu pauses mid-level; the board and the clock hol
   expect(await page.evaluate(() => window.__chrono!.levelTime)).toBe(t);
   await page.screenshot({ path: 'test-results/f9-dev-paused.png' });
 
+  const resumeAt = Date.now();
   await poke(page, 'resume');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
   expect(await page.evaluate(() => ({ placements: window.__chrono!.placements, gears: window.__chrono!.gears }))).toEqual(board);
-  expect(await page.evaluate(() => window.__chrono!.levelTime)).toBeLessThan(t + 1);
+  // the bound is the real time since Resume, so the 2 s spent paused can't sneak in
+  const resumed = (await page.evaluate(() => window.__chrono!.levelTime)) - t;
+  expect(resumed).toBeGreaterThanOrEqual(0);
+  expect(resumed).toBeLessThan((Date.now() - resumeAt) / 1000 + 0.25);
 
   await page.evaluate((d) => (window as unknown as Record<string, Device>)[d]!.activeSession!.end(), device);
   await page.waitForFunction(() => window.__chrono!.xrPresenting === false, undefined, { timeout: 10_000 });
