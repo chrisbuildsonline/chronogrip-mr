@@ -4,7 +4,8 @@ import { PROPS } from '../../src/clockwork';
 import { targetRate } from '../../src/escapement';
 import { checkLevel, parseLevel, type Level } from '../../src/levels';
 import { PIN_RADIUS, footprints, inComfortZone, interactables, partsStrip } from '../../src/seat';
-import { dailySeed, fallbackLevel, tinkerLevel } from '../../src/tinker';
+import { LEVELS } from '../../src/levels';
+import { dailySeed, fallbackLevel, tinkerLevel, withDaily } from '../../src/tinker';
 
 /** Every invariant the shipped levels are tested for, plus the tinker-specific ones. */
 function invariants(level: Level, why: string) {
@@ -136,5 +137,35 @@ describe('tinkerLevel fuzz', () => {
       if (JSON.stringify({ ...l, id: 'x' }) === plain) fallbacks++;
     }
     expect(fallbacks, 'the generator, not the fallback, makes the puzzles').toBeLessThan(seeds.length / 20);
+  });
+});
+
+describe('withDaily', () => {
+  const day1 = new Date(2026, 9, 30, 23, 59);
+  const day2 = new Date(2026, 9, 31, 0, 1);
+  const boot = [...LEVELS, tinkerLevel(dailySeed(day1))];
+
+  it('keeps the very same list while the date has not changed', () => {
+    expect(withDaily(boot, new Date(2026, 9, 30, 0, 0))).toBe(boot);
+    expect(withDaily(boot, day1)).toBe(boot);
+  });
+
+  it('swaps only the last level for the new date after midnight', () => {
+    const next = withDaily(boot, day2);
+    expect(next).toHaveLength(boot.length);
+    expect(next.slice(0, -1)).toEqual(boot.slice(0, -1));
+    expect(next.at(-1)).toEqual(tinkerLevel(dailySeed(day2)));
+    expect(next.at(-1)!.id).toBe('t20261031');
+    expect(boot.at(-1)!.id).toBe('t20261030'); // the old list is untouched
+  });
+
+  it('rolls over a month and a year end', () => {
+    expect(withDaily(boot, new Date(2026, 11, 31)).at(-1)!.id).toBe('t20261231');
+    expect(withDaily(boot, new Date(2027, 0, 1)).at(-1)!.id).toBe('t20270101');
+  });
+
+  it('is stable once swapped', () => {
+    const next = withDaily(boot, day2);
+    expect(withDaily(next, day2)).toBe(next);
   });
 });

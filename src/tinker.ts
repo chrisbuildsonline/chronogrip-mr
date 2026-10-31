@@ -8,6 +8,12 @@ import type { Axle, PlacedGear } from './train';
 /** One puzzle per local calendar day: YYYYMMDD. */
 export const dailySeed = (d: Date): number => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 
+/** `levels` with its last level (the daily) swapped for the one for `now`'s date; the same list back while it is already today's. */
+export function withDaily(levels: readonly Level[], now: Date): readonly Level[] {
+  const seed = dailySeed(now);
+  return levels.at(-1)?.id === `t${seed}` ? levels : [...levels.slice(0, -1), tinkerLevel(seed)];
+}
+
 type Rand = () => number;
 
 function mulberry32(seed: number): Rand {
