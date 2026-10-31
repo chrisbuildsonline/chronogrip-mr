@@ -23,5 +23,7 @@ export default defineConfig(({ mode }) => ({
   plugins: mode === 'test' ? [] : [injectIWER({ device: 'metaQuest3', sem: { defaultScene: 'living_room' } })],
   // @iwsdk/core ships its own three; one copy keeps instanceof checks and the renderer consistent.
   resolve: { dedupe: ['three'] },
+  // Reachable from outside a container (docker run -p 4173:4173).
+  preview: { host: true, port: 4173, strictPort: true },
   test: { include: ['tests/unit/**/*.test.ts'] },
 }));

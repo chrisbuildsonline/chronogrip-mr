@@ -69,12 +69,12 @@ Or in Docker, with no browsers or Node tools on the host:
 
 ```
 docker build -t chronogrip-mr .
-docker run --rm --ipc=host chronogrip-mr
+docker run --rm -p 4173:4173 chronogrip-mr
 ```
 
-(`bun run docker:build` and `bun run docker:test` are the same two commands.)
+That serves the production build at http://localhost:4173 (`bun run docker:build` and `bun run docker:serve` do the same, in the background; `bun run docker:stop` stops it).
 
-That runs typecheck, the unit tests and both e2e projects inside the image (about 10 minutes, mostly the e2e run).
+`bun run docker:test` runs the whole suite in the image: typecheck, the unit tests and both e2e projects (about 10 minutes, mostly the e2e run).
 
 `bun run e2e` runs two Playwright projects (pick one with `bun run e2e --project=preview` or `--project=dev`):
 

@@ -6,12 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --port 4173 --strictPort",
+    "preview": "vite preview",
+    "serve": "vite preview --host 0.0.0.0 --port 4173 --strictPort",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
+    "check": "bun run typecheck && bun run test && bun run e2e",
     "docker:build": "docker build -t chronogrip-mr .",
-    "docker:test": "docker run --rm --ipc=host chronogrip-mr"
+    "docker:test": "docker run --rm --ipc=host chronogrip-mr bun run check",
+    "docker:serve": "docker run --rm -d -p 4173:4173 --name chronogrip-mr chronogrip-mr",
+    "docker:stop": "docker stop chronogrip-mr"
   },
   "dependencies": {
     "@iwsdk/core": "1.1.0-rc.2",

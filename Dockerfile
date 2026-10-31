@@ -1,4 +1,4 @@
-# Runs the whole check suite: typecheck, unit tests, both Playwright projects.
+# Serves the production build on port 4173. `bun run check` in this image runs typecheck, unit tests and both Playwright projects.
 # The Playwright image tag must match @playwright/test in package.json.
 FROM mcr.microsoft.com/playwright:v1.64.1-noble
 
@@ -13,4 +13,8 @@ RUN bun install --frozen-lockfile
 
 COPY --chown=pwuser:pwuser . .
 
-CMD ["sh", "-c", "bun run typecheck && bun run test && bun run e2e"]
+RUN bun run build
+
+EXPOSE 4173
+
+CMD ["bun", "run", "serve"]
