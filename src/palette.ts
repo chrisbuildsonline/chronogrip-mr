@@ -13,6 +13,8 @@ export const C = {
   tint: '#f3dcae',
   tintInk: '#7a4e0e',
   shadow: 'rgba(20,12,4,0.35)',
+  /** World only, never text: the gears' brass, and the fine lines of the "table found" ring (src/cue.ts). */
+  brass: '#b08d57',
   /** Page only: the Enter MR note, and the lightest stop of the walnut vignette behind the page chrome. */
   note: '#c9bba6',
   vignette: '#3a2a1c',

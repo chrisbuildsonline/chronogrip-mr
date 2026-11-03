@@ -64,5 +64,9 @@ test('dev server: with no usable plane the tray takes the default pose, in the c
   await page.screenshot({ path: 'test-results/f6-dev-default.png' });
   expect(await page.evaluate(() => window.__chrono?.trayPlaced)).toBe('default');
   expect(await comfort(page)).toBe(true);
+  // The default fallback is not a found table: no placement ring, nothing restored, nothing saved.
+  expect(await page.evaluate(() => window.__chrono?.placeCue)).toEqual({ kind: null, showing: false, count: 0 });
+  expect(await page.evaluate(() => window.__chrono?.trayRestored)).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('chronogrip.tray.v1'))).toBeNull();
   expect(errors).toEqual([]);
 });

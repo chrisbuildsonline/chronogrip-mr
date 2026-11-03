@@ -22,6 +22,8 @@ import { createSound, ticksBetween } from './sound';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, createAutomaton, createEscapement } from './clockwork';
 import { firstUnsolved, loadProgress, recordSolve, saveProgress, type Progress } from './progress';
 import { dailySeed, tinkerLevel, withDaily } from './tinker';
+import { HAND_JOINTS, createHandOccluder } from './occlude';
+import { createPlaceCue, cueFor } from './cue';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('#app container missing');
@@ -457,19 +459,35 @@ let placement = DEFAULT_PLACEMENT;
 let placedPose: TrayPose = TRAY_POSE;
 let handHint = false;
 let recenters = 0;
+/** How this session's tray came back from an earlier one, if it did. */
+let trayRestored: 'anchor' | 'saved' | null = null;
 const lastTipZ: { left: number | null; right: number | null } = { left: null, right: null };
 const tipButton: { left: string | null; right: string | null } = { left: null, right: null };
+// Passthrough: real hands hide the board behind them (depth-only occluders on the joints), and a ring shows a found table.
+const occluders = { left: createHandOccluder(), right: createHandOccluder() };
+const jointsNow: { left: Float32Array | null; right: Float32Array | null } = { left: null, right: null };
+const cue = createPlaceCue();
+world.scene.add(occluders.left.root, occluders.right.root, cue.root);
+const INDEX_TIP = HAND_JOINTS.indexOf('index-finger-tip');
+const tipOf = (j: Float32Array | null) => (j ? { indexTip: [j[INDEX_TIP * 4]!, j[INDEX_TIP * 4 + 1]!, j[INDEX_TIP * 4 + 2]!] as const } : null);
 trackMr(world.renderer, {
   onRecenter() {
     recenters++;
   },
   holding: () => holder === 'left' || holder === 'right' || turning === 'left' || turning === 'right',
-  onPlace(next, head: Head) {
+  onPlace(next, head: Head, why) {
     placement = next;
     const [x, y, z] = toHeadFrame(next.pose.position, head);
     placedPose = { position: [x, y, z], tilt: next.pose.tilt, yaw: (next.pose.yaw ?? 0) - head.yaw };
     built.place(next);
     placePanels();
+    trayRestored = why === 'saved' || why === 'anchor' ? why : null;
+    const kind = cueFor(why, next);
+    if (kind) cue.start(kind, next, performance.now());
+  },
+  onJoints(hand, joints) {
+    jointsNow[hand] = joints;
+    occluders[hand].update(joints);
   },
   onHands(present) {
     handHint = !present;
@@ -507,13 +525,19 @@ trackMr(world.renderer, {
     if (point) drag(point);
     else release();
   },
-});
+}, storage);
 world.renderer.xr.addEventListener('sessionend', () => {
   send({ type: 'pause' });
   putBack();
   placement = DEFAULT_PLACEMENT;
   placedPose = TRAY_POSE;
   handHint = false;
+  trayRestored = null;
+  cue.hide();
+  for (const hand of ['left', 'right'] as const) {
+    jointsNow[hand] = null;
+    occluders[hand].update(null);
+  }
   built.place(DEFAULT_PLACEMENT);
   placePanels();
   panels.showHint(false);
@@ -563,6 +587,7 @@ world.scene.onBeforeRender = () => {
     if (done) tweens.delete(id);
   }
   built.updateShadows();
+  cue.update(now);
 
   // WebXR has no general eye-gaze API, so in XR the gaze ray is the head (viewer pose) forward direction.
   let ray: [Vec3, Vec3] | null = mouseRay;
@@ -700,6 +725,15 @@ window.__chrono = Object.freeze({
   },
   get recenters() {
     return recenters;
+  },
+  get placeCue() {
+    return { ...cue.state };
+  },
+  get trayRestored() {
+    return trayRestored;
+  },
+  get occluders() {
+    return { left: occluders.left.root.visible ? tipOf(jointsNow.left) : null, right: occluders.right.root.visible ? tipOf(jointsNow.right) : null };
   },
   get handHint() {
     return handHint;

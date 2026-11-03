@@ -10,6 +10,12 @@ interface ChronoHook {
   readonly trayPose: { readonly position: readonly [number, number, number]; readonly tilt: number; readonly yaw?: number };
   /** Live: 'plane' when a detected plane placed the tray, else 'default'. */
   readonly trayPlaced: 'plane' | 'default';
+  /** Live: the "table found" ring: the last kind shown ('plane' when a plane placed the tray, 'restored' for a saved pose), whether it is pulsing now, and how many times it has shown. */
+  readonly placeCue: { readonly kind: 'plane' | 'restored' | null; readonly showing: boolean; readonly count: number };
+  /** Live: how this session's tray pose came back from an earlier one: 'anchor' (a persistent anchor), 'saved' (the head-relative pose in localStorage), or null (placed fresh). */
+  readonly trayRestored: 'anchor' | 'saved' | null;
+  /** Live: per hand, the depth-only occluder's index tip (world) while the hand is tracked and occluding, else null. */
+  readonly occluders: { readonly left: { readonly indexTip: readonly [number, number, number] } | null; readonly right: { readonly indexTip: readonly [number, number, number] } | null };
   /** Live: how many two-hand pinch holds have recentered the tray. */
   readonly recenters: number;
   /** Live: true while the in-scene "use your hands" hint is shown. */
