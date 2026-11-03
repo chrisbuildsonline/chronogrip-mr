@@ -1,4 +1,5 @@
 import { LEVELS } from './levels';
+import { hasEdge, snapToEdge, type Pt } from './edge';
 import { TRAY_POSE, inComfortZone, interactables, type TrayPose, type Vec3 } from './seat';
 
 /** A detected surface in local space (head at the origin, -Z forward, +Y up). */
@@ -7,16 +8,24 @@ export type Plane = {
   /** Centre of the plane. */
   position: Vec3;
   extents?: { width: number; depth: number };
+  /** The surface outline as [x, z] points in the same frame (see planePolygonToHead); the tray snaps to its near edge. */
+  polygon?: readonly Pt[];
 };
+
+/** How the tray sits: snapped to a table edge, kept at the default spot because the table is too small, or placed without an outline. */
+export type Fit = 'edge' | 'small' | 'default';
 
 export type Placement = {
   pose: TrayPose;
   source: 'plane' | 'default';
   /** Height of the tray centre above the plane surface; the scene draws a riser for it. 0 by default. */
   stand: number;
+  fit: Fit;
+  /** The table outline the pose was chosen on, always in the head frame it was chosen for (even when `pose` is moved to local space); absent without one. */
+  table?: readonly Pt[];
 };
 
-export const DEFAULT_PLACEMENT: Placement = { pose: TRAY_POSE, source: 'default', stand: 0 };
+export const DEFAULT_PLACEMENT: Placement = { pose: TRAY_POSE, source: 'default', stand: 0, fit: 'default' };
 
 /** A plane must be this far below the head, ahead, and at least this big to hold the tray. */
 const REACH = { minBelow: 0.25, maxBelow: 0.7, maxForward: 0.7, maxYaw: 35, minSize: 0.25 } as const;
@@ -39,22 +48,51 @@ export const fitsComfort = (pose: TrayPose) => LEVELS.every((l) => interactables
 /**
  * Stands the tray on the nearest usable horizontal plane: x/z clamped near the default spot, the centre
  * height clamped into the comfortable band (so a low plane gets a riser, a high one no push above the cone).
- * The tray is not yawed: turning a 0.4 m wide tray towards the player pushes its ends out of the yaw cone.
- * Falls back to the default pose when no plane qualifies or comfort would break.
+ * A plane with an outline snaps the tray to the table edge nearest the player (src/edge.ts), turned as far as
+ * comfort allows; if no outlined plane can hold it comfortably the tray stays at the default pose, fit 'small'.
+ * Without an outline, or with the head over it (no edge to snap to), the tray is not yawed. Falls back to the default pose when no plane qualifies or comfort would break.
  */
 export function placeTray(planes: readonly Plane[]): Placement {
-  const near = planes.filter(usable).sort((a, b) => Math.hypot(...a.position) - Math.hypot(...b.position))[0];
-  if (!near) return DEFAULT_PLACEMENT;
-  const [px, py, pz] = near.position;
-  const x = clamp(px, -TRAY_SPOT.maxX, TRAY_SPOT.maxX);
-  const y = clamp(py + TRAY_SPOT.lift, TRAY_SPOT.minY, TRAY_SPOT.maxY);
-  const z = clamp(pz, TRAY_SPOT.minZ, TRAY_SPOT.maxZ);
-  const pose: TrayPose = { position: [x, y, z], tilt: TRAY_POSE.tilt };
-  return fitsComfort(pose) ? { pose, source: 'plane', stand: y - py } : DEFAULT_PLACEMENT;
+  const near = planes.filter(usable).sort((a, b) => Math.hypot(...a.position) - Math.hypot(...b.position));
+  let small: Placement | undefined;
+  for (const { position: [px, py, pz], polygon } of near) {
+    const y = clamp(py + TRAY_SPOT.lift, TRAY_SPOT.minY, TRAY_SPOT.maxY);
+    if (polygon && polygon.length >= 3 && hasEdge(polygon)) {
+      const pose = snapToEdge(polygon, y, fitsComfort);
+      if (pose) return { pose, source: 'plane', stand: y - py, fit: 'edge', table: polygon };
+      small ??= { ...DEFAULT_PLACEMENT, fit: 'small', table: polygon };
+      continue;
+    }
+    const pose: TrayPose = { position: [clamp(px, -TRAY_SPOT.maxX, TRAY_SPOT.maxX), y, clamp(pz, TRAY_SPOT.minZ, TRAY_SPOT.maxZ)], tilt: TRAY_POSE.tilt };
+    return fitsComfort(pose) ? { pose, source: 'plane', stand: y - py, fit: 'default' } : DEFAULT_PLACEMENT;
+  }
+  return small ?? DEFAULT_PLACEMENT;
 }
 
 /** Head position in local space and its yaw (radians about Y, 0 = facing -Z). */
 export type Head = { position: Vec3; yaw: number };
+
+/** A plane's outline (plane space, y about 0) as [x, z] points in the head frame, using the plane pose's full transform. */
+export function planePolygonToHead(
+  points: readonly { x: number; y: number; z: number }[],
+  at: { position: Vec3; orientation: { x: number; y: number; z: number; w: number } },
+  head: Head,
+): Pt[] {
+  const { x: qx, y: qy, z: qz, w: qw } = at.orientation;
+  return points.map(({ x, y, z }) => {
+    // v + 2w (u x v) + 2 u x (u x v) with u = (qx, qy, qz), t = 2 (u x v)
+    const tx = 2 * (qy * z - qz * y);
+    const ty = 2 * (qz * x - qx * z);
+    const tz = 2 * (qx * y - qy * x);
+    const local: Vec3 = [
+      at.position[0] + x + qw * tx + (qy * tz - qz * ty),
+      at.position[1] + y + qw * ty + (qz * tx - qx * tz),
+      at.position[2] + z + qw * tz + (qx * ty - qy * tx),
+    ];
+    const h = toHeadFrame(local, head);
+    return [h[0], h[2]] as Pt;
+  });
+}
 
 /** A local-space point expressed in the head frame (head at the origin, facing -Z). */
 export function toHeadFrame(p: Vec3, head: Head): Vec3 {

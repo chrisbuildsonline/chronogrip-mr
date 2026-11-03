@@ -1,4 +1,4 @@
-import { fitsComfort, poseToWorld, toHeadFrame, type Head, type Placement } from './anchor';
+import { fitsComfort, poseToWorld, toHeadFrame, type Fit, type Head, type Placement } from './anchor';
 import type { TrayPose, Vec3 } from './seat';
 
 /**
@@ -15,6 +15,8 @@ export type SavedTray = {
   pose: TrayPose;
   source: Placement['source'];
   stand: number;
+  /** How the tray sat on its table; older saves have none and read as 'default'. */
+  fit?: Fit;
   /** A persistent anchor handle at the tray centre, when the runtime gave one. */
   anchor?: string;
 };
@@ -32,17 +34,17 @@ export const yawOf = ({ x, y, z, w }: { x: number; y: number; z: number; w: numb
 /** A local-space placement as saved: its pose moved into the head frame. */
 export function savedFrom(p: Placement, head: Head, anchor?: string): SavedTray {
   const pose: TrayPose = { position: toHeadFrame(p.pose.position, head), tilt: p.pose.tilt, yaw: (p.pose.yaw ?? 0) - head.yaw };
-  return { pose, source: p.source, stand: p.stand, ...(anchor === undefined ? {} : { anchor }) };
+  return { pose, source: p.source, stand: p.stand, fit: p.fit, ...(anchor === undefined ? {} : { anchor }) };
 }
 
 /** The saved placement in front of this head. */
-export const restoreAt = (s: SavedTray, head: Head): Placement => ({ pose: poseToWorld(s.pose, head), source: s.source, stand: s.stand });
+export const restoreAt = (s: SavedTray, head: Head): Placement => ({ pose: poseToWorld(s.pose, head), source: s.source, stand: s.stand, fit: s.fit ?? 'default' });
 
 /** The saved placement at a restored anchor (local space), or null if that spot is out of comfortable reach of this head. */
 export function anchoredAt(s: SavedTray, at: { position: Vec3; yaw: number }, head: Head): Placement | null {
   const inHead: TrayPose = { position: toHeadFrame(at.position, head), tilt: s.pose.tilt, yaw: at.yaw - head.yaw };
   if (!fitsComfort(inHead)) return null;
-  return { pose: { position: at.position, tilt: s.pose.tilt, yaw: at.yaw }, source: s.source, stand: s.stand };
+  return { pose: { position: at.position, tilt: s.pose.tilt, yaw: at.yaw }, source: s.source, stand: s.stand, fit: s.fit ?? 'default' };
 }
 
 export const serializeTray = (s: SavedTray): string => JSON.stringify({ v: 1, ...s });
@@ -59,8 +61,9 @@ export function parseTray(raw: string | null | undefined): SavedTray | null {
     return null;
   }
   if (typeof o !== 'object' || o === null || Array.isArray(o)) return null;
-  const { v, pose, source, stand, anchor } = o as Record<string, unknown>;
+  const { v, pose, source, stand, anchor, fit } = o as Record<string, unknown>;
   if (v !== 1 || (source !== 'plane' && source !== 'default') || !num(stand, 1) || stand < 0) return null;
+  if (fit !== undefined && fit !== 'edge' && fit !== 'small' && fit !== 'default') return null;
   if (anchor !== undefined && (typeof anchor !== 'string' || !HANDLE.test(anchor))) return null;
   if (typeof pose !== 'object' || pose === null) return null;
   const { position, tilt, yaw } = pose as Record<string, unknown>;
@@ -68,7 +71,7 @@ export function parseTray(raw: string | null | undefined): SavedTray | null {
   if (!num(tilt, Math.PI) || (yaw !== undefined && !num(yaw, 2 * Math.PI))) return null;
   const p: TrayPose = { position: [position[0], position[1], position[2]], tilt, ...(yaw === undefined ? {} : { yaw }) };
   if (!fitsComfort(p)) return null;
-  return { pose: p, source, stand, ...(anchor === undefined ? {} : { anchor }) };
+  return { pose: p, source, stand, ...(fit === undefined ? {} : { fit }), ...(anchor === undefined ? {} : { anchor }) };
 }
 
 /** The saved tray, or null; blocked storage reads as nothing saved. */

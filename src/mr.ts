@@ -1,5 +1,5 @@
 import type { WebGLRenderer } from 'three';
-import { createRecenterHold, placeTray, poseToWorld, toHeadFrame, type Head, type Placement, type Plane } from './anchor';
+import { createRecenterHold, placeTray, planePolygonToHead, poseToWorld, toHeadFrame, type Head, type Placement, type Plane } from './anchor';
 import type { Vec3 } from './seat';
 import type { Quat } from './escapement';
 import { createKeeper } from './keeper';
@@ -46,7 +46,8 @@ function planesIn(frame: XRFrame, space: XRReferenceSpace, head: Head): Plane[] 
     const xs = p.polygon.map((v) => v.x);
     const zs = p.polygon.map((v) => v.z);
     const extents = xs.length ? { width: Math.max(...xs) - Math.min(...xs), depth: Math.max(...zs) - Math.min(...zs) } : undefined;
-    return [{ orientation: p.orientation, position: toHeadFrame(pos(pose.transform), head), extents }];
+    const polygon = planePolygonToHead(p.polygon, { position: pos(pose.transform), orientation: pose.transform.orientation }, head);
+    return [{ orientation: p.orientation, position: toHeadFrame(pos(pose.transform), head), extents, polygon }];
   });
 }
 
