@@ -9,6 +9,7 @@ import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
 import { buildScene } from './scene';
 import { trackMr } from './mr';
+import { tuneForSoftwareGl } from './render';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
 import { buttonAt, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button } from './ui';
@@ -55,6 +56,7 @@ const resume = () => levelIds.some((id) => Object.hasOwn(progress.best, id));
 
 let levelIndex = continueAt();
 let level: Level = levels[levelIndex]!;
+tuneForSoftwareGl(world.renderer);
 const built = buildScene(level, world.scene, world.renderer);
 
 // Desktop preview: from above, behind and a little right of the seated head, so the board reads in depth (bevel,
