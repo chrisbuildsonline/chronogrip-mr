@@ -2,6 +2,7 @@ import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColor
 import { clock, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
 import { C } from './palette';
 import { rpmLabel, type Goal } from './goal';
+import { FAULT_WORDS } from './fault';
 
 /** Canvas drawing of the in-world panels, per design/DESIGN.md. */
 const PX = 3000; // canvas pixels per metre: 3 px per mm
@@ -13,8 +14,22 @@ const mm = (v: number) => v * 3;
 const T = { display: 36, xl: 24, heading: 18, button: 12.5, body: 13.5, eyebrow: 8.5 };
 const font = (weight: number, sizeMm: number, face = SANS) => `${weight} ${mm(sizeMm)}px ${face}`;
 
-/** `best` is per level index; `newBest`: this solve beat a saved time; `goal`: what the HUD asks of the marked gear. */
-export type PanelCtx = { level: number; levels: number; daily: boolean; resume: boolean; newBest: boolean; time: number; best: readonly (number | null)[]; hover: string | null; goal: Goal | null };
+/**
+ * `best` is per level index; `newBest`: this solve beat a saved time; `goal`: what the HUD asks of the marked gear;
+ * `fault`: what is wrong with the train as placed, shown on the HUD in place of the goal line.
+ */
+export type PanelCtx = {
+  level: number;
+  levels: number;
+  daily: boolean;
+  resume: boolean;
+  newBest: boolean;
+  time: number;
+  best: readonly (number | null)[];
+  hover: string | null;
+  goal: Goal | null;
+  fault?: keyof typeof FAULT_WORDS | null;
+};
 
 const isDaily = (ctx: PanelCtx, i: number) => ctx.daily && i === ctx.levels - 1;
 
@@ -129,6 +144,49 @@ function goalLine(g: Draw, goal: Goal, x: number, y: number) {
   if (goal.matched) check(g, rpmX + g.measureText(rpm).width + mm(4) + mm(5), y);
 }
 
+/**
+ * The HUD's fault line, in place of the goal line: a small red disc with a cream "!", the lead in red bold, the fix in
+ * muted. One line, shrunk to fit `room` if a wide system font needs it.
+ */
+function faultLine(g: Draw, kind: keyof typeof FAULT_WORDS, x: number, y: number, room: number) {
+  const [lead, rest] = FAULT_WORDS[kind];
+  const disc = mm(6);
+  const gap = mm(3);
+  let size = T.body;
+  const width = () => {
+    g.font = font(700, size);
+    const a = g.measureText(lead).width;
+    g.font = font(600, size);
+    return [a, g.measureText(` ${rest}`).width] as const;
+  };
+  let [leadW, restW] = width();
+  const k = Math.min(1, (room - 2 * disc - gap) / (leadW + restW));
+  if (k < 1) {
+    size *= k;
+    [leadW, restW] = width();
+  }
+  const r = disc * Math.max(0.85, size / T.body);
+  g.beginPath();
+  g.arc(x + r, y, r, 0, Math.PI * 2);
+  g.fillStyle = C.jamInk;
+  g.fill();
+  // The "!": a rounded stroke and a dot, drawn so it sits dead centre in any font.
+  g.lineWidth = r * 0.26;
+  g.lineCap = 'round';
+  g.strokeStyle = C.cream;
+  g.beginPath();
+  g.moveTo(x + r, y - r * 0.52);
+  g.lineTo(x + r, y + r * 0.12);
+  g.stroke();
+  g.beginPath();
+  g.arc(x + r, y + r * 0.5, r * 0.15, 0, Math.PI * 2);
+  g.fillStyle = C.cream;
+  g.fill();
+  const tx = x + 2 * r + gap;
+  text(g, lead, tx, y + 1, font(700, size), C.jamInk, 'left');
+  text(g, ` ${rest}`, tx + leadW, y + 1, font(600, size), C.muted, 'left');
+}
+
 /** 'Back' with a small chevron before it. */
 function backLabel(g: Draw, label: string, x: number, y: number) {
   g.font = font(600, T.button);
@@ -207,7 +265,8 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       else text(g, level, left(0.016), y(0.022), font(700, T.xl), C.ink, 'left');
       text(g, 'TIME', left(0.066), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
       text(g, clock(ctx.time), left(0.066), y(0.022), font(700, T.xl), C.ink, 'left');
-      if (ctx.goal) goalLine(g, ctx.goal, left(0.016), y(0.077));
+      if (ctx.goal && ctx.fault) faultLine(g, ctx.fault, left(0.016), y(0.077), right(0.016) - left(0.016));
+      else if (ctx.goal) goalLine(g, ctx.goal, left(0.016), y(0.077));
       break;
     case 'complete': {
       status(g, 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);

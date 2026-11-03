@@ -71,17 +71,32 @@ interface ChronoHook {
   readonly regulatorAt: readonly [number, number, number];
   /**
    * Live: the level's goal as the badge on the target gear shows it: direction as the player sees it, target rpm (unsigned),
-   * whether the live spin matches, the HUD's words, and world positions of the badge's centre and of the target gear.
-   * Null when the level has no fixed target gear to mark.
+   * whether the live spin matches, the HUD's words (the fault line while there is one), the target ring's colour
+   * ('#rrggbb': amber, or the jam red when the target turns the wrong way), and world positions of the badge's centre and
+   * of the target gear. Null when the level has no fixed target gear to mark.
    */
   readonly goal: {
     readonly dir: 'cw' | 'ccw';
     readonly rpm: number;
     readonly matched: boolean;
     readonly text: string;
+    readonly ring: string;
     readonly at: readonly [number, number, number];
     readonly gear: readonly [number, number, number];
   } | null;
+  /**
+   * Live: the fault cues (src/fault.ts). `jammed`: ids of the gears the solver calls jammed, sorted; `wrongWay`: the
+   * target turns at the right speed against the arrow; `shaking`: the jam shake is running (or waiting for the dropped gear
+   * to land); `shakes`: how many jam shakes have started; `tint`: per gear id, how far its material has gone towards the
+   * full jam red, 0..1, read back from the material (0 on every gear that is not jammed).
+   */
+  readonly cue: {
+    readonly jammed: readonly string[];
+    readonly wrongWay: boolean;
+    readonly shaking: boolean;
+    readonly shakes: number;
+    readonly tint: Readonly<Record<string, number>>;
+  };
   /** Live: index of the loaded level in LEVELS. */
   readonly levelIndex: number;
   /** Live: seconds played on this level; runs only while playing. */

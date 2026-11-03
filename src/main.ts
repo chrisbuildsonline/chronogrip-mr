@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { APP_TITLE, createWorldOptions } from './config';
 import { DEFAULT_PLACEMENT, toHeadFrame, type Head } from './anchor';
 import { startSession } from './enter';
-import { BoxGeometry, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
+import { BoxGeometry, Color, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
 import { grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle, type Hand } from './grab';
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
@@ -15,7 +15,9 @@ import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent 
 import { SCREENS, buttonAt, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button } from './ui';
 import { createPanels } from './panels';
 import { createGhostHand, ghostAt, ghostTwistAt } from './ghost';
-import { easeOut, tweenAt } from './tween';
+import { TWEEN_MS, easeOut, tweenAt } from './tween';
+import { faultKind, faultOf, faultText, shakeSpin, shakeTilt, SHAKE_MS, type Fault } from './fault';
+import { C } from './palette';
 import type { GearSpin } from './train';
 import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
 import { createSound, ticksBetween } from './sound';
@@ -200,12 +202,20 @@ const ghostOn = () => ghostTwist() || (levelIndex === 0 && !grabbedOnce && (flow
 const badge = createGoalBadge();
 built.tray.add(badge.root);
 const goal = () => goalOf(level, targetSpin);
-/** Rechecks the board after a gear moves: solved, the target's live spin and the badge. */
+/** What is wrong with the train as placed: jammed gears turn red (and shake once), a wrong-way target turns the badge red. */
+let fault: Fault = { jammed: [], wrongWay: false };
+/** When the last jam shake starts (after its gear lands), and how many there have been. */
+let shakeFrom = -Infinity;
+let shakes = 0;
+/** The spin offset each gear's shake has added to its turn, so the next frame can take it back out. */
+const shaken = new Map<string, number>();
+/** Rechecks the board after a gear moves: solved, the target's live spin, the fault and the badge. */
 function recheck(): ReturnType<typeof checkLevel> {
   const r = checkLevel(level, placements);
   solved = r.solved;
   targetSpin = r.spins[level.target.gear];
-  badge.update(goal());
+  fault = faultOf(level, r.spins);
+  badge.update(goal(), fault.wrongWay);
   return r;
 }
 badge.load(level, goal());
@@ -265,6 +275,9 @@ function loadLevel(i: number): void {
   placements = {};
   solved = false;
   targetSpin = undefined;
+  fault = { jammed: [], wrongWay: false };
+  shakeFrom = -Infinity;
+  shaken.clear();
   badge.load(level, goal());
   spins = {};
   held = heldFrom = null;
@@ -425,7 +438,12 @@ function release(): void {
   const check = recheck();
   if (axle) {
     sound.click();
-    if (Object.values(check.spins).includes('jammed')) sound.grind();
+    if (Object.values(check.spins).includes('jammed')) {
+      sound.grind();
+      // The locked gears shudder once the dropped gear has landed.
+      shakeFrom = performance.now() + TWEEN_MS;
+      shakes++;
+    }
   }
   if (solved) send({ type: 'solve' });
 }
@@ -768,6 +786,20 @@ const tint = (mesh: Mesh, t: { color: number; intensity: number } | null) => {
   mat.emissive.set(t?.color ?? 0x000000);
   mat.emissiveIntensity = t?.intensity ?? 0;
 };
+// A jammed gear: its own brass lerps towards the jam red, with a faint red glow (every gear has its own material).
+const BRASS = new Color(C.brass);
+const JAM = new Color(C.jam);
+/** How far a jammed gear's colour goes from brass to the jam red. */
+const JAM_MIX = 0.7;
+const JAM_TINT = { color: JAM.getHex(), intensity: 0.18 };
+const redden = (mesh: Mesh, k: number) => (mesh.material as MeshStandardMaterial).color.lerpColors(BRASS, JAM, k * JAM_MIX);
+/** For the test hook: how far a gear's colour has gone towards the full jam tint, 0..1, read back from its material. */
+const reddened = (mesh: Mesh) => {
+  const c = (mesh.material as MeshStandardMaterial).color;
+  const [dr, dg, db] = [JAM.r - BRASS.r, JAM.g - BRASS.g, JAM.b - BRASS.b];
+  const k = ((c.r - BRASS.r) * dr + (c.g - BRASS.g) * dg + (c.b - BRASS.b) * db) / (dr * dr + dg * dg + db * db) / JAM_MIX;
+  return Math.round(k * 1000) / 1000;
+};
 /** Tick count as the train sees it: each tick is a quick 90 ms step, then a rest until the next. */
 const stepped = (phase: number, rate: number) => {
   const whole = Math.floor(phase);
@@ -852,9 +884,25 @@ world.scene.onBeforeRender = () => {
   const glint = flow.name === 'calibrate' ? 0.6 * (1 - (regulator.phase % 1)) ** 3 : 0;
 
   for (const s of hoverTargets) {
-    const lit = s.kind === 'gear' && handGlow.includes(s.id) ? HAND_TINT : gazeTarget?.kind === s.kind && gazeTarget.id === s.id ? GAZE_TINT : null;
+    const near = s.kind === 'gear' && handGlow.includes(s.id);
+    const lit = near ? HAND_TINT : gazeTarget?.kind === s.kind && gazeTarget.id === s.id ? GAZE_TINT : null;
     const amber = s.kind === 'gear' ? Math.max(1.2 * flash, s.id === level.escapement.gear ? glint : 0) : 0;
-    tint(s.mesh, amber > 0.01 ? { color: 0xd99a2b, intensity: amber } : lit);
+    // A jammed gear stays red under the gaze; a hand reaching for it still lights it, so it reads as one to take off.
+    const jam = s.kind === 'gear' && fault.jammed.includes(s.id);
+    tint(s.mesh, amber > 0.01 ? { color: 0xd99a2b, intensity: amber } : jam && !near ? JAM_TINT : lit);
+    if (s.kind === 'gear') redden(s.mesh, jam ? 1 : 0);
+  }
+  // The jam shake: the locked gears rattle about their axles and wobble across them, then hold still. Each frame takes
+  // back last frame's rattle before adding this one's, so the turn is left exactly where it was.
+  const shakeMs = now - shakeFrom;
+  for (const [id, m] of built.gears) {
+    const on = fault.jammed.includes(id);
+    const spin = on ? shakeSpin(shakeMs) : 0;
+    const was = shaken.get(id) ?? 0;
+    if (spin !== was) m.rotation.z += spin - was;
+    shaken.set(id, spin);
+    const tilt = on ? shakeTilt(shakeMs) : 0;
+    if (m.rotation.y !== tilt) m.rotation.y = tilt;
   }
   const pulse = Math.sin(now / 160);
   for (const [id, ring] of built.rings) {
@@ -889,6 +937,7 @@ function showPanel(now = performance.now()): void {
     best: levelIds.map((id) => progress.best[id] ?? null),
     hover: mouseButton ?? tipButton.left ?? tipButton.right,
     goal: badge.root.visible ? goal() : null,
+    fault: faultKind(fault),
   });
 }
 
@@ -1010,7 +1059,17 @@ window.__chrono = Object.freeze({
     const tgt = built.gears.get(level.target.gear);
     if (!at || !tgt) return null;
     const g = goal();
-    return { ...g, text: goalText(g), at: worldOf(at), gear: worldOf(tgt.position) };
+    return { ...g, text: faultText(fault) ?? goalText(g), ring: badge.ringColor, at: worldOf(at), gear: worldOf(tgt.position) };
+  },
+  get cue() {
+    const now = performance.now();
+    return {
+      jammed: [...fault.jammed],
+      wrongWay: fault.wrongWay,
+      shaking: fault.jammed.length > 0 && now < shakeFrom + SHAKE_MS,
+      shakes,
+      tint: Object.fromEntries([...built.gears].map(([id, m]) => [id, reddened(m)])),
+    };
   },
   get levelIndex() {
     return levelIndex;

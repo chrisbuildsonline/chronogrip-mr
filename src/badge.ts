@@ -39,7 +39,7 @@ export function createGoalBadge() {
   root.visible = false;
   let shown = '';
 
-  const draw = (goal: Goal) => {
+  const draw = (goal: Goal, wrongWay: boolean) => {
     const [w, h] = [BADGE.w * PX, BADGE.h * PX];
     const [x0, y0] = [PAD, PAD];
     g.clearRect(0, 0, canvas.width, canvas.height);
@@ -53,7 +53,8 @@ export function createGoalBadge() {
     g.fill();
     g.restore();
     const cy = y0 + h / 2;
-    turnArrow(g, x0 + h * 0.56, cy, h * 0.25, goal.dir, C.ink, h * 0.08);
+    // Wrong way: the arrow the target should follow turns red (a touch bolder), so the badge says which way is wanted.
+    turnArrow(g, x0 + h * 0.56, cy, h * 0.25, goal.dir, wrongWay ? C.jamInk : C.ink, h * (wrongWay ? 0.1 : 0.08));
     // The number large, "rpm" smaller after it on the same baseline; the pair shrinks only if a long daily number needs it.
     const [num, unit] = rpmLabel(goal.rpm).split(' ') as [string, string];
     const left = x0 + h * 1.02;
@@ -101,12 +102,17 @@ export function createGoalBadge() {
       shown = '';
       this.update(goal);
     },
-    /** Redraws only when the goal or its matched state changes. */
-    update(goal: Goal) {
-      const key = `${goal.dir} ${goal.rpm} ${goal.matched}`;
+    /** The ring's colour now, '#rrggbb', for the test hook. */
+    get ringColor() {
+      return `#${(ring.material as MeshBasicMaterial).color.getHexString()}`;
+    },
+    /** Redraws only when the goal, its matched state or the wrong-way cue changes; wrong way turns the arrow and ring red. */
+    update(goal: Goal, wrongWay = false) {
+      const key = `${goal.dir} ${goal.rpm} ${goal.matched} ${wrongWay}`;
       if (key === shown) return;
       shown = key;
-      draw(goal);
+      (ring.material as MeshBasicMaterial).color.set(wrongWay ? C.jam : C.amber);
+      draw(goal, wrongWay);
     },
   };
 }
