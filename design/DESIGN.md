@@ -62,6 +62,16 @@ Times are m:ss; under 10 s they carry tenths (0:00.4, 0:07.2), truncated, so a q
 | Level complete | 0.35 x 0.17 | amber "Solved" pill; Heading "Level N complete"; Number XL time right, an amber "New best" pill under it when a saved time was beaten, else muted "Best m:ss"; row: Next (primary), Restart, Levels. On the daily: Levels (primary), Restart |
 | Pause | 0.35 x 0.15 | Heading "Paused"; muted "Level N - m:ss"; row: Resume (primary), Restart, Levels |
 
+Puzzle code line and Copy link (tinker puzzles only, never on levels 1-8): under the heading, left aligned on the row of the
+"New best" pill / "Best" line, a muted line "Puzzle code CY9J" in body type (600, Muted), not a box or pill. The row gets a
+third pill, "Copy link", after Levels and Restart: a secondary pill, so the near-black primary stays the one action. It
+is outside XR only (desktop and phone) and reads "Copied" for 2.5 s after a copy. If the clipboard refuses, the code line
+becomes the link itself, shrunk to the card's width if long, and the pill keeps its label. On a phone the primary gives
+8 mm to the Copy pill (92 / 72 / 82 mm) so "Copy link" fits at 14 mm type. A shared puzzle (`?seed=`) is not the daily: its
+card reads "Level 9 complete" and its tile "9", without the amber edge. An invalid code shows one cream pill, centred at
+the top of the page (the hint pills' look, ink 600 text), "That puzzle code didn't work, here's today's puzzle", for 8 s.
+Tests: tests/e2e/seed.spec.ts (incl. 375 x 812).
+
 Progress (best times) is saved in localStorage; the title board is the first unsolved level, so Continue picks up there.
 The daily is a seeded "tinker" puzzle generated from the local date and played after the eight levels, as a ninth.
 
