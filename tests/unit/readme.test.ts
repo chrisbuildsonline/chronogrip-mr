@@ -94,7 +94,10 @@ describe('README submission write-up', () => {
   });
 
   it('claims nothing that was not built or measured', () => {
-    expect(readme).not.toMatch(/MRUK/);
+    // MRUK is not used; the README may only say so (Room data it uses).
+    const mruk = readme.split('\n').filter((l) => /MRUK/.test(l));
+    expect(mruk.every((l) => /does not use MRUK/.test(l))).toBe(true);
+    expect(mruk.length).toBeGreaterThan(0);
     expect(readme).not.toMatch(/persistent anchors? (are|is) (used|supported)/i);
     expect(readme).not.toMatch(/(runs|holds|measured|hits|steady) (at )?(a )?(steady )?60 ?fps/i);
   });

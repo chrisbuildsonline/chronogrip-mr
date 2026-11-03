@@ -130,6 +130,11 @@ speeds and the bird flaps in time; the complete card shows 2 s later.
   plane just under the board top and expands from 15 to 32 cm radius over 1 s, out past the rim, turning a twelfth of a turn as it fades; a
   fainter echo ring follows 0.2 s behind. A restored spot gets one fainter, shorter-growing ring (1.2 s). The default
   fallback gets none. Colours: amber, brass (`#b08d57`, world only) and amber tint from src/palette.ts.
+- Small table: when the detected table cannot hold the tray, the tray stays at the default spot and a cream pill (0.03 m high,
+  the hand hint's style: ink 600 body text, no icon) reads "Table's a bit small, tray kept in easy reach". The floating pills
+  are sized to their words (measured, 2 cm side padding) and share the width of the longer one; they stack centred over the
+  card with a 12 mm gap to the card and between each other, the hand hint nearest the card. The line goes when a table that
+  fits is found or the session ends.
 - Hands: depth-only spheres and capsules on the 25 joints, drawn first, so the real hand shows in front of the board.
 
 ## Light and material (world)

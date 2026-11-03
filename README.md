@@ -67,6 +67,13 @@ The same scene and cards run in any desktop browser with WebGL. Where the browse
 - **Levels** shows nine tiles: levels 1-8 and **Daily**. Solved tiles show your best time and a check. Beating a saved time shows **New best**.
 - The **Daily** is a puzzle generated from today's local date: the same for everyone on a given day, different the next. If the game is left open past midnight, the new daily swaps in the next time you are on the title or level select.
 
+## Room data it uses
+
+- **Detected planes only.** The game reads the WebXR plane-detection polygons the headset reports for horizontal surfaces (the table's real outline, not just its centre). It does not use MRUK: MRUK is Meta's scene SDK for native Unity and Unreal apps, and this is a WebXR page built on IWSDK in the browser, where plane detection is the room data on offer. No camera images, meshes or room scans are read.
+- **The tray snaps to the table edge.** The tray sits flush with the table edge nearest you, turned to match it (as far as the comfort cone allows) and 2 cm inside the edge, with the whole board on the table, a notched or L-shaped table included. The comfort cone (`src/seat.ts`) always wins: if snapping would put a part out of easy reach, the tray stays where it is comfortable.
+- **A small table.** If the table is too small to hold the tray comfortably, the tray stays at its default spot in front of you and a short line above the card says "Table's a bit small, tray kept in easy reach".
+- **It is saved.** The snapped spot is saved with the rest of the tray's pose (see Saved progress), so it comes back turned the same way.
+
 ## Testing it (for judges)
 
 **On a Quest 3 (the real thing).** Open https://chrisbuildsonline.github.io/chronogrip-mr/ in the Quest browser. Put the controllers down, sit with a table or tray table in front of you and press **Enter MR**. Then follow [How to play](#how-to-play-quest-browser): pinch a gear onto its axle, then pinch the dial and roll your wrist.
@@ -130,7 +137,7 @@ Deploys: `.github/workflows/deploy.yml` typechecks, runs the unit tests, builds 
 ChronoGrip is a web app: TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK) for the WebXR `immersive-ar` session, three.js for rendering and Vite for the build. It runs in the Quest browser with nothing to install.
 
 - **Hands.** IWSDK's `GrabSystem` picks up and carries the gears: while the board is live in XR, each loose gear is a one-hand grabbable, and the game starts and ends a carry when IWSDK grabs and lets go of it. Every frame `mr.ts` also reads the thumb tip, index tip and wrist joints straight from the XR frame. Tips closer than 2 cm are a pinch; the pinch point and the index tip press card buttons, the wrist's roll turns the regulator and two pinching hands recenter the tray. The raw pinch is also the fallback for gears: if IWSDK has not grabbed a pinched gear within 4 frames, the pinch picks it up. The IWSDK grab path is tested in the IWER emulator only, not yet on a real headset.
-- **Tray placement.** With plane detection, `anchor.ts` stands the tray on the nearest usable horizontal plane, adding a riser if it is low. If no plane qualifies, the tray takes a fixed comfort pose in front of you.
+- **Tray placement.** With plane detection, `anchor.ts` stands the tray on the nearest usable horizontal plane (snapped to its near edge, see Room data it uses), adding a riser if it is low. If no plane qualifies, the tray takes a fixed comfort pose in front of you.
 - **Passthrough.** Your real hands hide the tray and gears behind them: `occlude.ts` puts depth-only spheres and capsules on the 25 hand joints, drawn before the board, so passthrough shows where a finger is in front (an approximation of the hand's shape, so the edges are rough). The tray's spot is remembered between sessions: saved in localStorage relative to your head (`persist.ts`) and, where the browser offers WebXR persistent anchors, also pinned to the room with one (tested in the IWER emulator only, not yet on a Quest). `keeper.ts` does the saving and restoring; a corrupt or out-of-reach saved value is ignored.
 - **Gears.** `gear.ts` draws real involute tooth outlines in code and extrudes them into meshes. There are no model files.
 - **Gear train.** `train.ts` is a deterministic solver: it walks the meshed gears, works out each speed and direction, and reports a jam when a loop disagrees or gears collide.
@@ -145,6 +152,7 @@ ChronoGrip is a web app: TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK
 | `main.ts` | Wires everything: input, flow, per-frame update |
 | `config.ts`, `enter.ts` | The immersive-ar session options; Enter MR |
 | `mr.ts`, `anchor.ts` | Per-frame hand joints (pinch, poke tip, wrist), plane search and tray placement, two-hand recenter |
+| `edge.ts` | Snaps the tray to the nearest table edge on the plane's polygon (parallel, inset, on the table) |
 | `persist.ts`, `keeper.ts` | The tray's saved spot: head-relative pose in localStorage, plus the room pin where the runtime has one |
 | `occlude.ts`, `cue.ts` | Depth-only hand occluders on the joints; the "table found" ring |
 | `seat.ts` | Seated layout, comfort cone, tray coordinates |
