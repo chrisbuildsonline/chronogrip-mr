@@ -26,6 +26,10 @@
       #enter-mr:disabled { opacity: 0.5; cursor: not-allowed; }
       #enter-note { text-wrap: balance; }
       #enter-note[hidden] { display: none; }
+      /* "Drag to look around the tray." fades once the player first drags (main.ts adds .gone) and stays gone; once faded
+         it gives up its room, so the first sentence sits flush right again. */
+      .cg-more { transition: opacity 0.4s ease, display 0.4s allow-discrete; }
+      .cg-more.gone { opacity: 0; display: none; }
       /* Phone width: a tighter header and only the first sentence of the note, so the board and card get the room. */
       @media (max-width: 499px) {
         h1 { left: 16px; }
@@ -71,7 +75,7 @@
       @keyframes cg-rise { from { opacity: 0; transform: translateY(12px) scale(0.98); } }
       @media (prefers-reduced-motion: reduce) {
         .cg-card, .cg-turn, .cg-ease { animation: none; }
-        #loading, .cg-card, #title, #xr-entry { transition: none; }
+        #loading, .cg-card, #title, #xr-entry, .cg-more { transition: none; }
       }
     </style>
   </head>
