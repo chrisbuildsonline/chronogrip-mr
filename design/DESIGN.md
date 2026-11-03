@@ -138,4 +138,11 @@ select. Held keys do not repeat. The canvas is labelled for screen readers (role
 Camera: from above, behind and a little right of the seated head (0.107, 0.225, 0.364) looking at (0.015, -0.08, -0.36):
 a three-quarter view that shows the bevel, gear thickness and the bird standing up. Every card (title, select, HUD,
 complete, pause) stays wholly in frame at 1280 x 720 on every level, the tallest card on the biggest strip included
-(tests/e2e/polish.spec.ts).
+(tests/e2e/polish.spec.ts). On desktop the cards lie face on to the camera (parallel to the screen, no keystone); in XR
+they keep their tilt towards the head.
+
+Narrow windows (phone portrait): the camera backs off along the same line until the level's board and strip, the dial,
+the bird and the card on show fit with 12 px to spare, and anything reaching a top corner stays under the wordmark and
+Enter MR (src/fit.ts). It never comes nearer than the tuned view, so landscape is unchanged. The wide level select needs
+more room, so a phone eases back 0.4 s for it and in again after. Under 500 px the header tightens to 16 px from the
+edges and the note keeps only "Mixed reality needs a Quest browser." in two balanced lines (tests/e2e/fit.spec.ts).
