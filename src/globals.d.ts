@@ -10,6 +10,16 @@ interface ChronoHook {
   readonly trayPose: { readonly position: readonly [number, number, number]; readonly tilt: number; readonly yaw?: number };
   /** Live: 'plane' when a detected plane placed the tray, else 'default'. */
   readonly trayPlaced: 'plane' | 'default';
+  /** Live: how the tray sits on its table: 'edge' (snapped to the near table edge), 'small' (the table cannot hold it comfortably, so it stays at the default spot) or 'default' (no outline, or no plane). */
+  readonly trayFit: 'edge' | 'small' | 'default';
+  /** Live: the tray's yaw in radians relative to the head it was placed for (what trayPose.yaw is); 0 when unturned. */
+  readonly trayYaw: number;
+  /** The two floating pills (hands hint, small-table line): words, measured text width, side padding and pill width, all metres. */
+  readonly pills: readonly { readonly text: string; readonly textWidth: number; readonly padding: number; readonly width: number }[];
+  /** Live: the line floating above the card when the table is too small for the tray (fit 'small'), else null. */
+  readonly tableNote: string | null;
+  /** Live: the table outline the tray was placed on as [x, z] points in the head frame it was placed for (x right, z forward = -Z), or null without one (also after a saved pose or anchor brings the tray back). */
+  readonly tableOutline: readonly (readonly [number, number])[] | null;
   /** Live: the "table found" ring: the last kind shown ('plane' when a plane placed the tray, 'restored' for a saved pose), whether it is pulsing now, and how many times it has shown. */
   readonly placeCue: { readonly kind: 'plane' | 'restored' | null; readonly showing: boolean; readonly count: number };
   /** For screenshots on slow software GL: pins any running "table found" ring at this fraction of its pulse (0..1) until called with null, when it ends at once. */

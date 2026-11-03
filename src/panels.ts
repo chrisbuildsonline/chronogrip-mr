@@ -338,6 +338,8 @@ function resize(p: { mesh: Mesh; g: Draw; tex: CanvasTexture }, w: number, h: nu
 }
 
 const HINT_TEXT = 'Put the controllers down and use your hands';
+/** Said when the detected table cannot hold the tray, so it stays at the default spot. */
+export const SMALL_TABLE_TEXT = 'Table’s a bit small, tray kept in easy reach';
 
 /** One panel at a time on the shared anchor, plus the hands hint floating above it. */
 export function createPanels() {
@@ -346,25 +348,40 @@ export function createPanels() {
   root.rotation.order = 'YXZ';
   const panel = canvasPlane();
   const hint = canvasPlane();
-  root.add(panel.mesh, hint.mesh);
+  const note = canvasPlane();
+  root.add(panel.mesh, hint.mesh, note.mesh);
   let key = '';
   let current: { screen: Screen; layout: Layout } | null = null;
   /** The words on the card up now, in panel space (metres): centre height y, left/centre x as drawn, font size. */
   let labels: { text: string; x: number; y: number; size: number }[] = [];
 
-  const hintW = 0.3;
   const hintH = 0.03;
-  resize(hint, hintW, hintH, 0);
-  hint.g.save();
-  hint.g.shadowColor = C.shadow;
-  hint.g.shadowBlur = 24;
-  hint.g.shadowOffsetY = 8;
-  pill(hint.g, hint.g.canvas.width / 2, hint.g.canvas.height / 2, hintW * PX, hintH * PX);
-  hint.g.fillStyle = C.cream;
-  hint.g.fill();
-  hint.g.restore();
-  text(hint.g, HINT_TEXT, hint.g.canvas.width / 2, hint.g.canvas.height / 2 + 1, font(600, T.body), C.ink);
-  hint.tex.needsUpdate = true;
+  /** Side room between a pill's end and its words, metres. */
+  const PILL_PAD = 0.02;
+  /** Gap between the card and the first pill, and between pills, metres. */
+  const PILL_GAP = 0.012;
+  const textWidth = (words: string) => {
+    hint.g.font = font(600, T.body);
+    return hint.g.measureText(words).width / PX;
+  };
+  // Both pills share the width of the longer line, so they stack as one column centred over the card.
+  const pillWidth = Math.max(...[HINT_TEXT, SMALL_TABLE_TEXT].map(textWidth)) + 2 * PILL_PAD;
+  const drawPill = (p: ReturnType<typeof canvasPlane>, words: string, width = pillWidth) => {
+    resize(p, width, hintH, 0);
+    p.g.save();
+    p.g.shadowColor = C.shadow;
+    p.g.shadowBlur = 24;
+    p.g.shadowOffsetY = 8;
+    pill(p.g, p.g.canvas.width / 2, p.g.canvas.height / 2, width * PX, hintH * PX);
+    p.g.fillStyle = C.cream;
+    p.g.fill();
+    p.g.restore();
+    text(p.g, words, p.g.canvas.width / 2, p.g.canvas.height / 2 + 1, font(600, T.body), C.ink);
+    p.tex.needsUpdate = true;
+  };
+  drawPill(hint, HINT_TEXT);
+  drawPill(note, SMALL_TABLE_TEXT);
+  note.mesh.visible = false;
 
   return {
     root,
@@ -374,6 +391,10 @@ export function createPanels() {
     },
     get labels() {
       return labels;
+    },
+    /** The floating pills for the test hook: words, measured text width, side padding and pill width, metres. */
+    get pills() {
+      return [HINT_TEXT, SMALL_TABLE_TEXT].map((words) => ({ text: words, textWidth: textWidth(words), padding: PILL_PAD, width: pillWidth }));
     },
     setAnchor(a: Anchor) {
       root.position.set(...a.position);
@@ -397,10 +418,14 @@ export function createPanels() {
       labels = drawn.map((d) => ({ text: d.text, x: (d.x - MARGIN) / PX - l.width / 2, y: l.height - (d.y - MARGIN) / PX, size: d.px / PX }));
       drawn = null;
       panel.tex.needsUpdate = true;
-      hint.mesh.position.y = l.height + 0.012 + hintH / 2;
+      hint.mesh.position.y = l.height + PILL_GAP + hintH / 2;
+      note.mesh.position.y = hint.mesh.position.y + hintH + PILL_GAP;
     },
     showHint(visible: boolean) {
       hint.mesh.visible = visible;
+    },
+    showNote(visible: boolean) {
+      note.mesh.visible = visible;
     },
   };
 }

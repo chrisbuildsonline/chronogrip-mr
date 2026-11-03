@@ -13,7 +13,7 @@ import { tuneForSoftwareGl } from './render';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
 import { SCREENS, buttonAt, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button } from './ui';
-import { createPanels } from './panels';
+import { createPanels, SMALL_TABLE_TEXT } from './panels';
 import { createGhostHand, ghostAt, ghostTwistAt } from './ghost';
 import { TWEEN_MS, easeOut, tweenAt } from './tween';
 import { faultKind, faultOf, faultText, shakeSpin, shakeTilt, SHAKE_MS, type Fault } from './fault';
@@ -698,6 +698,7 @@ trackMr(world.renderer, {
     placedPose = { position: [x, y, z], tilt: next.pose.tilt, yaw: (next.pose.yaw ?? 0) - head.yaw };
     built.place(next);
     placePanels();
+    panels.showNote(next.fit === 'small');
     trayRestored = why === 'saved' || why === 'anchor' ? why : null;
     const kind = cueFor(why, next);
     if (kind) cue.start(kind, next, performance.now());
@@ -780,6 +781,7 @@ world.renderer.xr.addEventListener('sessionend', () => {
   placement = DEFAULT_PLACEMENT;
   placedPose = TRAY_POSE;
   handHint = false;
+  panels.showNote(false);
   trayRestored = null;
   cue.hide();
   for (const hand of ['left', 'right'] as const) {
@@ -1031,6 +1033,21 @@ window.__chrono = Object.freeze({
   },
   get trayPlaced() {
     return placement.source;
+  },
+  get trayFit() {
+    return placement.fit;
+  },
+  get trayYaw() {
+    return placedPose.yaw ?? 0;
+  },
+  get pills() {
+    return panels.pills;
+  },
+  get tableNote() {
+    return placement.fit === 'small' && world.renderer.xr.isPresenting ? SMALL_TABLE_TEXT : null;
+  },
+  get tableOutline() {
+    return placement.table ? placement.table.map((p) => [...p] as [number, number]) : null;
   },
   get recenters() {
     return recenters;
