@@ -61,6 +61,13 @@ describe('README submission write-up', () => {
     expect(readme).toContain('bun run check');
   });
 
+  it('names the desktop keys in Testing it', () => {
+    const testing = /^##+ Testing it\b[\s\S]*?(?=^## )/m.exec(readme)?.[0] ?? '';
+    expect(testing).toMatch(/\*\*Enter\*\*/);
+    expect(testing).toMatch(/\*\*Esc\*\*/);
+    expect(testing).not.toMatch(/no keyboard/i);
+  });
+
   it('claims nothing that was not built or measured', () => {
     expect(readme).not.toMatch(/MRUK/);
     expect(readme).not.toMatch(/persistent anchors? (are|is) (used|supported)/i);

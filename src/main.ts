@@ -280,7 +280,7 @@ const PRESS: Record<string, FlowEvent> = {
  */
 const PRESS_GAP_MS = 300;
 let pressedAt = -Infinity;
-function press(id: string, by: 'hand' | 'mouse' = 'hand'): void {
+function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   rolloverDaily();
   const now = performance.now();
   if (by === 'hand' && now - pressedAt < PRESS_GAP_MS) return;
@@ -342,6 +342,18 @@ function release(): void {
 
 // Desktop: click panel buttons, drag a loose gear across the tray plane; dragging empty space still orbits.
 const canvas = world.renderer.domElement;
+canvas.setAttribute('role', 'img');
+canvas.setAttribute('aria-label', `${APP_TITLE}, a clockwork puzzle: drag brass gears from the ledge onto the axles to link the train, then turn the regulator dial until the clock keeps time.`);
+// Desktop keys press the shown card's buttons, as a click would: Enter is the primary pill, Esc pauses, resumes or goes back.
+window.addEventListener('keydown', (e) => {
+  if (e.repeat || world.renderer.xr.isPresenting || e.target instanceof HTMLButtonElement) return;
+  const shown = shownButtons();
+  const id = e.key === 'Enter' ? shown.find((b) => b.kind === 'primary')?.id : e.key === 'Escape' ? ['pause', 'resume', 'back'].find((k) => shown.some((b) => b.id === k)) : undefined;
+  if (!id) return;
+  e.preventDefault();
+  sound.unlock();
+  press(id, 'key');
+});
 canvas.addEventListener('pointerdown', () => sound.unlock(), { capture: true });
 const rayAt = (e: PointerEvent): [Vec3, Vec3] => {
   const rect = canvas.getBoundingClientRect();
@@ -648,6 +660,9 @@ function showPanel(now = performance.now()): void {
     hover: mouseButton ?? tipButton.left ?? tipButton.right,
   });
 }
+
+// The world is built and the first card is up: the loading card in index.html fades out of the way.
+document.getElementById('loading')?.classList.add('done');
 
 const supported = await (navigator.xr?.isSessionSupported('immersive-ar') ?? Promise.resolve(false)).catch(() => false);
 if (supported) {

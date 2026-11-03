@@ -60,11 +60,12 @@ The same scene and cards run in any desktop browser with WebGL. Where the browse
 
 **On a Quest 3 (the real thing).** Open https://chrisbuildsonline.github.io/chronogrip-mr/ in the Quest browser. Put the controllers down, sit with a table or tray table in front of you and press **Enter MR**. Then follow [How to play](#how-to-play-quest-browser): pinch a gear onto its axle, then pinch the dial and roll your wrist.
 
-**In any desktop browser (preview).** Open the same URL. Enter MR stays disabled, but the whole game runs with the mouse (there are no keyboard controls):
+**In any desktop browser (preview).** Open the same URL. Enter MR stays disabled, but the whole game runs with the mouse:
 
 - Click **Start**, then drag the loose gear from the ledge onto a free axle.
 - When the escapement starts ticking, press the dial's knob and drag sideways (right is faster) until the needle sits in the amber band.
 - Drag empty space to orbit, scroll to zoom.
+- Keys: **Enter** presses the dark button on the card that is up (Start, Next, Resume). **Esc** pauses, and again resumes; on level select it goes back.
 
 **Locally with Docker.** No Bun or browsers needed on the host:
 
