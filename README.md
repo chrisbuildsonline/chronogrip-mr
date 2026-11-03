@@ -119,7 +119,7 @@ That serves the production build at http://localhost:4173 (`bun run docker:build
 `bun run e2e` runs two Playwright projects (pick one with `bun run e2e --project=preview` or `--project=dev`):
 
 - **preview**: the production build on port 4173, no emulator, mouse only. Page load with a clean console, rendering, drag-and-drop gears, hover hints, the level flow, calibration, saved progress and the daily, sound, and the render budget on every level.
-- **dev**: the dev server on port 5174 with the IWER emulator posing as a Quest 3. Entering the XR session, the default tray pose, the hands hint, pinch grab and drop, head gaze and hand glow, two-hand recenter, poking card buttons, pause from the headset menu and on session end; and a table placing the tray with its ring, the tray coming back to the same spot after a reload (pinned to the emulator's room, and from localStorage alone when the room pin cannot be restored), a recenter overwriting it, and the hand occluders following the joints.
+- **dev**: the dev server on port 5174 with the IWER emulator posing as a Quest 3. Entering the XR session, the default tray pose, the hands hint, pinch grab and drop (by default a carry starts through IWSDK's `GrabSystem`; add `?grab=pinch` to the URL to force the raw pinch for gears), head gaze and hand glow, two-hand recenter, poking card buttons, pause from the headset menu and on session end; and a table placing the tray with its ring, the tray coming back to the same spot after a reload (pinned to the emulator's room, and from localStorage alone when the room pin cannot be restored), a recenter overwriting it, and the hand occluders following the joints.
 
 The unit tests cover the gear geometry, the train solver, the levels (with an exhaustive search proving levels 6-8 cannot be solved with three gears or fewer), the goal badge, tray placement, the regulator, the flow (including Given/When/Then acceptance tests), saved progress and the daily generator, with fuzz tests for the gear geometry, the train solver and level parsing.
 
@@ -129,7 +129,7 @@ Deploys: `.github/workflows/deploy.yml` typechecks, runs the unit tests, builds 
 
 ChronoGrip is a web app: TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK) for the WebXR `immersive-ar` session, three.js for rendering and Vite for the build. It runs in the Quest browser with nothing to install.
 
-- **Hands.** Every frame `mr.ts` reads the thumb tip, index tip and wrist joints straight from the XR frame. Tips closer than 2 cm are a pinch; the index tip pokes card buttons; the wrist's roll turns the regulator.
+- **Hands.** IWSDK's `GrabSystem` picks up and carries the gears: while the board is live in XR, each loose gear is a one-hand grabbable, and the game starts and ends a carry when IWSDK grabs and lets go of it. Every frame `mr.ts` also reads the thumb tip, index tip and wrist joints straight from the XR frame. Tips closer than 2 cm are a pinch; the pinch point and the index tip press card buttons, the wrist's roll turns the regulator and two pinching hands recenter the tray. The raw pinch is also the fallback for gears: if IWSDK has not grabbed a pinched gear within 4 frames, the pinch picks it up. The IWSDK grab path is tested in the IWER emulator only, not yet on a real headset.
 - **Tray placement.** With plane detection, `anchor.ts` stands the tray on the nearest usable horizontal plane, adding a riser if it is low. If no plane qualifies, the tray takes a fixed comfort pose in front of you.
 - **Passthrough.** Your real hands hide the tray and gears behind them: `occlude.ts` puts depth-only spheres and capsules on the 25 hand joints, drawn before the board, so passthrough shows where a finger is in front (an approximation of the hand's shape, so the edges are rough). The tray's spot is remembered between sessions: saved in localStorage relative to your head (`persist.ts`) and, where the browser offers WebXR persistent anchors, also pinned to the room with one (tested in the IWER emulator only, not yet on a Quest). `keeper.ts` does the saving and restoring; a corrupt or out-of-reach saved value is ignored.
 - **Gears.** `gear.ts` draws real involute tooth outlines in code and extrudes them into meshes. There are no model files.
@@ -151,7 +151,7 @@ ChronoGrip is a web app: TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK
 | `gear.ts` | Involute spur gear outlines generated in code, extruded into meshes |
 | `train.ts` | Deterministic gear-train solver: speeds, directions, jams, collisions |
 | `levels.ts`, `tinker.ts` | The eight levels and the seeded daily generator |
-| `grab.ts`, `hover.ts` | Pick and snap rules; gaze, hand glow and valid-axle hints |
+| `grab.ts`, `hover.ts` | Pick and snap rules, the grab mode (`?grab=pinch`), the raw-pinch fallback and which hand holds a gear; gaze, hand glow and valid-axle hints |
 | `escapement.ts`, `clockwork.ts` | The regulator (wrist twist to tick rate); the dial, balance wheel and bird |
 | `flow.ts`, `progress.ts` | Title, play, calibrate, complete, pause, level select; level clock; saved best times |
 | `ui.ts`, `panels.ts` | In-world card layouts, poke and pinch hits; canvas-drawn cards |
@@ -163,7 +163,7 @@ ChronoGrip is a web app: TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK
 
 ## Challenges
 
-- **No pinch point to read.** IWSDK's grab system can turn a pinch into a generic grab, but we needed the pinch point, the index tip for pokes and the wrist's roll. So we switched its grabbing off and read the joints ourselves.
+- **No pinch point to read.** IWSDK's grab system turns a pinch into a generic grab, but it does not give us the pinch point, the index tip for pokes or the wrist's roll. So IWSDK grabs the gears, and we keep reading the joints ourselves for what its grab can't give us: button pinches and pokes, the regulator dial and two-hand recenter, plus a fallback when IWSDK misses a pinched gear.
 - **Testing hands without a headset.** The IWER emulator has hands, but a test has to set each hand's pinch value and move the emulated hand one step at a time, then wait for the game to see it. Shared helpers for pinch, carry and poke let the whole demo story run headless, end to end.
 - **Slow software GL.** In containers there is no GPU, so WebGL runs on the CPU. Too many parallel workers starved each other into timeouts. We cut the worker count and gave each e2e test 90 to 120 seconds.
 - **Seated comfort.** Every card, gear, axle and dial has to stay inside a comfortable view cone and within arm's reach. `seat.ts` defines the cone and a unit test checks every part of every level against it.
@@ -175,7 +175,8 @@ Target launch date: January 2027, free in the Quest browser at the live URL.
 
 - Test hand occlusion and the remembered tray spot on a Quest 3; both are checked only in the emulator so far.
 - More levels, and a level editor so players can share puzzles.
-- On-device profiling on a Quest 3 to hold 60 fps on every level. The render budget so far is measured in software GL only.
+- On-device profiling on a Quest 3 to hold 60 fps on every level. Frame rate on a Quest is unmeasured: the render budget so far is measured in software GL only.
+- Try IWSDK's gear grab on a Quest 3; it is tested in the IWER emulator only so far.
 
 ## How it fits the judging
 

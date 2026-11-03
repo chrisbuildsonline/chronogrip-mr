@@ -33,6 +33,12 @@ describe('README', () => {
     expect(named.filter((n) => !scripts.includes(n))).toEqual([]);
   });
 
+  it('says IWSDK grabs the gears, names ?grab=pinch, and no longer says grabbing is off', () => {
+    expect(readme).toContain('GrabSystem');
+    expect(readme).toContain('?grab=pinch');
+    expect(readme).not.toMatch(/switched (its )?grabbing off|grabbing (is )?(switched|turned) off/i);
+  });
+
   it('links the live build', () => {
     expect(readme).toContain('https://chrisbuildsonline.github.io/chronogrip-mr/');
   });
