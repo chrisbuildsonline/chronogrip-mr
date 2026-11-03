@@ -1,8 +1,8 @@
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace } from 'three';
 import { clock, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
+import { C } from './palette';
 
 /** Canvas drawing of the in-world panels, per design/DESIGN.md. */
-const C = { cream: '#f6efe2', deep: '#ebe0cc', ink: '#1c1712', muted: '#7d6f5f', amber: '#d99a2b', tint: '#f3dcae', tintInk: '#7a4e0e', shadow: 'rgba(20,12,4,0.35)' };
 const PX = 3000; // canvas pixels per metre: 3 px per mm
 const MARGIN = 48; // room for the soft shadow
 const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
@@ -105,7 +105,7 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
     g.beginPath();
     g.arc(x, y, h / 2, 0, Math.PI * 2);
   } else pill(g, x, y, w, h);
-  g.fillStyle = b.kind === 'primary' ? (hover ? '#33291f' : C.ink) : hover ? '#e2d3b8' : C.deep;
+  g.fillStyle = b.kind === 'primary' ? (hover ? C.inkHover : C.ink) : hover ? C.deepHover : C.deep;
   g.fill();
   if (hover) {
     g.lineWidth = mm(3);

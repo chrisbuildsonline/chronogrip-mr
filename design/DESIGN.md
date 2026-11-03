@@ -8,14 +8,18 @@ The board is the game; UI is a quiet cream card that floats above it. Warm walnu
 | Walnut | `#4a3322` | tray, ledge (world) |
 | Brass | `#b08d57` | gears (world) |
 | Cream | `#f6efe2` | every panel surface |
-| Cream deep | `#ebe0cc` | secondary buttons, level tiles |
-| Ink | `#1c1712` | titles, numbers, the primary pill |
-| Muted | `#7d6f5f` | secondary text, eyebrows |
+| Cream deep | `#ebe0cc` | secondary buttons, level tiles; `#e2d3b8` hovered |
+| Ink | `#1c1712` | titles, numbers, the primary pill; `#33291f` hovered |
+| Muted | `#665a4c` | secondary text, eyebrows |
 | Amber | `#d99a2b` | the one accent: selection, progress, hover ring, reward glow |
-| Amber tint | `#f3dcae` on `#7a4e0e` | status pills ("Solved", best times) |
+| Amber tint | `#7a4e0e` on `#f3dcae` | status pills ("Solved", "New best") |
+| Note | `#c9bba6` | page only: the Enter MR note on the walnut vignette (lightest stop `#3a2a1c`) |
 | Shadow | `rgba(20,12,4,0.35)` | soft drop shadow, 30 px blur, 10 px down |
 
 No hairline borders. Depth comes from the shadow and the cream-on-walnut contrast.
+
+Every text colour reaches WCAG AA (4.5:1) on each surface it sits on, hover included: muted is 5.9:1 on cream, 5.1:1 on
+cream deep and 4.6:1 on a hovered tile (tests/unit/palette.test.ts). The colours live in src/palette.ts.
 
 ## Type (panel millimetres; canvas at 3 px per mm)
 | Style | Size | Face |
@@ -101,6 +105,15 @@ speeds and the bird flaps in time; the complete card shows 2 s later.
 The same in-world panels, clicked with the mouse (ray cast). The HTML chrome is only the small serif wordmark (top left)
 and the Enter MR pill with its note (top right, so it never covers the board), in the same palette, over a warm walnut
 radial vignette that lets the tray's shadow read.
+
+Loading: from first paint (plain markup and CSS in index.html, before the 5.5 MB SDK chunk arrives) a cream card in the
+middle: two brass gears that tick one tooth per half second and rest, the eyebrow, the Display wordmark and a muted
+"Winding the clockwork…". The page wordmark and Enter MR wait behind it. Once the world is built it fades out (0.5 s) and
+takes no pointer; if startup fails it stops ticking and says "The clockwork would not start." with the reason. Reduced
+motion: no ticking, no fades.
+
+Keys (desktop): Enter presses the card's primary pill; Esc pauses, resumes from the pause card and goes back from level
+select. Held keys do not repeat. The canvas is labelled for screen readers (role img).
 
 Camera: from above, behind and a little right of the seated head (0.107, 0.225, 0.364) looking at (0.015, -0.08, -0.36):
 a three-quarter view that shows the bevel, gear thickness and the bird standing up. Every card (title, select, HUD,

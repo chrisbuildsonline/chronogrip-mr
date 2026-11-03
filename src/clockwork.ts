@@ -18,6 +18,7 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { BAND, TWIST_FULL, settingOf } from './escapement';
+import { C } from './palette';
 import { gearGeometry } from './gear';
 import { trayLocal } from './seat';
 
@@ -51,7 +52,6 @@ export const KNOB_TOP = 0.019;
 /** A pinch (or a mouse press) this close to the knob grabs it: the whole dial is the target, metres. */
 export const KNOB_GRAB_M = 0.04;
 
-const C = { cream: '#f6efe2', deep: '#ebe0cc', ink: '#1c1712', muted: '#7d6f5f', amber: '#d99a2b', tint: '#f3dcae' };
 const brass = () => new MeshStandardMaterial({ color: 0xb08d57, metalness: 1, roughness: 0.35 });
 const bronze = () => new MeshStandardMaterial({ color: 0x7d5f33, metalness: 0.85, roughness: 0.45 });
 const steel = () => new MeshStandardMaterial({ color: 0x9aa3ab, metalness: 1, roughness: 0.35 });
