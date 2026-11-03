@@ -13,6 +13,8 @@ The board is the game; UI is a quiet cream card that floats above it. Warm walnu
 | Muted | `#665a4c` | secondary text, eyebrows |
 | Amber | `#d99a2b` | the one accent: selection, progress, hover ring, reward glow |
 | Amber tint | `#7a4e0e` on `#f3dcae` | status pills ("Solved", "New best") |
+| Jam | `#cf4128` | world only: a jammed gear's tint, the goal ring when the target turns the wrong way |
+| Jam ink | `#a8321e` | the red words and disc of a fault on the HUD, the badge arrow when wrong way (5.8:1 on cream) |
 | Note | `#c9bba6` | page only: the Enter MR note on the walnut vignette (lightest stop `#3a2a1c`) |
 | Shadow | `rgba(20,12,4,0.35)` | soft drop shadow, 30 px blur, 10 px down |
 
@@ -79,6 +81,21 @@ near side, 78% opaque with an amber Fresnel rim so each finger's edge and the ou
   clear of every pin, fixed and solution gear, the dial, balance wheel and bird; spots clear of the biggest tray gear on
   every free axle are tried first. Checked on every level and 120 dailies (tests/unit/goal.test.ts). Two draw calls.
 - The HUD repeats it in words: "Turn the marked gear ↻ 60 rpm".
+
+## Faults (on the board and the HUD)
+Red is kept for one thing: a train that will not do what the goal asks. It never shows on a board that is just
+unfinished. Rules in src/fault.ts.
+- Jammed (the gears lock each other): every gear the solver calls jammed takes a warm red tint (its own material, a
+  colour lerp from brass towards Jam plus a faint Jam glow, no other gear touched). The gear whose drop jammed the
+  train lands, then the locked gears shudder for 0.5 s (a 16 Hz rattle about the axle, 3.5 degrees at most, and an 11 Hz
+  wobble across it, 1.2 degrees, under 2 mm at the rim of the biggest gear, dying away quadratically) and hold still.
+  The tint stays while the jam does and goes the moment a gear comes off or moves.
+- Wrong way (the target turns at the right speed, against the arrow): the badge's turn arrow is drawn in Jam ink and
+  the ring round the target turns Jam. The pill stays cream; it only goes amber when matched.
+- The HUD's goal line gives way to one line: a small Jam ink disc with a cream "!", the lead in Jam ink bold and the
+  fix in muted: "Jammed: these gears lock up", "Wrong way: add or remove a gear". Short enough for body size on the
+  HUD; a wider system font shrinks it to fit, it never wraps. The goal line comes back as soon as the fault clears.
+- The grind sound still plays on the drop that jams.
 
 ## Escapement and automaton (on the board)
 - Near-right corner of the tray, on a bronze plate: the regulator dial (88 mm cream face, brass bezel) and a small brass

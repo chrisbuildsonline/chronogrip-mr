@@ -13,6 +13,10 @@ export const C = {
   tint: '#f3dcae',
   tintInk: '#7a4e0e',
   shadow: 'rgba(20,12,4,0.35)',
+  /** World only: the warm red a jammed gear is tinted and the goal ring turns when the target runs the wrong way. */
+  jam: '#cf4128',
+  /** The same red dark enough for words and the badge's arrow on cream: "Jammed:", "Wrong way:". */
+  jamInk: '#a8321e',
   /** World only, never text: the gears' brass, and the fine lines of the "table found" ring (src/cue.ts). */
   brass: '#b08d57',
   /** Page only: the Enter MR note, and the lightest stop of the walnut vignette behind the page chrome. */

@@ -29,6 +29,8 @@ const TEXT: [string, string, string][] = [
   ['muted best times on a hovered tile', C.muted, C.deepHover],
   ['status pill text on amber tint', C.tintInk, C.tint],
   ['ink goal text on the matched (amber) goal badge', C.ink, C.amber],
+  ['red "Jammed:" and "Wrong way:" on the cream HUD', C.jamInk, C.cream],
+  ['the cream "!" on the red fault disc', C.cream, C.jamInk],
   ['the cream wordmark on the lightest vignette', C.cream, C.vignette],
   ['the Enter MR note on the lightest vignette', C.note, C.vignette],
 ];
@@ -59,5 +61,22 @@ describe('palette contrast (WCAG AA)', () => {
     expect(design).toContain(`| Muted | \`${C.muted}\``);
     expect(design).toContain(`| Cream | \`${C.cream}\``);
     expect(design).toContain(`| Ink | \`${C.ink}\``);
+    expect(design).toContain(`| Jam | \`${C.jam}\``);
+    expect(design).toContain(`| Jam ink | \`${C.jamInk}\``);
+  });
+
+  it('the jam red reads apart from the brass it tints and the amber accent: a clearly redder hue', () => {
+    const hue = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255];
+      const [max, min] = [Math.max(r, g, b), Math.min(r, g, b)];
+      expect(max, hex).toBe(r);
+      return (60 * (g - b)) / (max - min);
+    };
+    for (const red of [C.jam, C.jamInk]) {
+      expect(hue(red), red).toBeLessThan(15);
+      expect(hue(C.brass) - hue(red)).toBeGreaterThan(20);
+      expect(hue(C.amber) - hue(red)).toBeGreaterThan(20);
+    }
   });
 });
