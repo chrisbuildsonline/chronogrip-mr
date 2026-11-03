@@ -26,6 +26,10 @@ interface ChronoHook {
   readonly placements: Record<string, string>;
   /** Live: id of the gear being carried, or null. */
   readonly held: string | null;
+  /** Live: how the current (or last) gear pick-up by hand started: IWSDK's GrabSystem or the raw pinch; null before the first. */
+  readonly grabVia: 'iwsdk' | 'pinch' | null;
+  /** Which path picks gears up by hand: 'iwsdk' by default, 'pinch' with `?grab=pinch`. */
+  readonly grabMode: 'iwsdk' | 'pinch';
   /** Live: whether the current placements solve the level. */
   readonly solved: boolean;
   /** Live: world positions of the loose gear centres. */

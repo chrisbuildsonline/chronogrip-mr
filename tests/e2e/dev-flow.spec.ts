@@ -87,7 +87,10 @@ test('dev server: the headset menu pauses mid-level; the board and the clock hol
   const resumeAt = Date.now();
   await poke(page, 'resume');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
-  expect(await page.evaluate(() => ({ placements: window.__chrono!.placements, gears: window.__chrono!.gears }))).toEqual(board);
+  const after = await page.evaluate(() => ({ placements: window.__chrono!.placements, gears: window.__chrono!.gears }));
+  expect(after.placements).toEqual(board.placements);
+  // IWSDK keeps an entity's position as float32, so a gear made grabbable again on Resume moves by ~1e-8 m: far under a micron.
+  for (const [id, p] of Object.entries(board.gears)) expect(Math.hypot(...p.map((v, i) => v - after.gears[id]![i]!) as [number, number, number])).toBeLessThan(1e-6);
   // the bound is the real time since Resume, so the 2 s spent paused can't sneak in
   const resumed = (await page.evaluate(() => window.__chrono!.levelTime)) - t;
   expect(resumed).toBeGreaterThanOrEqual(0);

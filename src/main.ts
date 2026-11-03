@@ -1,10 +1,10 @@
-import { World } from '@iwsdk/core';
+import { Grabbed, GrabSystem, OneHandGrabbable, World, type Entity } from '@iwsdk/core';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { APP_TITLE, createWorldOptions } from './config';
 import { DEFAULT_PLACEMENT, toHeadFrame, type Head } from './anchor';
 import { startSession } from './enter';
 import { BoxGeometry, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
-import { occupiedAt, pickGear, snapAxle } from './grab';
+import { grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle, type Hand } from './grab';
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
 import { buildScene } from './scene';
@@ -257,6 +257,7 @@ function loadLevel(i: number): void {
   levelIndex = i;
   level = levels[i]!;
   newBest = false;
+  dropGearEntities();
   built.load(level);
   axleOf = new Map(level.axles.map((a) => [a.id, a]));
   layerOf = new Map(level.tray.map((g) => [g.id, g.layer]));
@@ -269,6 +270,7 @@ function loadLevel(i: number): void {
   held = heldFrom = null;
   if (holder === 'mouse') controls.enabled = true;
   holder = null;
+  pending = null;
   tweens.clear();
   burst.visible = false;
   rewardAt = -Infinity;
@@ -282,6 +284,7 @@ function loadLevel(i: number): void {
 
 /** The carried gear goes back where it was picked from, at once: the board is as it was before the grab. */
 function putBack(): void {
+  dropGearEntities(); // ends any IWSDK carry at once, so it cannot move the gear again after it is put back
   const id = held;
   if (holder === 'mouse') controls.enabled = true;
   held = holder = null;
@@ -374,21 +377,31 @@ const live = () => flow.name === 'title' || flow.name === 'playing';
 const COMPLETE_DELAY_MS = 2000;
 const shownButtons = (): Button[] => (panels.panelMesh.visible ? (panels.current?.layout.buttons ?? []) : []);
 
-/** Picks up the loose gear nearest a world point, if one is within reach; freeing its axle. */
-function grab(world: Vec3): boolean {
-  if (!live()) return false;
+/** The loose gear nearest a world point, if one is within reach and the board is live. */
+function gearNear(world: Vec3): string | null {
+  if (!live()) return null;
   const point = worldToTray(world, currentPose());
-  const id = pickGear(
+  return pickGear(
     point,
     [...built.loose].filter(([gid]) => gid !== held).map(([gid, m]) => ({ id: gid, x: m.position.x, y: -m.position.z, lift: m.position.y })),
   );
-  if (!id) return false;
+}
+
+/** Starts carrying a loose gear, freeing its axle. */
+function take(id: string): void {
   if (flow.name === 'title') send({ type: 'start' });
   grabbedOnce = true;
   held = id;
   heldFrom = placements[id] ?? null;
   tweens.delete(id);
   if (delete placements[id]) recheck();
+}
+
+/** Picks up the loose gear nearest a world point, if one is within reach; freeing its axle. */
+function grab(world: Vec3): boolean {
+  const id = gearNear(world);
+  if (!id) return false;
+  take(id);
   drag(world);
   return true;
 }
@@ -415,6 +428,80 @@ function release(): void {
     if (Object.values(check.spins).includes('jammed')) sound.grind();
   }
   if (solved) send({ type: 'solve' });
+}
+
+// Gear pick-up in XR goes through IWSDK's GrabSystem: each loose gear is an entity with OneHandGrabbable while the board is
+// live, and the Grabbed tag it gains and loses starts and ends the same carry as the raw pinch. `?grab=pinch` leaves the raw
+// pinch in charge. The raw pinch also stays as the fallback when IWSDK never grabs for a pinch that is on a gear.
+const grabMode = grabModeOf(location.search);
+/** How the current (or last) gear pick-up started. */
+let grabVia: 'iwsdk' | 'pinch' | null = null;
+const grabSystem = world.getSystem(GrabSystem)!;
+const trayEntity = world.createTransformEntity(built.tray, { parent: world.sceneEntity, persistent: true });
+const gearEntities = new Map<string, Entity>();
+/** The gear IWSDK is carrying now, if any. */
+let iwsdkHeld: string | null = null;
+/** A pinch that is on a gear: the raw path gives IWSDK a few frames to grab it before taking it itself. */
+let pending: { hand: Hand; frames: number } | null = null;
+/** Hands whose current pinch went to a panel button or the knob, so it never picks up a gear. */
+const claimed = { left: false, right: false };
+
+/** Drops every gear entity (which pulls the mesh out of the tray, so it goes straight back). Ends any IWSDK carry. */
+function dropGearEntities(): void {
+  for (const [id, e] of gearEntities) {
+    const mesh = built.loose.get(id);
+    e.destroy();
+    if (mesh) built.tray.add(mesh);
+  }
+  gearEntities.clear();
+  iwsdkHeld = null;
+}
+
+/** Gears are grabbable only in XR while the board is live; sealed (placed, calibrating) or paused, they are plain meshes. */
+function syncGrabbables(): void {
+  const want = grabMode === 'iwsdk' && world.renderer.xr.isPresenting && live();
+  if (!want) {
+    if (gearEntities.size) dropGearEntities();
+    return;
+  }
+  if (gearEntities.size) return;
+  for (const [id, mesh] of built.loose) {
+    const e = world.createTransformEntity(mesh, { parent: trayEntity, persistent: true });
+    e.addComponent(OneHandGrabbable, { rotate: false });
+    gearEntities.set(id, e);
+  }
+}
+
+/** Follows the Grabbed tag: a gear gaining it is picked up, losing it is let go. Runs once a frame. */
+function stepGrabs(): void {
+  syncGrabbables();
+  if (iwsdkHeld) {
+    const e = gearEntities.get(iwsdkHeld);
+    if (!e || held !== iwsdkHeld) {
+      // The board changed under the carry (paused, new level): IWSDK lets go, the game already has.
+      if (e) grabSystem.forceRelease(e);
+      iwsdkHeld = null;
+    } else if (!e.hasComponent(Grabbed)) {
+      iwsdkHeld = null;
+      release();
+    }
+  }
+  if (iwsdkHeld) return;
+  for (const [id, e] of gearEntities) {
+    if (!e.hasComponent(Grabbed)) continue;
+    const at = worldOf(built.loose.get(id)!.position);
+    const hand = holderHand(grabSystem.getHolderHand(e), pinching, pinchPoints, at);
+    // A pinch already spoken for (a button, the knob), a carry already under way or a board that is not live: not a pick-up.
+    if (held !== null || !live() || (hand && claimed[hand])) {
+      grabSystem.forceRelease(e);
+      continue;
+    }
+    take(id);
+    holder = hand ?? 'right';
+    iwsdkHeld = id;
+    grabVia = 'iwsdk';
+    break;
+  }
 }
 
 // Desktop: click panel buttons, drag a loose gear across the tray plane; dragging empty space still orbits.
@@ -588,9 +675,34 @@ trackMr(world.renderer, {
     const starts = point !== null && !pinching[hand] && holder === null;
     if (starts) sound.unlock();
     const onButton = starts && buttonAt(worldToPanel(anchor, point), shownButtons(), 0.03);
+    if (starts) {
+      claimed[hand] = !!onButton;
+      pending = null;
+    }
     if (onButton) press(onButton);
-    else if (starts && grabKnob(point, hand)) lastWrist = wrist;
-    else if (starts && grab(point)) holder = hand;
+    else if (starts && grabKnob(point, hand)) {
+      claimed[hand] = true;
+      lastWrist = wrist;
+    } else if (starts && grabMode === 'pinch') {
+      if (grab(point)) {
+        holder = hand;
+        grabVia = 'pinch';
+      }
+    } else if (starts && gearNear(point)) pending = { hand, frames: 0 };
+    if (!point) claimed[hand] = false;
+    if (pending?.hand === hand) {
+      // IWSDK's grab has a few frames to arrive; if it has not, this pinch picks the gear up itself.
+      const owner = pinchOwner(grabMode, pending.frames, iwsdkHeld !== null);
+      if (!point || owner === 'skip') pending = null;
+      else if (owner === 'wait') pending.frames++;
+      else {
+        pending = null;
+        if (holder === null && grab(point)) {
+          holder = hand;
+          grabVia = 'pinch';
+        }
+      }
+    }
     pinching[hand] = point !== null;
     pinchPoints[hand] = point;
     if (turning === hand) {
@@ -600,6 +712,12 @@ trackMr(world.renderer, {
         if (lastWrist) regulator.turn(twistOf(lastWrist, wrist));
         lastWrist = wrist;
       }
+      return;
+    }
+    if (holder === hand && iwsdkHeld) {
+      // IWSDK ends the carry (and stepGrabs releases the gear); a lost pinch just makes sure of it.
+      const e = !point && gearEntities.get(iwsdkHeld);
+      if (e) grabSystem.forceRelease(e);
       return;
     }
     if (holder !== hand) return;
@@ -661,6 +779,7 @@ world.scene.onBeforeRender = () => {
   const now = performance.now();
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   lastFrame = now;
+  stepGrabs();
   levelClock.tick(now, flow.name === 'playing');
   for (const [id, t] of tweens) {
     const { pos, done } = tweenAt(t.from, t.to, now - t.start);
@@ -855,6 +974,12 @@ window.__chrono = Object.freeze({
   },
   get held() {
     return held;
+  },
+  get grabVia() {
+    return grabVia;
+  },
+  get grabMode() {
+    return grabMode;
   },
   get solved() {
     return solved;

@@ -18,7 +18,7 @@ export function createWorldOptions(): WorldOptions {
     },
     features: {
       locomotion: false,
-      grabbing: false,
+      grabbing: true,
       spatialUI: false,
     },
   };
