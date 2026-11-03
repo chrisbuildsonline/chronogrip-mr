@@ -729,6 +729,9 @@ window.__chrono = Object.freeze({
   get placeCue() {
     return { ...cue.state };
   },
+  holdCue(progress: number | null) {
+    cue.hold(progress);
+  },
   get trayRestored() {
     return trayRestored;
   },

@@ -69,6 +69,54 @@ const savedAnchor = (page: Page, not?: string) =>
     return a && a !== old ? a : null;
   }, [TRAY_KEY, not] as const, { timeout: 10_000 }).then((h) => h.jsonValue() as Promise<string>);
 
+/** Lets the game draw a few more frames (it moves the cue in scene.onBeforeRender, so a change shows a frame later). */
+const frames = (page: Page) => page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => done())))));
+
+/**
+ * Pixels of the cue's amber and brass in a screenshot (base64 PNG), decoded in the page: warm hues, well saturated and
+ * bright, so not the grey room, the white controllers or the dark walnut. Only the strips of the view left and right of
+ * the board count: over the board the title's ghost hand carries a brass ghost gear about, a little further on in every
+ * shot, and nothing else there moves. The cue shows as a difference between two shots of one pose.
+ */
+const brassPixels = (page: Page, png: string) =>
+  page.evaluate(async (b64) => {
+    const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob());
+    const g = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')!;
+    g.drawImage(bitmap, 0, 0);
+    const px = g.getImageData(0, 0, bitmap.width, bitmap.height).data;
+    let n = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      const x = (i / 4) % bitmap.width;
+      if (x > 0.28 * bitmap.width && x < 0.72 * bitmap.width) continue;
+      const [r, gr, b] = [px[i]!, px[i + 1]!, px[i + 2]!];
+      const max = Math.max(r, gr, b);
+      const min = Math.min(r, gr, b);
+      if (max < 140 || max - min < 0.4 * max || max !== r) continue;
+      const hue = (60 * (gr - b)) / (max - min);
+      if (hue > 25 && hue < 55) n++;
+    }
+    return n;
+  }, png);
+
+/** Where the held cue is caught: early in the pulse, nearly at full strength, the band well clear of the board. */
+const CUE_HOLD = 0.25;
+/**
+ * Brass pixels the held cue must add to the side strips of the 1280 x 720 shot. Measured: the ring adds about 19 600
+ * (restored 14 300); a ring that stays under the board adds none.
+ */
+const CUE_PIXELS = { plane: 8_000, restored: 5_000 } as const;
+
+/** The held cue's shot (saved to `path`) against one once it has gone, from the same pose: how many brass pixels it adds. */
+async function cueContrast(page: Page, path: string) {
+  await frames(page);
+  const lit = (await page.screenshot({ path })).toString('base64');
+  await page.evaluate(() => window.__chrono!.holdCue(null));
+  await page.waitForFunction(() => window.__chrono?.placeCue.showing === false, undefined, { timeout: 10_000 });
+  await frames(page);
+  const gone = (await page.screenshot()).toString('base64');
+  return (await brassPixels(page, lit)) - (await brassPixels(page, gone));
+}
+
 function expectSamePose(a: Pose, b: Pose) {
   a.position.forEach((v, i) => expect(v, `position[${i}]`).toBeCloseTo(b.position[i]!, 3));
   expect(a.tilt).toBeCloseTo(b.tilt, 3);
@@ -93,15 +141,16 @@ test('dev server: a table plane places the tray and a brass ring pulses out from
   await open(page);
   await addTable(page);
   expect(await chrono(page, 'placeCue')).toEqual({ kind: null, showing: false, count: 0 });
+  // A software-GL frame (and a screenshot) can outlast the 1 s pulse, so the pulse is held at one moment for the shot.
+  await page.evaluate((t) => window.__chrono!.holdCue(t), CUE_HOLD);
   await enterMr(page);
-  // Under load a software-GL frame can outlast the 1 s pulse, so wait for it to have started, not to be seen mid-pulse.
   await page.waitForFunction(() => (window.__chrono?.placeCue.count ?? 0) >= 1, undefined, { timeout: 10_000 });
   expect(await chrono(page, 'trayPlaced')).toBe('plane');
-  expect((await chrono(page, 'placeCue')).kind).toBe('plane');
+  expect(await chrono(page, 'placeCue')).toEqual({ kind: 'plane', showing: true, count: 1 });
   expect(await chrono(page, 'trayRestored')).toBeNull();
-  await page.screenshot({ path: 'test-results/f19/cue-plane.png' });
-  // It pulses once, about a second, then goes.
-  await page.waitForFunction(() => window.__chrono?.placeCue.showing === false, undefined, { timeout: 10_000 });
+  // The ring is plain to see: it adds a broad sweep of amber and brass to the view, which is gone once it ends.
+  expect(await cueContrast(page, 'test-results/f19/cue-plane.png')).toBeGreaterThan(CUE_PIXELS.plane);
+  // It pulsed once.
   expect((await chrono(page, 'placeCue')).count).toBe(1);
   expect(errors).toEqual([]);
 });
@@ -115,12 +164,14 @@ test('dev server: after a reload, Enter MR puts the tray back where the table pl
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);
   expect(await chrono(page, 'trayRestored')).toBeNull();
+  await page.evaluate((t) => window.__chrono!.holdCue(t), CUE_HOLD);
   await enterMr(page);
   await page.waitForFunction(() => window.__chrono?.trayRestored === 'anchor', undefined, { timeout: 10_000 });
   expectSamePose(await pose(page), placed);
   expect(await chrono(page, 'trayPlaced')).toBe('plane');
-  expect((await chrono(page, 'placeCue')).kind).toBe('restored');
-  await page.screenshot({ path: 'test-results/f19/cue-restored.png' });
+  expect(await chrono(page, 'placeCue')).toMatchObject({ kind: 'restored', showing: true });
+  // Subtler, but there to see.
+  expect(await cueContrast(page, 'test-results/f19/cue-restored.png')).toBeGreaterThan(CUE_PIXELS.restored);
   // No search runs over it: past the 3 s plane window it has not fallen back to the default.
   await page.waitForTimeout(3500);
   expectSamePose(await pose(page), placed);

@@ -1,4 +1,4 @@
-/** Read-only hook for tests, set once the scene is built. */
+/** Hook for tests, set once the scene is built; read-only but for holdCue. */
 interface ChronoHook {
   readonly levelId: string;
   readonly gearCount: number;
@@ -12,6 +12,8 @@ interface ChronoHook {
   readonly trayPlaced: 'plane' | 'default';
   /** Live: the "table found" ring: the last kind shown ('plane' when a plane placed the tray, 'restored' for a saved pose), whether it is pulsing now, and how many times it has shown. */
   readonly placeCue: { readonly kind: 'plane' | 'restored' | null; readonly showing: boolean; readonly count: number };
+  /** For screenshots on slow software GL: pins any running "table found" ring at this fraction of its pulse (0..1) until called with null, when it ends at once. */
+  holdCue(progress: number | null): void;
   /** Live: how this session's tray pose came back from an earlier one: 'anchor' (a persistent anchor), 'saved' (the head-relative pose in localStorage), or null (placed fresh). */
   readonly trayRestored: 'anchor' | 'saved' | null;
   /** Live: per hand, the depth-only occluder's index tip (world) while the hand is tracked and occluding, else null. */
