@@ -24,6 +24,8 @@ export const COMFORT = { maxDistance: 0.6, maxYaw: 35, minPitch: -50, maxPitch: 
 
 /** Tray board half extents in level coordinates (the tray is 0.40 x 0.30 m). */
 export const TRAY_HALF = { x: 0.2, y: 0.15 } as const;
+/** The wooden board overhangs the play area by this much on every side, metres (src/scene.ts). */
+export const BOARD_MARGIN = 0.01;
 
 /** Gap between parts on the strip, metres. */
 const STRIP_GAP = 0.012;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PLACEMENT, placeTray } from '../../src/anchor';
-import { CUE_COLORS, CUE_MS, cueAt, cueFor, cueSpot } from '../../src/cue';
+import { CUE_COLORS, CUE_MS, bandInner, cueAt, cueFor, cueSpot, type CueKind } from '../../src/cue';
 import { C } from '../../src/palette';
-import { worldToTray } from '../../src/seat';
+import { BOARD_MARGIN, TRAY_HALF, worldToTray } from '../../src/seat';
 import srcCue from '../../src/cue.ts?raw';
 
 const onTable = placeTray([{ orientation: 'horizontal', position: [0, -0.45, -0.4] }]);
@@ -58,6 +58,28 @@ describe('the pulse', () => {
     expect(peak('restored')).toBeGreaterThan(0.3);
     const growth = (k: 'plane' | 'restored') => cueAt(k, 0.95 * CUE_MS[k]).scale / cueAt(k, 0.02 * CUE_MS[k]).scale;
     expect(growth('restored')).toBeLessThan(growth('plane'));
+  });
+});
+
+describe('the ring clears the board', () => {
+  // The cue lies just under the board top, so whatever of it is inside the board's footprint is hidden. The board's
+  // corners are the furthest it reaches from the centre (src/scene.ts builds it TRAY_HALF + BOARD_MARGIN each side).
+  const corner = Math.hypot(TRAY_HALF.x + BOARD_MARGIN, TRAY_HALF.y + BOARD_MARGIN);
+  const frames = (k: CueKind) => Array.from({ length: 101 }, (_, i) => (i / 100) * CUE_MS[k]).filter((ms) => cueAt(k, ms).opacity > 0.01);
+
+  it.each(['plane', 'restored'] as const)('the bold band lies outside the board corners at every visible moment: %s', (k) => {
+    expect(frames(k).length).toBeGreaterThan(50);
+    // A clear margin past the corners, for the board's thickness seen at an angle.
+    for (const ms of frames(k)) expect(bandInner(k, ms)).toBeGreaterThan(corner + 0.015);
+  });
+
+  it('grows outward across the table, to about half a metre; the restored ring grows less', () => {
+    const r = (k: CueKind, t: number) => bandInner(k, t * CUE_MS[k]);
+    for (let t = 0.05; t < 1; t += 0.05) expect(r('plane', t)).toBeGreaterThan(r('plane', t - 0.05));
+    expect(r('plane', 0.99)).toBeGreaterThan(0.38);
+    expect(r('plane', 0.99)).toBeLessThan(0.5);
+    expect(r('restored', 0.99) - r('restored', 0)).toBeGreaterThan(0.02);
+    expect(r('restored', 0.99) - r('restored', 0)).toBeLessThan(r('plane', 0.99) - r('plane', 0));
   });
 });
 

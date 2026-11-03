@@ -24,7 +24,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { gearGeometry } from './gear';
 import type { Level } from './levels';
 import type { Placement } from './anchor';
-import { PIN_RADIUS, TRAY_HALF, TRAY_POSE, layerLift, ledgeFar, partsStrip, trayLocal } from './seat';
+import { BOARD_MARGIN, PIN_RADIUS, TRAY_HALF, TRAY_POSE, layerLift, ledgeFar, partsStrip, trayLocal } from './seat';
 
 const brass = () => new MeshStandardMaterial({ color: 0xb08d57, metalness: 1, roughness: 0.35 });
 const steel = () => new MeshStandardMaterial({ color: 0x9aa3ab, metalness: 1, roughness: 0.4 });
@@ -132,7 +132,7 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
     const strip = partsStrip(level);
     const far = ledgeFar(level);
     const ledgeWidth = Math.max(2 * TRAY_HALF.x, ...strip.map((s) => 2 * Math.abs(s.x) + 2 * s.radius)) + 0.04;
-    const board = new Mesh(new RoundedBoxGeometry(2 * TRAY_HALF.x + 0.02, BOARD_THICKNESS, 2 * TRAY_HALF.y + 0.02, 3, BEVEL), wood());
+    const board = new Mesh(new RoundedBoxGeometry(2 * (TRAY_HALF.x + BOARD_MARGIN), BOARD_THICKNESS, 2 * (TRAY_HALF.y + BOARD_MARGIN), 3, BEVEL), wood());
     place(board, 0, 0, -BOARD_THICKNESS / 2);
     // The ledge sits a touch lower and overlaps the board, so the seam reads as a step, not a flicker.
     const ledgeDepth = far - TRAY_HALF.y + 0.01;
