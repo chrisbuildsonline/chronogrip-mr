@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LEVELS } from '../../src/levels';
 import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { TRAY_POSE, inZone, ledgeFar, trayToWorld, type Vec3 } from '../../src/seat';
-import { BUTTON_MIN_M, PANEL_ZONE, SCREENS, buttonAt, clock, layout, panelAnchor, panelToWorld, pokeHit, worldToPanel } from '../../src/ui';
+import { BUTTON_MIN_M, NARROW_W, PANEL_ZONE, SCREENS, buttonAt, clock, layout, panelAnchor, panelToWorld, pokeHit, worldToPanel } from '../../src/ui';
 
 const pitch = (p: Vec3) => (Math.atan2(p[1], Math.hypot(p[0], p[2])) * 180) / Math.PI;
 const yaw = (p: Vec3) => Math.atan2(p[0], -p[2]);
@@ -39,6 +39,64 @@ describe('panel layouts', () => {
         expect(apart).toBe(true);
       }
     }
+  });
+});
+
+describe('phone layouts (narrow, outside XR)', () => {
+  const ctx = { level: 0, levels: LEVELS.length + 1, daily: true };
+  const narrow = (s: (typeof SCREENS)[number], c: Partial<typeof ctx> = {}) => layout(s, { ...ctx, ...c, narrow: true });
+
+  it('every card is one phone width, with the same buttons as the wide card', () => {
+    for (const s of SCREENS) {
+      expect(narrow(s).width, s).toBeCloseTo(NARROW_W, 9);
+      expect(narrow(s).buttons.map((b) => b.id), s).toEqual(layout(s, ctx).buttons.map((b) => b.id));
+      expect(narrow(s).buttons.map((b) => b.label), s).toEqual(layout(s, ctx).buttons.map((b) => b.label));
+    }
+    expect(narrow('complete', { level: 8 }).buttons.map((b) => b.id)).toEqual(['next', 'restart']);
+  });
+
+  it('every target is at least 4 cm, 12 mm apart and inside the padding', () => {
+    for (const s of SCREENS) {
+      const l = narrow(s);
+      for (const b of l.buttons) {
+        expect(Math.min(b.w, b.h), `${s} ${b.id}`).toBeGreaterThanOrEqual(BUTTON_MIN_M);
+        expect(Math.abs(b.x) + b.w / 2, `${s} ${b.id}`).toBeLessThanOrEqual(l.width / 2 - 0.008 + 1e-9);
+        expect(b.y - b.h / 2, `${s} ${b.id}`).toBeGreaterThanOrEqual(0.008 - 1e-9);
+        expect(b.y + b.h / 2, `${s} ${b.id}`).toBeLessThanOrEqual(l.height);
+      }
+      for (const a of l.buttons) for (const b of l.buttons) {
+        if (a === b) continue;
+        const apart = Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= 0.012 - 1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= 0.012 - 1e-9;
+        expect(apart, `${s} ${a.id} ${b.id}`).toBe(true);
+      }
+    }
+  });
+
+  it('level select puts Back and the nine tiles in two rows of five, Back first', () => {
+    const sel = narrow('select');
+    const rows = [...new Set(sel.buttons.map((b) => b.y.toFixed(6)))];
+    expect(rows).toHaveLength(2);
+    const top = sel.buttons.filter((b) => b.y.toFixed(6) === rows[0]);
+    expect(top.map((b) => b.id)).toEqual(['back', 'level-1', 'level-2', 'level-3', 'level-4']);
+    // Reading order: left to right, then the lower row.
+    expect(sel.buttons[1]!.y).toBeGreaterThan(sel.buttons[5]!.y);
+    expect(sel.buttons[5]!.x).toBeCloseTo(sel.buttons[0]!.x, 9);
+  });
+
+  it('the wide cards stay as they were when narrow is off', () => {
+    for (const s of SCREENS) expect(layout(s, { ...ctx, narrow: false })).toEqual(layout(s, ctx));
+    expect(layout('select', ctx).width).toBeCloseTo(0.674, 9);
+  });
+});
+
+describe('a scaled anchor (the phone card)', () => {
+  it('scales panel space about the anchor and round-trips', () => {
+    const a = { ...panelAnchor(LEVELS[0]!), scale: 0.4 };
+    const p: Vec3 = [0.05, 0.07, 0.01];
+    const w = panelToWorld(a, p);
+    const plain = panelToWorld({ ...a, scale: 1 }, [p[0] * 0.4, p[1] * 0.4, p[2] * 0.4]);
+    w.forEach((v, i) => expect(v).toBeCloseTo(plain[i]!, 12));
+    worldToPanel(a, w).forEach((v, i) => expect(v).toBeCloseTo(p[i]!, 9));
   });
 });
 

@@ -1,7 +1,7 @@
 import type { Level } from './levels';
 import { BIRD, DIAL_AT, KNOB_TOP } from './clockwork';
 import { BOARD_MARGIN, TRAY_HALF, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
-import { SCREENS, layout, panelAnchor, panelToWorld, type Anchor, type Screen } from './ui';
+import { NARROW_W, SCREENS, layout, panelAnchor, panelToWorld, type Anchor, type Screen } from './ui';
 
 /**
  * Desktop preview framing (outside XR). The tuned three-quarter view: from above, behind and a little right of the seated
@@ -86,6 +86,49 @@ export function faceView(a: Anchor, back: Vec3): Anchor {
   const [x, y, z] = unit(back);
   // The card's normal is (cos p sin y, -sin p, cos p cos y) (src/ui.ts panelToWorld).
   return { position: a.position, pitch: -Math.asin(y), yaw: Math.atan2(x, z) };
+}
+
+/**
+ * Phone portrait (outside XR): the card is a bottom sheet, one phone width wide (`side` px in from each edge), its foot
+ * `bottom` px over the bottom edge, so its buttons sit under the thumb. The board fits the room above it, `gap` px clear.
+ * The card is drawn `depth` metres in front of the eye, nearer than anything on the board.
+ */
+export const PHONE = { side: 16, bottom: 16, gap: 12, depth: 0.2 } as const;
+
+/** A phone in portrait: narrow, and tall enough to keep the board above a bottom-sheet card. */
+export const isPhone = (width: number, height: number) => width < 500 && height >= 1.4 * width;
+
+/** Page pixels per metre of panel space on a phone: a NARROW_W card spans the width less the side margins. */
+export const phonePx = (width: number) => (width - 2 * PHONE.side) / NARROW_W;
+
+/**
+ * The phone card's anchor for a camera at `eye` with backward axis `back` (world up, no roll): face on, centred, its
+ * bottom edge PHONE.bottom px over the foot of the view, scaled so panel space shows at phonePx. `shift`: the view is
+ * raised that many px (phoneShift, a camera view offset), so the card is placed that much lower in the unshifted frame.
+ */
+export function phoneCard(o: { eye: Vec3; back: Vec3; fovDeg: number; width: number; height: number; shift?: number }): Anchor {
+  const [, up, z] = axes(o.back);
+  const tanV = Math.tan((o.fovDeg * Math.PI) / 360);
+  const d = PHONE.depth;
+  const ndcY = 1 - (2 * (o.height - PHONE.bottom + (o.shift ?? 0))) / o.height;
+  const at = (k: number) => o.eye[k]! - z[k]! * d + up[k]! * ndcY * d * tanV;
+  const pxPerMetre = o.height / (2 * d * tanV);
+  return { ...faceView({ position: [at(0), at(1), at(2)], pitch: 0, yaw: 0 }, o.back), scale: phonePx(o.width) / pxPerMetre };
+}
+
+/**
+ * How many px to raise a phone's view (camera view offset) so the content seen from `d` along `dir` sits midway between
+ * `top` and `bottom` px: the board centred in the room between the header and the card, not sunk onto the card.
+ */
+export function phoneShift(o: View & { d: number; points: readonly Vec3[]; top: number; bottom: number }): number {
+  const ys = o.points.map((p) => toPixel(o, o.d, p)[1]);
+  return (Math.min(...ys) + Math.max(...ys)) / 2 - (o.top + o.bottom) / 2;
+}
+
+/** Page pixels kept clear along the bottom of a phone view for the tallest of `screens` as a bottom-sheet card. */
+export function phoneReserve(width: number, screens: readonly Screen[], levels: number): number {
+  const tallest = Math.max(...screens.map((s) => layout(s, { level: 0, levels, daily: true, narrow: true }).height));
+  return PHONE.bottom + PHONE.gap + tallest * phonePx(width);
 }
 
 /** Height of the gears and pins above the board top, metres: a generous top for the board's box. */

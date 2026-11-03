@@ -31,8 +31,19 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
   });
 }
 
-/** `daily`: the last level is today's tinker puzzle. `resume`: a level is solved, so the title offers Continue. */
-export type LayoutCtx = { level: number; levels: number; daily?: boolean; resume?: boolean };
+/**
+ * `daily`: the last level is today's tinker puzzle. `resume`: a level is solved, so the title offers Continue.
+ * `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
+ */
+export type LayoutCtx = { level: number; levels: number; daily?: boolean; resume?: boolean; narrow?: boolean };
+
+/** Width of every card on a phone in portrait (outside XR), metres of panel space. */
+export const NARROW_W = 0.3;
+/** Phone level select: five targets to a row (Back, then the tiles), 44 x 60 mm, two rows for nine levels. */
+const NARROW_COLS = 5;
+const NARROW_TILE_H = 0.06;
+/** Room over the tiles for the "Levels" heading and the solved count. */
+const NARROW_HEAD = 0.052;
 
 const TILE_W = 0.05;
 const TILE_H = 0.07;
@@ -44,15 +55,37 @@ const HUD_W = 0.27;
 
 export function layout(screen: Screen, ctx: LayoutCtx): Layout {
   const low = PAD + BH / 2;
+  const narrow = !!ctx.narrow;
+  // Phone: the same buttons in one phone width (content 268 mm): primary 100 mm, secondaries 72 mm.
+  const [primaryW, secondaryW] = narrow ? [0.1, 0.072] : [0.11, 0.088];
   switch (screen) {
     case 'title':
-      return { width: 0.34, height: 0.15, buttons: row(low, [['start', ctx.resume ? 'Continue' : 'Start', 'primary', 0.13], ['levels', 'Levels', 'secondary', 0.1]]) };
+      return {
+        width: narrow ? NARROW_W : 0.34,
+        height: 0.15,
+        buttons: row(low, [['start', ctx.resume ? 'Continue' : 'Start', 'primary', narrow ? 0.15 : 0.13], ['levels', 'Levels', 'secondary', narrow ? 0.106 : 0.1]]),
+      };
     case 'select': {
-      // One row, low on the card so every target stays in reach: the Back pill, a wider gap, then one tile per level.
       const n = ctx.levels;
+      const label = (i: number) => (ctx.daily && i === n - 1 ? 'Daily' : String(i + 1));
+      if (narrow) {
+        // Phone: Back then the tiles, five to a row, so nine levels make two rows that fit the width. Back takes the top
+        // left cell, where a phone keeps its back control; the tiles read left to right, then the lower row.
+        const w = (NARROW_W - 2 * PAD - (NARROW_COLS - 1) * GAP) / NARROW_COLS;
+        const rows = Math.ceil((n + 1) / NARROW_COLS);
+        const cell = (k: number) => ({
+          x: -NARROW_W / 2 + PAD + (k % NARROW_COLS) * (w + GAP) + w / 2,
+          y: PAD + (rows - 1 - Math.floor(k / NARROW_COLS)) * (NARROW_TILE_H + GAP) + NARROW_TILE_H / 2,
+          w,
+          h: NARROW_TILE_H,
+        });
+        const back: Button = { id: 'back', label: 'Back', kind: 'secondary', ...cell(0) };
+        const tiles = Array.from({ length: n }, (_, i): Button => ({ id: `level-${i + 1}`, label: label(i), kind: 'tile', ...cell(i + 1) }));
+        return { width: NARROW_W, height: PAD + rows * NARROW_TILE_H + (rows - 1) * GAP + NARROW_HEAD, buttons: [back, ...tiles] };
+      }
+      // One row, low on the card so every target stays in reach: the Back pill, a wider gap, then one tile per level.
       const width = 2 * PAD + BACK_W + BACK_GAP + n * TILE_W + (n - 1) * GAP;
       const y = PAD + TILE_H / 2;
-      const label = (i: number) => (ctx.daily && i === n - 1 ? 'Daily' : String(i + 1));
       const left = -width / 2 + PAD;
       const back: Button = { id: 'back', label: 'Back', kind: 'secondary', x: left + BACK_W / 2, y, w: BACK_W, h: BH };
       const tiles = Array.from({ length: n }, (_, i): Button => ({
@@ -60,19 +93,25 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       }));
       return { width, height: 0.15, buttons: [back, ...tiles] };
     }
-    case 'hud':
+    case 'hud': {
       // The goal line runs across the top; under it the level, a time with tenths (0:04.7) and the pause button. The
       // button stays on the bottom row, so it is no higher in view than before.
-      return { width: HUD_W, height: 0.096, buttons: [{ id: 'pause', label: 'Pause', kind: 'icon', x: HUD_W / 2 - 0.008 - BH / 2, y: 0.031, w: BH, h: BH }] };
+      const width = narrow ? NARROW_W : HUD_W;
+      return { width, height: 0.096, buttons: [{ id: 'pause', label: 'Pause', kind: 'icon', x: width / 2 - 0.008 - BH / 2, y: 0.031, w: BH, h: BH }] };
+    }
     case 'complete': {
       // After the last level the primary already goes to level select, so there is no second Levels button.
       const last = ctx.level + 1 >= ctx.levels;
-      const items: Parameters<typeof row>[1] = [['next', last ? 'Levels' : 'Next', 'primary', 0.11], ['restart', 'Restart', 'secondary', 0.088]];
-      if (!last) items.push(['levels', 'Levels', 'secondary', 0.088]);
-      return { width: 0.35, height: 0.17, buttons: row(low, items) };
+      const items: Parameters<typeof row>[1] = [['next', last ? 'Levels' : 'Next', 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW]];
+      if (!last) items.push(['levels', 'Levels', 'secondary', secondaryW]);
+      return { width: narrow ? NARROW_W : 0.35, height: 0.17, buttons: row(low, items) };
     }
     case 'paused':
-      return { width: 0.35, height: 0.15, buttons: row(low, [['resume', 'Resume', 'primary', 0.11], ['restart', 'Restart', 'secondary', 0.088], ['levels', 'Levels', 'secondary', 0.088]]) };
+      return {
+        width: narrow ? NARROW_W : 0.35,
+        height: 0.15,
+        buttons: row(low, [['resume', 'Resume', 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW], ['levels', 'Levels', 'secondary', secondaryW]]),
+      };
   }
 }
 
@@ -86,8 +125,11 @@ export function buttonAt(p: Vec3, buttons: readonly Button[], depth = TOUCH_M): 
 export const pokeHit = (lastZ: number | null, p: Vec3, buttons: readonly Button[]) =>
   lastZ !== null && lastZ > TOUCH_M ? buttonAt(p, buttons) : null;
 
-/** Panel anchor: the bottom centre of every panel, tilted to face the head. */
-export type Anchor = { position: Vec3; pitch: number; yaw: number };
+/**
+ * Panel anchor: the bottom centre of every panel, tilted to face the head. `scale` (default 1) sizes panel space in the
+ * world: the phone card is a small card near the camera (src/fit.ts phoneCard); XR and desktop cards are full size.
+ */
+export type Anchor = { position: Vec3; pitch: number; yaw: number; scale?: number };
 
 /** Distance from the head to the panel's bottom edge, metres. */
 const PANEL_DISTANCE = 0.46;
@@ -109,17 +151,20 @@ export function panelAnchor(level: Level, pose: TrayPose = TRAY_POSE): Anchor {
   return { position: [px + off[0] * c + off[2] * s, py + off[1], pz - off[0] * s + off[2] * c], pitch, yaw };
 }
 
-export function panelToWorld(a: Anchor, [x, y, z]: Vec3): Vec3 {
+export function panelToWorld(a: Anchor, p: Vec3): Vec3 {
+  const k = a.scale ?? 1;
+  const [x, y, z] = [p[0] * k, p[1] * k, p[2] * k];
   const [cp, sp, cy, sy] = [Math.cos(a.pitch), Math.sin(a.pitch), Math.cos(a.yaw), Math.sin(a.yaw)];
   const [ty, tz] = [y * cp - z * sp, y * sp + z * cp];
   return [a.position[0] + x * cy + tz * sy, a.position[1] + ty, a.position[2] - x * sy + tz * cy];
 }
 
 export function worldToPanel(a: Anchor, p: Vec3): Vec3 {
+  const k = a.scale ?? 1;
   const [cp, sp, cy, sy] = [Math.cos(a.pitch), Math.sin(a.pitch), Math.cos(a.yaw), Math.sin(a.yaw)];
   const [dx, dy, dz] = [p[0] - a.position[0], p[1] - a.position[1], p[2] - a.position[2]];
   const [x, tz] = [dx * cy - dz * sy, dx * sy + dz * cy];
-  return [x, dy * cp + tz * sp, -dy * sp + tz * cp];
+  return [x / k, (dy * cp + tz * sp) / k, (-dy * sp + tz * cp) / k];
 }
 
 /** Seconds as m:ss, with tenths under 10 s (0:04.7) so a quick solve never reads 0:00. Truncated, never rounded up. */
