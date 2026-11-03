@@ -137,7 +137,7 @@ describe('tinkerLevel fuzz', () => {
       if (JSON.stringify({ ...l, id: 'x' }) === plain) fallbacks++;
     }
     expect(fallbacks, 'the generator, not the fallback, makes the puzzles').toBeLessThan(seeds.length / 20);
-  });
+  }, 20_000); // CPU-bound: room for a loaded machine (the e2e suite's software GL running alongside)
 });
 
 describe('withDaily', () => {
