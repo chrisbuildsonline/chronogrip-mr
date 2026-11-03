@@ -131,6 +131,17 @@ describe('README screenshots', () => {
     expect(bytes.length).toBeLessThan(1_500_000);
   });
 
+  it('links only screenshots that exist in docs/', () => {
+    const linked = [...new Set([...readme.matchAll(/docs\/[\w-]+\.png/g)].map((m) => `/${m[0]}`))];
+    expect(linked.length).toBeGreaterThan(0);
+    expect(linked.filter((p) => !pngs[p])).toEqual([]);
+  });
+
+  it('is honest that the only images in the repo are these screenshots', () => {
+    expect(readme).not.toMatch(/repo (has|contains) no image/i);
+    expect(readme).toMatch(/only images are the README screenshots in `?docs\/`?/);
+  });
+
   it('regenerates them with their own Playwright config, outside the e2e run', () => {
     const scripts = (JSON.parse(pkg) as { scripts: Record<string, string> }).scripts;
     expect(scripts.screenshots).toMatch(/playwright test -c \S+/);

@@ -35,7 +35,7 @@ A pocket watch felt right. It is small, it sits on your lap, and fixing one is a
 5. **Calibrate the escapement.** When the train is right, the level clock stops and the escapement in the near-right corner starts ticking. Pinch the regulator dial and roll your wrist like turning a key: the knob turns one to one with your wrist (160 degrees end to end), clockwise ticks faster, anticlockwise slower, from 1 to 5 ticks a second. Hold the needle in the amber target band (within 10% of the target rate) for 0.8 s.
 6. **Reward.** The gears flash, the train runs at its true speeds, the brass bird on its perch flaps and bobs on every tick, and the complete card shows your time, with **Next**, **Restart** and **Levels** (on the daily: **Levels** and **Restart**).
 
-In level 1 there is no text: a translucent ghost hand shows the pinch, carry and drop until you first grab a gear, then shows the wrist twist on the dial.
+In level 1 there is no text: a translucent ghost hand shows the pinch, carry and drop until you first grab a gear, then shows the wrist twist on a ghost knob beside the dial.
 
 ## Controls (hands only)
 
@@ -188,4 +188,4 @@ Target launch date: January 2027, free in the Quest browser at the live URL.
 
 MIT, see LICENSE.
 
-All geometry, textures (canvas-drawn cards and dial) and sounds (oscillators and noise) are generated in code; the repo has no image, model, font or audio files. Text uses the system's own fonts. The production build also includes the font, decoder and physics chunks bundled with `@iwsdk/core`; the game's own text and models do not use them. Third-party code: IWSDK, three.js, and for development Vite, TypeScript, Vitest and Playwright.
+All geometry, textures (canvas-drawn cards and dial) and sounds (oscillators and noise) are generated in code. The game itself ships no image, model, font or audio files. The only images are the README screenshots in `docs/`, rendered from the game by `bun run screenshots`. Text uses the system's own fonts. The production build also includes the font, decoder and physics chunks bundled with `@iwsdk/core`; the game's own text and models do not use them. Third-party code: IWSDK, three.js, and for development Vite, TypeScript, Vitest and Playwright.
