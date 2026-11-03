@@ -67,6 +67,8 @@ The same scene and cards run in any desktop browser with WebGL. Where the browse
 - **Levels** shows nine tiles: levels 1-8 and **Daily**. Solved tiles show your best time and a check. Beating a saved time shows **New best**.
 - The **Daily** is a puzzle generated from today's local date: the same for everyone on a given day, different the next. If the game is left open past midnight, the new daily swaps in the next time you are on the title or level select.
 
+- **Puzzle codes.** The complete card of a daily or shared puzzle shows a short code like `CY9J`; **Copy link** (desktop and phone) copies a link ending in `?seed=CY9J`, and opening that link plays the exact same puzzle. A code that does not work shows a short note and the normal game. A shared puzzle takes the Daily's slot for that visit and keeps its best time under its own id, so the Daily's and levels 1-8's times are never touched.
+
 ## Room data it uses
 
 - **Detected planes only.** The game reads the WebXR plane-detection polygons the headset reports for horizontal surfaces (the table's real outline, not just its centre). It does not use MRUK: MRUK is Meta's scene SDK for native Unity and Unreal apps, and this is a WebXR page built on IWSDK in the browser, where plane detection is the room data on offer. No camera images, meshes or room scans are read.
@@ -159,6 +161,7 @@ ChronoGrip is a web app: TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK
 | `gear.ts` | Involute spur gear outlines generated in code, extruded into meshes |
 | `train.ts` | Deterministic gear-train solver: speeds, directions, jams, collisions |
 | `levels.ts`, `tinker.ts` | The eight levels and the seeded daily generator |
+| `seed.ts` | Short puzzle codes (Crockford base32) for `?seed=` links |
 | `grab.ts`, `hover.ts` | Pick and snap rules, the grab mode (`?grab=pinch`), the raw-pinch fallback and which hand holds a gear; gaze, hand glow and valid-axle hints |
 | `escapement.ts`, `clockwork.ts` | The regulator (wrist twist to tick rate); the dial, balance wheel and bird |
 | `flow.ts`, `progress.ts` | Title, play, calibrate, complete, pause, level select; level clock; saved best times |
