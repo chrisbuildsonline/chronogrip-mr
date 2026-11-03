@@ -65,6 +65,19 @@ interface ChronoHook {
   readonly tickPhase: number;
   /** Live: world position of the top of the regulator knob, where a pinch grabs it. */
   readonly regulatorAt: readonly [number, number, number];
+  /**
+   * Live: the level's goal as the badge on the target gear shows it: direction as the player sees it, target rpm (unsigned),
+   * whether the live spin matches, the HUD's words, and world positions of the badge's centre and of the target gear.
+   * Null when the level has no fixed target gear to mark.
+   */
+  readonly goal: {
+    readonly dir: 'cw' | 'ccw';
+    readonly rpm: number;
+    readonly matched: boolean;
+    readonly text: string;
+    readonly at: readonly [number, number, number];
+    readonly gear: readonly [number, number, number];
+  } | null;
   /** Live: index of the loaded level in LEVELS. */
   readonly levelIndex: number;
   /** Live: seconds played on this level; runs only while playing. */

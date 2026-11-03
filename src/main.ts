@@ -24,6 +24,8 @@ import { firstUnsolved, loadProgress, recordSolve, saveProgress, type Progress }
 import { dailySeed, tinkerLevel, withDaily } from './tinker';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
+import { goalOf, goalText } from './goal';
+import { createGoalBadge } from './badge';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('#app container missing');
@@ -38,7 +40,7 @@ if (!enterButton || !enterNote) throw new Error('Enter MR controls missing');
 
 const world = await World.create(container, createWorldOptions());
 
-// The five levels, then today's daily tinker puzzle as a sixth.
+// The hand-made levels, then today's daily tinker puzzle after them.
 let levels: readonly Level[] = [...LEVELS, tinkerLevel(dailySeed(new Date()))];
 let levelIds = levels.map((l) => l.id);
 // Saved best times. Reading localStorage itself can throw (storage blocked), so fall back to none.
@@ -76,6 +78,8 @@ let layerOf = new Map(level.tray.map((g) => [g.id, g.layer]));
 let slots = new Map(partsStrip(level).map((s) => [s.id, s]));
 let placements: Record<string, string> = {};
 let solved = false;
+/** The target gear's live spin as placed now: the goal badge turns amber when it meets the target. */
+let targetSpin: GearSpin | undefined;
 let held: string | null = null;
 /** The axle the held gear was lifted from, so a pause can put it back. */
 let heldFrom: string | null = null;
@@ -137,6 +141,20 @@ built.tray.add(ghost.root);
 const ghostTwist = () => levelIndex === 0 && !turnedOnce && turning === null && flow.name === 'calibrate';
 const ghostOn = () => ghostTwist() || (levelIndex === 0 && !grabbedOnce && (flow.name === 'title' || flow.name === 'playing'));
 
+// The goal: a badge beside the target gear and a ring round it, on the board.
+const badge = createGoalBadge();
+built.tray.add(badge.root);
+const goal = () => goalOf(level, targetSpin);
+/** Rechecks the board after a gear moves: solved, the target's live spin and the badge. */
+function recheck(): ReturnType<typeof checkLevel> {
+  const r = checkLevel(level, placements);
+  solved = r.solved;
+  targetSpin = r.spins[level.target.gear];
+  badge.update(goal());
+  return r;
+}
+badge.load(level, goal());
+
 const escapement = createEscapement();
 const automaton = createAutomaton();
 built.tray.add(escapement.root, automaton.root);
@@ -190,6 +208,8 @@ function loadLevel(i: number): void {
   slots = new Map(partsStrip(level).map((s) => [s.id, s]));
   placements = {};
   solved = false;
+  targetSpin = undefined;
+  badge.load(level, goal());
   spins = {};
   held = heldFrom = null;
   if (holder === 'mouse') controls.enabled = true;
@@ -218,7 +238,7 @@ function putBack(): void {
     placements[id] = axle.id;
   } else toSlot(id);
   heldFrom = null;
-  solved = checkLevel(level, placements).solved;
+  recheck();
 }
 
 /** On the title or level select, swaps in today's daily if the date has rolled over since it was picked (a session left open past midnight). */
@@ -312,7 +332,7 @@ function grab(world: Vec3): boolean {
   held = id;
   heldFrom = placements[id] ?? null;
   tweens.delete(id);
-  if (delete placements[id]) solved = checkLevel(level, placements).solved;
+  if (delete placements[id]) recheck();
   drag(world);
   return true;
 }
@@ -333,8 +353,7 @@ function release(): void {
   const to = axle ? trayLocal(axleOf.get(axle)!.x, axleOf.get(axle)!.y, layerLift(layer)) : trayLocal(slots.get(id)!.x, slots.get(id)!.y, layerLift(0));
   if (axle) placements[id] = axle;
   tweens.set(id, { from: [m.position.x, m.position.y, m.position.z], to, start: performance.now() });
-  const check = checkLevel(level, placements);
-  solved = check.solved;
+  const check = recheck();
   if (axle) {
     sound.click();
     if (Object.values(check.spins).includes('jammed')) sound.grind();
@@ -683,6 +702,7 @@ function showPanel(now = performance.now()): void {
     time: levelClock.seconds,
     best: levelIds.map((id) => progress.best[id] ?? null),
     hover: mouseButton ?? tipButton.left ?? tipButton.right,
+    goal: badge.root.visible ? goal() : null,
   });
 }
 
@@ -770,6 +790,13 @@ window.__chrono = Object.freeze({
   },
   get flow() {
     return flow.name;
+  },
+  get goal() {
+    const at = badge.at;
+    const tgt = built.gears.get(level.target.gear);
+    if (!at || !tgt) return null;
+    const g = goal();
+    return { ...g, text: goalText(g), at: worldOf(at), gear: worldOf(tgt.position) };
   },
   get levelIndex() {
     return levelIndex;

@@ -43,12 +43,13 @@ describe('panel layouts', () => {
 });
 
 describe('level select with the daily', () => {
-  const sel = layout('select', { level: 0, levels: 6, daily: true });
+  const sel = layout('select', { level: 0, levels: LEVELS.length + 1, daily: true });
 
-  it('has a Back pill and six tiles, the last one the daily', () => {
-    expect(sel.buttons.map((b) => b.id)).toEqual(['back', 'level-1', 'level-2', 'level-3', 'level-4', 'level-5', 'level-6']);
-    expect(sel.buttons.map((b) => b.label)).toEqual(['Back', '1', '2', '3', '4', '5', 'Daily']);
-    expect(sel.buttons.filter((b) => b.kind === 'tile')).toHaveLength(6);
+  it('has a Back pill and nine tiles: the eight levels, then the daily', () => {
+    expect(LEVELS).toHaveLength(8);
+    expect(sel.buttons.map((b) => b.id)).toEqual(['back', ...Array.from({ length: 9 }, (_, i) => `level-${i + 1}`)]);
+    expect(sel.buttons.map((b) => b.label)).toEqual(['Back', '1', '2', '3', '4', '5', '6', '7', '8', 'Daily']);
+    expect(sel.buttons.filter((b) => b.kind === 'tile')).toHaveLength(9);
   });
 
   it('every target is at least 4 cm, 12 mm apart, inside the panel', () => {
@@ -74,6 +75,16 @@ describe('level select with the daily', () => {
         expect(Math.hypot(...w)).toBeLessThanOrEqual(0.6);
       }
     }
+  });
+});
+
+describe('HUD', () => {
+  it('has a goal line across the top, above the level, the time and the pause button', () => {
+    const hud = layout('hud', { level: 0, levels: 9, daily: true });
+    const pause = hud.buttons.find((b) => b.id === 'pause')!;
+    expect(hud.width).toBeGreaterThanOrEqual(0.26);
+    // The goal line (body type) needs about 3 cm over the 6.2 cm level and time row.
+    expect(hud.height - (pause.y + pause.h / 2)).toBeGreaterThanOrEqual(0.03);
   });
 });
 

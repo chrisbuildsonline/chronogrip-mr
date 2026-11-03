@@ -1,19 +1,20 @@
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace } from 'three';
 import { clock, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
 import { C } from './palette';
+import { rpmLabel, type Goal } from './goal';
 
 /** Canvas drawing of the in-world panels, per design/DESIGN.md. */
 const PX = 3000; // canvas pixels per metre: 3 px per mm
 const MARGIN = 48; // room for the soft shadow
-const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+export const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 const SERIF = 'Georgia, "Times New Roman", serif';
 const mm = (v: number) => v * 3;
 /** Type scale in panel millimetres (design/DESIGN.md). */
 const T = { display: 36, xl: 24, heading: 18, button: 12.5, body: 13.5, eyebrow: 8.5 };
 const font = (weight: number, sizeMm: number, face = SANS) => `${weight} ${mm(sizeMm)}px ${face}`;
 
-/** `best` is per level index; `newBest`: this solve beat a saved time. */
-export type PanelCtx = { level: number; levels: number; daily: boolean; resume: boolean; newBest: boolean; time: number; best: readonly (number | null)[]; hover: string | null };
+/** `best` is per level index; `newBest`: this solve beat a saved time; `goal`: what the HUD asks of the marked gear. */
+export type PanelCtx = { level: number; levels: number; daily: boolean; resume: boolean; newBest: boolean; time: number; best: readonly (number | null)[]; hover: string | null; goal: Goal | null };
 
 const isDaily = (ctx: PanelCtx, i: number) => ctx.daily && i === ctx.levels - 1;
 
@@ -65,7 +66,39 @@ function tile(g: Draw, b: Button, x: number, y: number, w: number, h: number, ct
   text(g, b.label, x, y - (best == null ? 0 : mm(8)), daily ? font(600, T.heading, SERIF) : font(700, T.xl), C.ink);
   if (best == null) return;
   text(g, clock(best), x, y + mm(16), font(700, T.body), C.muted);
-  const [cx, cy] = [x + w / 2 - mm(9), y - h / 2 + mm(10)];
+  check(g, x + w / 2 - mm(9), y - h / 2 + mm(10));
+}
+
+/**
+ * The turn arrow (↻ or ↺ as the player sees the gear): an open circle of radius `r` round x, y with its gap at the top
+ * and an arrowhead at the end it turns towards. Drawn, not a glyph, so it looks the same in every font.
+ */
+export function turnArrow(g: Draw, x: number, y: number, r: number, dir: Goal['dir'], color: string, width: number) {
+  const s = dir === 'cw' ? 1 : -1; // canvas angles grow clockwise on screen
+  const gap = 0.62;
+  const a0 = -Math.PI / 2 + s * gap;
+  const a1 = a0 + s * (2 * Math.PI - 2 * gap);
+  const head = width * 2.6;
+  g.beginPath();
+  g.arc(x, y, r, a0, a1 - s * (head * 0.35) / r, s < 0);
+  g.lineWidth = width;
+  g.lineCap = 'round';
+  g.strokeStyle = color;
+  g.stroke();
+  const [ex, ey] = [x + r * Math.cos(a1), y + r * Math.sin(a1)];
+  const [tx, ty] = [-s * Math.sin(a1), s * Math.cos(a1)]; // along the turn
+  const [nx, ny] = [Math.cos(a1), Math.sin(a1)]; // outwards
+  g.beginPath();
+  g.moveTo(ex + tx * head * 0.75, ey + ty * head * 0.75);
+  g.lineTo(ex - tx * head * 0.45 + nx * head * 0.6, ey - ty * head * 0.45 + ny * head * 0.6);
+  g.lineTo(ex - tx * head * 0.45 - nx * head * 0.6, ey - ty * head * 0.45 - ny * head * 0.6);
+  g.closePath();
+  g.fillStyle = color;
+  g.fill();
+}
+
+/** A small amber disc with a cream tick: solved tiles, a matched goal. */
+function check(g: Draw, cx: number, cy: number) {
   g.beginPath();
   g.arc(cx, cy, mm(5), 0, Math.PI * 2);
   g.fillStyle = C.amber;
@@ -78,6 +111,22 @@ function tile(g: Draw, b: Button, x: number, y: number, w: number, h: number, ct
   g.lineCap = g.lineJoin = 'round';
   g.strokeStyle = C.cream;
   g.stroke();
+}
+
+/** The HUD's goal line: "Turn the marked gear", the turn arrow, the rpm; a check at the end once the train matches it. */
+function goalLine(g: Draw, goal: Goal, x: number, y: number) {
+  const lead = 'Turn the marked gear';
+  g.font = font(600, T.body);
+  const leadW = g.measureText(lead).width;
+  text(g, lead, x, y + 1, font(600, T.body), C.muted, 'left');
+  const r = mm(4.6);
+  const ax = x + leadW + mm(6) + r;
+  turnArrow(g, ax, y, r, goal.dir, C.ink, mm(1.5));
+  const rpm = rpmLabel(goal.rpm);
+  g.font = font(700, T.body);
+  const rpmX = ax + r + mm(4.5);
+  text(g, rpm, rpmX, y + 1, font(700, T.body), C.ink, 'left');
+  if (goal.matched) check(g, rpmX + g.measureText(rpm).width + mm(4) + mm(5), y);
 }
 
 /** 'Back' with a small chevron before it. */
@@ -158,6 +207,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       else text(g, level, left(0.016), y(0.022), font(700, T.xl), C.ink, 'left');
       text(g, 'TIME', left(0.066), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
       text(g, clock(ctx.time), left(0.066), y(0.022), font(700, T.xl), C.ink, 'left');
+      if (ctx.goal) goalLine(g, ctx.goal, left(0.016), y(0.077));
       break;
     case 'complete': {
       status(g, 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);

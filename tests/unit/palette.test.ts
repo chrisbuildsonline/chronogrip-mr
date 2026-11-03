@@ -28,6 +28,7 @@ const TEXT: [string, string, string][] = [
   ['muted best times on cream-deep tiles', C.muted, C.deep],
   ['muted best times on a hovered tile', C.muted, C.deepHover],
   ['status pill text on amber tint', C.tintInk, C.tint],
+  ['ink goal text on the matched (amber) goal badge', C.ink, C.amber],
   ['the cream wordmark on the lightest vignette', C.cream, C.vignette],
   ['the Enter MR note on the lightest vignette', C.note, C.vignette],
 ];

@@ -91,7 +91,7 @@ function holds(input: unknown, why: string) {
 
 describe('levels fuzz', () => {
   it('has levels to mutate', () => {
-    expect(LEVELS).toHaveLength(5);
+    expect(LEVELS).toHaveLength(8);
   });
 
   for (const seed of SEEDS) {

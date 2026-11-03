@@ -134,7 +134,93 @@ const l5: Level = {
   solution: { p: 'b', q: 'b', r: 'c' },
 };
 
-export const LEVELS: readonly Level[] = [l1, l2, l3, l4, l5];
+type Pt = { x: number; y: number };
+/** The point `d` metres from `p` at `deg` degrees (0 = +x, 90 = +y, up the board). */
+const step = (p: Pt, d: number, deg: number): Pt => ({ x: p.x + d * Math.cos((deg * Math.PI) / 180), y: p.y + d * Math.sin((deg * Math.PI) / 180) });
+const at = (id: string, p: Pt) => ax(id, p.x, p.y);
+
+// 6. Parity: four idlers wind round to the target. The spare 24 fits pin `s`, meshing the driver and a3 and skipping
+// two idlers, and the train runs, but one mesh fewer turns the target the wrong way.
+const l6: Level = (() => {
+  const d = { x: -0.14, y: -0.035 };
+  const a1 = step(d, mesh(M, 20, 16), 80);
+  const a2 = step(a1, mesh(M, 16, 20), 0);
+  const a3 = step(a2, mesh(M, 20, 16), -60);
+  const a4 = step(a3, mesh(M, 16, 20), 20);
+  const tg = step(a4, mesh(M, 20, 20), 30);
+  // Below the line from the driver to a3, a 24's mesh distance from each.
+  const [r1, r2] = [mesh(M, 20, 24), mesh(M, 16, 24)];
+  const [dx, dy] = [a3.x - d.x, a3.y - d.y];
+  const len = Math.hypot(dx, dy);
+  const along = (r1 * r1 - r2 * r2 + len * len) / (2 * len);
+  const off = Math.sqrt(r1 * r1 - along * along);
+  const s = { x: d.x + (along * dx + off * dy) / len, y: d.y + (along * dy - off * dx) / len };
+  return {
+    id: 'l6',
+    name: 'Long way round',
+    module: M,
+    axles: [at('a0', d), at('a1', a1), at('a2', a2), at('a3', a3), at('a4', a4), at('a5', tg), at('s', s)],
+    fixed: [g('drv', 'a0', 20), g('tgt', 'a5', 20)],
+    driver: 'drv',
+    rpm: 60,
+    tray: [t('i1', 16), t('sk', 24), t('i2', 20), t('i3', 16), t('i4', 20)],
+    target: { gear: 'tgt', rpm: -60, tolerance: 1 },
+    escapement: { gear: 'tgt' },
+    solution: { i1: 'a1', i2: 'a2', i3: 'a3', i4: 'a4' },
+  };
+})();
+
+// 7. Two compound pairs slow 60 rpm by 24:16, then 16:32, then 20:20, to -45. Big gears ride on layer 1 over the
+// small ones; the decoy 24 looks like it belongs on `b` but collides with the driver.
+const l7: Level = (() => {
+  const d = { x: -0.125, y: -0.06 };
+  const b = step(d, mesh(M, 24, 16), 50);
+  const c = step(b, mesh(M, 16, 32), 10);
+  const e = step(c, mesh(M, 20, 20), 20);
+  return {
+    id: 'l7',
+    name: 'Double reduction',
+    module: M,
+    axles: [at('a0', d), at('b', b), at('c', c), at('e', e)],
+    fixed: [g('drv', 'a0', 24), g('tgt', 'e', 20)],
+    driver: 'drv',
+    rpm: 60,
+    tray: [t('r', 32, 1), t('p', 16), t('x', 24), t('q', 16, 1), t('u', 20)],
+    target: { gear: 'tgt', rpm: -45, tolerance: 1 },
+    escapement: { gear: 'tgt' },
+    solution: { p: 'b', q: 'b', r: 'c', u: 'c' },
+  };
+})();
+
+// 8. Odd loop: the driver, a1, tr and b sit on a rhombus of 20-tooth mesh distances. A 20 on a1 or on tr carries the
+// drive to b, but both at once lock three gears in a triangle. Then compound p+q on b and r step 60 rpm up to 75.
+const l8: Level = (() => {
+  const d = { x: -0.13, y: -0.06 };
+  const a1 = step(d, mesh(M, 20, 20), 90);
+  const tr = step(d, mesh(M, 20, 20), 30);
+  const b = step(a1, mesh(M, 20, 20), 30);
+  const c = step(b, mesh(M, 30, 15), 20);
+  const e = step(c, mesh(M, 15, 24), -30);
+  return {
+    id: 'l8',
+    name: 'Three is a crowd',
+    module: M,
+    axles: [at('a0', d), at('a1', a1), at('tr', tr), at('b', b), at('c', c), at('e', e)],
+    fixed: [g('drv', 'a0', 20), g('tgt', 'e', 24, 1)],
+    driver: 'drv',
+    rpm: 60,
+    tray: [t('i1', 20), t('q', 30, 1), t('i2', 20), t('r', 15, 1), t('p', 20)],
+    target: { gear: 'tgt', rpm: 75, tolerance: 1 },
+    escapement: { gear: 'tgt' },
+    solution: { i1: 'a1', p: 'b', q: 'b', r: 'c' },
+  };
+})();
+
+export const LEVELS: readonly Level[] = [l1, l2, l3, l4, l5, l6, l7, l8];
+
+/** Whether a live spin meets a target: turning, the right way, within tolerance. */
+export const meetsTarget = (target: Level['target'], spin: GearSpin | undefined): boolean =>
+  typeof spin === 'number' && Math.sign(spin) === Math.sign(target.rpm) && Math.abs(spin - target.rpm) <= target.tolerance;
 
 export function checkLevel(level: Level, placements: Record<string, string>): { solved: boolean; spins: Record<string, GearSpin> } {
   const tray = new Map(level.tray.map((x) => [x.id, x]));
@@ -147,10 +233,7 @@ export function checkLevel(level: Level, placements: Record<string, string>): { 
     gears.push({ id, axle, teeth: loose.teeth, layer: loose.layer });
   }
   const spins = solveTrain({ module: level.module, axles: level.axles, gears, driver: level.driver, rpm: level.rpm });
-  const spin = spins[level.target.gear];
-  const { rpm, tolerance } = level.target;
-  const solved = typeof spin === 'number' && Math.sign(spin) === Math.sign(rpm) && Math.abs(spin - rpm) <= tolerance;
-  return { solved, spins };
+  return { solved: meetsTarget(level.target, spins[level.target.gear]), spins };
 }
 
 type Obj = Record<string, unknown>;

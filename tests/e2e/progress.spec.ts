@@ -124,9 +124,10 @@ test("desktop: the Daily tile plays today's tinker puzzle through to its complet
   const daily = tinkerLevel(dailySeed(new Date()));
   const errors = await open(page);
   await click(page, 'levels');
-  expect(await label(page, 'level-6')).toBe('Daily');
-  await click(page, 'level-6');
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 5);
+  const tile = `level-${LEVELS.length + 1}`;
+  expect(await label(page, tile)).toBe('Daily');
+  await click(page, tile);
+  await page.waitForFunction((n) => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === n, LEVELS.length);
   const got = await page.evaluate(() => ({ id: window.__chrono!.levelId, gears: window.__chrono!.gearCount, axles: window.__chrono!.axleCount }));
   expect(got.id).toMatch(/^t/);
   expect(got).toEqual({ id: daily.id, gears: daily.fixed.length + daily.tray.length, axles: daily.axles.length });

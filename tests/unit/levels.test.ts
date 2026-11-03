@@ -1,14 +1,64 @@
 import { describe, expect, it } from 'vitest';
+import { PROPS } from '../../src/clockwork';
 import { gearRadii } from '../../src/gear';
 import { LEVELS, checkLevel, parseLevel, type Level } from '../../src/levels';
+import { PIN_RADIUS } from '../../src/seat';
 
 const clone = (l: Level): any => JSON.parse(JSON.stringify(l));
-const [L1, L2, L3, L4, L5] = LEVELS as [Level, Level, Level, Level, Level];
+const [L1, L2, L3, L4, L5, L6, L7, L8] = LEVELS as [Level, Level, Level, Level, Level, Level, Level, Level];
+
+/**
+ * The fewest tray gears that solve a level, up to `max`: every subset of the tray of that size, each gear on every axle
+ * that has nothing on its layer yet (as the board allows). Returns the first solving placement found, or null.
+ */
+function solveWithin(level: Level, max: number): Record<string, string> | null {
+  const taken = new Set(level.fixed.map((f) => `${f.axle}/${f.layer}`));
+  const chosen: Record<string, string> = {};
+  const search = (from: number, left: number): Record<string, string> | null => {
+    if (Object.keys(chosen).length > 0 && checkLevel(level, chosen).solved) return { ...chosen };
+    if (left === 0) return null;
+    for (let i = from; i < level.tray.length; i++) {
+      const gear = level.tray[i]!;
+      for (const a of level.axles) {
+        const key = `${a.id}/${gear.layer}`;
+        if (taken.has(key)) continue;
+        taken.add(key);
+        chosen[gear.id] = a.id;
+        const found = search(i + 1, left - 1);
+        delete chosen[gear.id];
+        taken.delete(key);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  return search(0, max);
+}
+
+/** Whether every pair of gears on one layer in a placement is either far apart or exactly in mesh: no tooth collisions. */
+function meshesCleanly(level: Level, placements: Record<string, string>): boolean {
+  const at = new Map(level.axles.map((a) => [a.id, a]));
+  const gears = [
+    ...level.fixed,
+    ...Object.entries(placements).map(([id, axle]) => ({ ...level.tray.find((t) => t.id === id)!, axle })),
+  ];
+  return gears.every((a) =>
+    gears.every((b) => {
+      if (a === b || a.layer !== b.layer || a.axle === b.axle) return a === b || a.layer !== b.layer;
+      const d = Math.hypot(at.get(a.axle)!.x - at.get(b.axle)!.x, at.get(a.axle)!.y - at.get(b.axle)!.y);
+      const meshAt = (level.module * (a.teeth + b.teeth)) / 2;
+      const tips = gearRadii({ module: level.module, teeth: a.teeth }).tip + gearRadii({ module: level.module, teeth: b.teeth }).tip;
+      return Math.abs(d - meshAt) < 1e-6 || d >= tips;
+    }),
+  );
+}
 
 describe('LEVELS', () => {
-  it('has five levels with unique ids', () => {
-    expect(LEVELS).toHaveLength(5);
-    expect(new Set(LEVELS.map((l) => l.id)).size).toBe(5);
+  it('has eight levels with unique ids, the first five unchanged so saved progress still matches', () => {
+    expect(LEVELS).toHaveLength(8);
+    expect(LEVELS.map((l) => l.id)).toEqual(['l1', 'l2', 'l3', 'l4', 'l5', 'l6', 'l7', 'l8']);
+    expect(LEVELS.slice(0, 5).map((l) => l.name)).toEqual(['Mind the gap', 'Against the grain', 'Gearing up', 'Odd one out', 'Full movement']);
+    expect(new Set(LEVELS.map((l) => l.name)).size).toBe(8);
   });
 
   it('level 1 has exactly one tray gear', () => {
@@ -84,6 +134,114 @@ describe('LEVELS', () => {
   it('level 5: the trap gear jams, and dropping the idler flips the direction', () => {
     expect(checkLevel(L5, { ...L5.solution, x: 's' }).spins.tgt).toBe('jammed');
     expect(checkLevel(L5, { p: 'b', q: 'b' }).solved).toBe(false);
+  });
+});
+
+describe('the deep levels (6-8)', () => {
+  const deep = [L6, L7, L8];
+
+  for (const level of deep) {
+    describe(`${level.id} ${level.name}`, () => {
+      it('needs at least four placements: no set of three or fewer tray gears on any free axles solves it', () => {
+        expect(Object.keys(level.solution).length).toBeGreaterThanOrEqual(4);
+        expect(solveWithin(level, 3)).toBeNull();
+        expect(solveWithin(level, Object.keys(level.solution).length)).not.toBeNull(); // the search does find real solutions
+      });
+
+      it('keeps every placed gear clear of the dial, the balance wheel, the bird and the other pins', () => {
+        const at = new Map(level.axles.map((a) => [a.id, a]));
+        const placed = [
+          ...level.fixed,
+          ...Object.entries(level.solution).map(([id, axle]) => ({ id, axle, teeth: level.tray.find((t) => t.id === id)!.teeth })),
+        ];
+        for (const g of placed) {
+          const { tip } = gearRadii({ module: level.module, teeth: g.teeth });
+          const p = at.get(g.axle)!;
+          for (const q of PROPS) expect(Math.hypot(q.x - p.x, q.y - p.y), `${g.id} vs prop at ${q.x}`).toBeGreaterThan(q.r + tip);
+          for (const a of level.axles) {
+            if (a.id !== g.axle) expect(Math.hypot(a.x - p.x, a.y - p.y), `${g.id} over pin ${a.id}`).toBeGreaterThan(tip + PIN_RADIUS);
+          }
+        }
+      });
+
+      it('has a tray gear left over: the solution never uses the whole tray', () => {
+        expect(level.tray.length).toBeGreaterThan(Object.keys(level.solution).length);
+      });
+    });
+  }
+
+  it('level 6: the 24 on the shortcut pin meshes cleanly and turns the target, but the wrong way', () => {
+    const shortcut = { sk: 's', i3: 'a3', i4: 'a4' };
+    expect(meshesCleanly(L6, shortcut)).toBe(true);
+    const r = checkLevel(L6, shortcut);
+    expect(r.solved).toBe(false);
+    expect(r.spins.tgt).toBeCloseTo(-L6.target.rpm, 6);
+  });
+
+  it('level 7: two compound pairs, each two gears on one axle on different layers', () => {
+    const byAxle = new Map<string, number[]>();
+    for (const [id, axle] of Object.entries(L7.solution)) byAxle.set(axle, [...(byAxle.get(axle) ?? []), L7.tray.find((t) => t.id === id)!.layer]);
+    const compound = [...byAxle.values()].filter((layers) => new Set(layers).size === 2);
+    expect(compound).toHaveLength(2);
+    // The decoy 24 in place of the first stage's 16 collides with the driver.
+    const { p: _, ...rest } = L7.solution;
+    expect(checkLevel(L7, { ...rest, x: 'b' }).spins.tgt).toBe('jammed');
+  });
+
+  it('level 8: the spare 20 fits the trap pin and meshes cleanly, but with the idler it closes an odd loop and jams', () => {
+    const both = { ...L8.solution, i2: 'tr' };
+    expect(meshesCleanly(L8, both)).toBe(true);
+    const r = checkLevel(L8, both);
+    expect(r.solved).toBe(false);
+    expect(r.spins.tgt).toBe('jammed');
+  });
+
+  it('between them they use a plausible distractor, a compound pair and an odd-loop jam', () => {
+    const compound = (l: Level) => {
+      const layers = new Map<string, Set<number>>();
+      for (const [id, axle] of Object.entries(l.solution)) layers.set(axle, (layers.get(axle) ?? new Set()).add(l.tray.find((t) => t.id === id)!.layer));
+      return [...layers.values()].some((s) => s.size === 2);
+    };
+    /** An odd-loop jam: a leftover gear added to the solution on a free axle meshes every neighbour cleanly, yet the train jams. */
+    const oddLoop = (l: Level) => {
+      const used = new Set([
+        ...l.fixed.map((f) => `${f.axle}/${f.layer}`),
+        ...Object.entries(l.solution).map(([id, axle]) => `${axle}/${l.tray.find((t) => t.id === id)!.layer}`),
+      ]);
+      return l.tray
+        .filter((t) => !(t.id in l.solution))
+        .some((spare) =>
+          l.axles.some((a) => {
+            const p = { ...l.solution, [spare.id]: a.id };
+            return !used.has(`${a.id}/${spare.layer}`) && meshesCleanly(l, p) && checkLevel(l, p).spins[l.target.gear] === 'jammed';
+          }),
+        );
+    };
+    /**
+     * A plausible distractor: a leftover gear that, with some of the solution's gears, meshes cleanly into a train that
+     * turns the target, just not to the goal.
+     */
+    const distractor = (l: Level) => {
+      const sol = Object.entries(l.solution);
+      const subsets = Array.from({ length: 2 ** sol.length }, (_, mask) => Object.fromEntries(sol.filter((_, i) => mask & (1 << i))));
+      return l.tray
+        .filter((t) => !(t.id in l.solution))
+        .some((spare) =>
+          l.axles.some((a) =>
+            subsets.some((part) => {
+              const p = { ...part, [spare.id]: a.id };
+              const clash = Object.entries(part).some(([id, ax]) => ax === a.id && l.tray.find((t) => t.id === id)!.layer === spare.layer);
+              if (clash || l.fixed.some((f) => f.axle === a.id && f.layer === spare.layer) || !meshesCleanly(l, p)) return false;
+              const r = checkLevel(l, p);
+              const spin = r.spins[l.target.gear];
+              return typeof spin === 'number' && spin !== 0 && !r.solved;
+            }),
+          ),
+        );
+    };
+    expect(deep.some(compound)).toBe(true);
+    expect(deep.some(oddLoop)).toBe(true);
+    expect(deep.some(distractor)).toBe(true);
   });
 });
 

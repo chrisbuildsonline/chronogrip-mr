@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from '../../src/flow';
+import { LEVEL_COUNT, TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from '../../src/flow';
+import { LEVELS } from '../../src/levels';
 
 const run = (events: FlowEvent[], from: Flow = TITLE) => events.reduce((f, e) => step(f, e), from);
 
@@ -40,17 +41,24 @@ describe('flow state machine', () => {
     expect(reloads(cal, { type: 'restart' }, next)).toBe(true);
   });
 
-  it('next moves to the following level, and from the last level back to level select', () => {
-    expect(run([{ type: 'start' }, { type: 'solve' }, { type: 'calibrated' }, { type: 'next' }])).toEqual({ name: 'playing', level: 1 });
-    expect(run([{ type: 'solve' }, { type: 'calibrated' }, { type: 'next' }], { name: 'playing', level: 4 })).toEqual({ name: 'select', level: 4 });
+  it('counts every hand-made level', () => {
+    expect(LEVEL_COUNT).toBe(LEVELS.length);
+    expect(LEVEL_COUNT).toBe(8);
   });
 
-  it('with the daily as a sixth level, next after level 5 plays the daily and next after the daily opens level select', () => {
+  it('next moves to the following level, and from the last level back to level select', () => {
+    expect(run([{ type: 'start' }, { type: 'solve' }, { type: 'calibrated' }, { type: 'next' }])).toEqual({ name: 'playing', level: 1 });
+    expect(run([{ type: 'solve' }, { type: 'calibrated' }, { type: 'next' }], { name: 'playing', level: 4 })).toEqual({ name: 'playing', level: 5 });
+    expect(run([{ type: 'solve' }, { type: 'calibrated' }, { type: 'next' }], { name: 'playing', level: 7 })).toEqual({ name: 'select', level: 7 });
+  });
+
+  it('with the daily as a ninth level, next after level 8 plays the daily and next after the daily opens level select', () => {
     const done = (level: number): Flow => ({ name: 'complete', level });
-    expect(step(done(4), { type: 'next' }, 6)).toEqual({ name: 'playing', level: 5 });
-    expect(step(done(5), { type: 'next' }, 6)).toEqual({ name: 'select', level: 5 });
-    expect(step({ name: 'select', level: 0 }, { type: 'select', level: 5 }, 6)).toEqual({ name: 'playing', level: 5 });
-    expect(step({ name: 'select', level: 0 }, { type: 'select', level: 6 }, 6)).toEqual({ name: 'select', level: 0 });
+    expect(step(done(4), { type: 'next' }, 9)).toEqual({ name: 'playing', level: 5 });
+    expect(step(done(7), { type: 'next' }, 9)).toEqual({ name: 'playing', level: 8 });
+    expect(step(done(8), { type: 'next' }, 9)).toEqual({ name: 'select', level: 8 });
+    expect(step({ name: 'select', level: 0 }, { type: 'select', level: 8 }, 9)).toEqual({ name: 'playing', level: 8 });
+    expect(step({ name: 'select', level: 0 }, { type: 'select', level: 9 }, 9)).toEqual({ name: 'select', level: 0 });
   });
 
   it('back leaves level select for the title, on a fresh board at the given level', () => {
@@ -74,7 +82,7 @@ describe('flow state machine', () => {
 
   it('ignores level numbers out of range', () => {
     const s: Flow = { name: 'select', level: 0 };
-    expect(step(s, { type: 'select', level: 5 })).toBe(s);
+    expect(step(s, { type: 'select', level: LEVEL_COUNT })).toBe(s);
     expect(step(s, { type: 'select', level: -1 })).toBe(s);
   });
 

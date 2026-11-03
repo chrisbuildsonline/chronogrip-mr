@@ -39,6 +39,8 @@ const TILE_H = 0.07;
 const BACK_W = 0.076;
 /** Back is navigation, not a level: a little more room sets it apart from the tiles. */
 const BACK_GAP = 0.02;
+/** Wide enough for "Turn the marked gear ↻ 37.5 rpm" in body type. */
+const HUD_W = 0.27;
 
 export function layout(screen: Screen, ctx: LayoutCtx): Layout {
   const low = PAD + BH / 2;
@@ -59,8 +61,9 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       return { width, height: 0.15, buttons: [back, ...tiles] };
     }
     case 'hud':
-      // Wide enough for a time with tenths (0:04.7) clear of the pause button.
-      return { width: 0.23, height: 0.062, buttons: [{ id: 'pause', label: 'Pause', kind: 'icon', x: 0.115 - 0.008 - BH / 2, y: 0.031, w: BH, h: BH }] };
+      // The goal line runs across the top; under it the level, a time with tenths (0:04.7) and the pause button. The
+      // button stays on the bottom row, so it is no higher in view than before.
+      return { width: HUD_W, height: 0.096, buttons: [{ id: 'pause', label: 'Pause', kind: 'icon', x: HUD_W / 2 - 0.008 - BH / 2, y: 0.031, w: BH, h: BH }] };
     case 'complete': {
       // After the last level the primary already goes to level select, so there is no second Levels button.
       const last = ctx.level + 1 >= ctx.levels;

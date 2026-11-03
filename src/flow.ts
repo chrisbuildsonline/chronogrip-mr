@@ -1,3 +1,4 @@
+import { LEVELS } from './levels';
 import type { Screen } from './ui';
 
 export type FlowName = 'title' | 'select' | 'playing' | 'calibrate' | 'complete' | 'paused';
@@ -9,7 +10,8 @@ export type FlowEvent =
   | { type: 'back'; level: number };
 
 export const TITLE: Flow = { name: 'title', level: 0 };
-export const LEVEL_COUNT = 5;
+/** The hand-made levels; the game adds the daily after them and passes the full count to `step`. */
+export const LEVEL_COUNT = LEVELS.length;
 
 const to = (name: FlowName, level: number): Flow => ({ name, level });
 /** Mid-level: the board is in play or its escapement is being regulated. */
