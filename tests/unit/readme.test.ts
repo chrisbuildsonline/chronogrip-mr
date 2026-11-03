@@ -5,10 +5,28 @@ import e2eConfig from '../../playwright.config.ts?raw';
 
 const scripts = Object.keys((JSON.parse(pkg) as { scripts: Record<string, string> }).scripts);
 
-/** Claims the code does not back: config.ts asks for hit-test and anchors, but nothing calls them; gaze is the head ray. */
-const DENY: readonly RegExp[] = [/hit[- ]?test/i, /\banchors?\b(?!\.ts)/i, /eye[- ]?(tracking|gaze)/i, /controllers? (support|work)/i];
+/** Claims the code does not back: config.ts asks for hit-test, but nothing calls it; gaze is the head ray. */
+const DENY: readonly RegExp[] = [/hit[- ]?test/i, /eye[- ]?(tracking|gaze)/i, /controllers? (support|work)/i];
+
+/**
+ * The one anchor claim the code backs (src/keeper.ts): the tray's spot is pinned with a persistent anchor where the
+ * browser offers them, and the tests run that path in the IWER emulator only. Any other mention of anchors is a claim
+ * nothing checks.
+ */
+const ANCHOR_CLAIM = 'where the browser offers WebXR persistent anchors, also pinned to the room with one (tested in the IWER emulator only, not yet on a Quest)';
 
 describe('README', () => {
+  it('makes exactly one, honest claim about anchors', () => {
+    expect(readme).toContain(ANCHOR_CLAIM);
+    expect(readme.replace(ANCHOR_CLAIM, '')).not.toMatch(/\banchors?\b(?!\.ts)/i);
+  });
+
+  it('says what passthrough does: hands hide the board, the tray spot is remembered', () => {
+    expect(readme).toMatch(/hands? (hide|hides) the (tray|board)/i);
+    expect(readme).toMatch(/remember/i);
+    expect(readme).not.toMatch(/^- (Real-hand occlusion|A tray pose that persists)/m);
+  });
+
   it('only names bun scripts that exist', () => {
     const named = [...readme.matchAll(/bun run ([\w:-]+)/g)].map((m) => m[1]!);
     expect(named.length).toBeGreaterThan(0);

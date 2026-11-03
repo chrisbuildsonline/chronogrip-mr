@@ -91,6 +91,14 @@ On solve every gear flashes amber and fades over 1.2 s and an amber ring bursts 
 starts ticking. On calibrated the gears flash again, a ring bursts round the dial, the train runs smoothly at its true
 speeds and the bird flaps in time; the complete card shows 2 s later.
 
+## Passthrough cues (XR)
+- Table found: when a detected plane places the tray, a brass chapter ring (a watch dial's minute track: a bold amber
+  band between fine brass lines, 60 ticks with longer amber five-minute marks, a soft amber-tint glow) lies in the tray's own
+  plane just under the board top and expands from 15 to 32 cm radius over 1 s, out past the rim, turning a twelfth of a turn as it fades; a
+  fainter echo ring follows 0.2 s behind. A restored spot gets one fainter, shorter-growing ring (1.2 s). The default
+  fallback gets none. Colours: amber, brass (`#b08d57`, world only) and amber tint from src/palette.ts.
+- Hands: depth-only spheres and capsules on the 25 joints, drawn first, so the real hand shows in front of the board.
+
 ## Light and material (world)
 - Tray and ledge: walnut grain (a canvas texture, warm streaks on `#573822`), 18 mm thick with a 6 mm rounded bevel;
   the ledge sits a step below the board.

@@ -29,7 +29,7 @@ A pocket watch felt right. It is small, it sits on your lap, and fixing one is a
 ## How to play (Quest browser)
 
 1. Open the live URL and press **Enter MR** (an immersive-ar session in passthrough; hand tracking and plane detection are requested as optional features).
-2. **Tray placement.** For the first 3 seconds the game looks for a detected horizontal surface (a table or tray table) 25-70 cm below your head, within 70 cm ahead and at least 25 cm across. If it finds one, the tray stands on it (with a riser if the surface is low). Otherwise the tray takes the default comfort pose: 32 cm ahead of and 19 cm below your head, tilted 50 degrees towards you.
+2. **Tray placement.** For the first 3 seconds the game looks for a detected horizontal surface (a table or tray table) 25-70 cm below your head, within 70 cm ahead and at least 25 cm across. If it finds one, the tray stands on it (with a riser if the surface is low). Otherwise the tray takes the default comfort pose: 32 cm ahead of and 19 cm below your head, tilted 50 degrees towards you. When a table places it, a brass dial ring pulses out from under the tray's rim. Next time you press **Enter MR** the tray comes back to the spot it had (a fainter ring shows it was remembered) instead of searching again; a two-hand recenter moves it and saves the new spot.
 3. **Title card.** A cream card floats just above the board: **Start** (or **Continue** once you have solved something) and **Levels**. Touching a gear on the board also starts the level.
 4. **Place gears.** Loose gears wait on a ledge along the far edge. Pinch one (thumb and index tip together, within 4 cm of the gear) to pick it up, carry it and let go over an axle. While you carry it, the axles it could go on pulse with an amber ring. Released within 2.5 cm of a free axle it snaps on with a click; anywhere else it floats back to the ledge. Connect the driver to the target gear so it turns the right way at the right speed. A loop of gears that cannot turn jams and grinds.
 5. **Calibrate the escapement.** When the train is right, the level clock stops and the escapement in the near-right corner starts ticking. Pinch the regulator dial and roll your wrist like turning a key: the knob turns one to one with your wrist (160 degrees end to end), clockwise ticks faster, anticlockwise slower, from 1 to 5 ticks a second. Hold the needle in the amber target band (within 10% of the target rate) for 0.8 s.
@@ -62,6 +62,7 @@ The same scene and cards run in any desktop browser with WebGL. Where the browse
 ## Saved progress
 
 - Best times are saved in the browser's localStorage (key `chronogrip.progress.v1`); corrupt or blocked storage starts clean.
+- The tray's spot in MR is saved under `chronogrip.tray.v1`; a corrupt, old or out-of-reach value is ignored and the game looks for a table as usual.
 - The title card says **Continue** once any level is solved, and it starts the first level you have not solved.
 - **Levels** shows six tiles: levels 1-5 and **Daily**. Solved tiles show your best time and a check. Beating a saved time shows **New best**.
 - The **Daily** is a puzzle generated from today's local date: the same for everyone on a given day, different the next. If the game is left open past midnight, the new daily swaps in the next time you are on the title or level select.
@@ -118,7 +119,7 @@ That serves the production build at http://localhost:4173 (`bun run docker:build
 `bun run e2e` runs two Playwright projects (pick one with `bun run e2e --project=preview` or `--project=dev`):
 
 - **preview**: the production build on port 4173, no emulator, mouse only. Page load with a clean console, rendering, drag-and-drop gears, hover hints, the level flow, calibration, saved progress and the daily, sound, and the render budget on every level.
-- **dev**: the dev server on port 5174 with the IWER emulator posing as a Quest 3. Entering the XR session, the default tray pose, the hands hint, pinch grab and drop, head gaze and hand glow, two-hand recenter, poking card buttons, pause from the headset menu and on session end.
+- **dev**: the dev server on port 5174 with the IWER emulator posing as a Quest 3. Entering the XR session, the default tray pose, the hands hint, pinch grab and drop, head gaze and hand glow, two-hand recenter, poking card buttons, pause from the headset menu and on session end; and a table placing the tray with its ring, the tray coming back to the same spot after a reload (pinned to the emulator's room, and from localStorage alone when the room pin cannot be restored), a recenter overwriting it, and the hand occluders following the joints.
 
 The unit tests cover the gear geometry, the train solver, the levels, tray placement, the regulator, the flow (including Given/When/Then acceptance tests), saved progress and the daily generator, with fuzz tests for the gear geometry, the train solver and level parsing.
 
@@ -130,6 +131,7 @@ ChronoGrip is a web app: TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK
 
 - **Hands.** Every frame `mr.ts` reads the thumb tip, index tip and wrist joints straight from the XR frame. Tips closer than 2 cm are a pinch; the index tip pokes card buttons; the wrist's roll turns the regulator.
 - **Tray placement.** With plane detection, `anchor.ts` stands the tray on the nearest usable horizontal plane, adding a riser if it is low. If no plane qualifies, the tray takes a fixed comfort pose in front of you.
+- **Passthrough.** Your real hands hide the tray and gears behind them: `occlude.ts` puts depth-only spheres and capsules on the 25 hand joints, drawn before the board, so passthrough shows where a finger is in front (an approximation of the hand's shape, so the edges are rough). The tray's spot is remembered between sessions: saved in localStorage relative to your head (`persist.ts`) and, where the browser offers WebXR persistent anchors, also pinned to the room with one (tested in the IWER emulator only, not yet on a Quest). `keeper.ts` does the saving and restoring; a corrupt or out-of-reach saved value is ignored.
 - **Gears.** `gear.ts` draws real involute tooth outlines in code and extrudes them into meshes. There are no model files.
 - **Gear train.** `train.ts` is a deterministic solver: it walks the meshed gears, works out each speed and direction, and reports a jam when a loop disagrees or gears collide.
 - **Escapement.** `escapement.ts` maps wrist twist to a tick rate from 1 to 5 ticks a second, and checks you hold it in the target band.
@@ -143,6 +145,8 @@ ChronoGrip is a web app: TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK
 | `main.ts` | Wires everything: input, flow, per-frame update |
 | `config.ts`, `enter.ts` | The immersive-ar session options; Enter MR |
 | `mr.ts`, `anchor.ts` | Per-frame hand joints (pinch, poke tip, wrist), plane search and tray placement, two-hand recenter |
+| `persist.ts`, `keeper.ts` | The tray's saved spot: head-relative pose in localStorage, plus the room pin where the runtime has one |
+| `occlude.ts`, `cue.ts` | Depth-only hand occluders on the joints; the "table found" ring |
 | `seat.ts` | Seated layout, comfort cone, tray coordinates |
 | `gear.ts` | Involute spur gear outlines generated in code, extruded into meshes |
 | `train.ts` | Deterministic gear-train solver: speeds, directions, jams, collisions |
@@ -169,8 +173,7 @@ ChronoGrip is a web app: TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK
 
 Target launch date: January 2027, free in the Quest browser at the live URL.
 
-- Real-hand occlusion, so your fingers hide the tray where they pass in front of it.
-- A tray pose that persists between sessions, so the board comes back where you left it.
+- Test hand occlusion and the remembered tray spot on a Quest 3; both are checked only in the emulator so far.
 - More levels, and a level editor so players can share puzzles.
 - On-device profiling on a Quest 3 to hold 60 fps on every level. The render budget so far is measured in software GL only.
 
