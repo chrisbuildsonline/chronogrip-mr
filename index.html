@@ -24,7 +24,14 @@
         background: #f6efe2; color: #1c1712; cursor: pointer; box-shadow: 0 6px 20px rgba(20, 12, 4, 0.35);
       }
       #enter-mr:disabled { opacity: 0.5; cursor: not-allowed; }
+      #enter-note { text-wrap: balance; }
       #enter-note[hidden] { display: none; }
+      /* Phone width: a tighter header and only the first sentence of the note, so the board and card get the room. */
+      @media (max-width: 499px) {
+        h1 { left: 16px; }
+        #xr-entry { right: 16px; max-width: 150px; }
+        .cg-more { display: none; }
+      }
 
       /* Loading card: plain markup and CSS, so it is up at first paint while the 5.5 MB SDK chunk loads. main.ts adds
          .done once the world is built (it fades and stops taking the pointer); a startup error adds .failed. */
@@ -101,7 +108,7 @@
     <h1 id="title">ChronoGrip</h1>
     <div id="xr-entry">
       <button id="enter-mr" type="button" disabled>Enter MR</button>
-      <span id="enter-note">Mixed reality needs a Quest browser. Drag to look around the tray.</span>
+      <span id="enter-note">Mixed reality needs a Quest browser.<span class="cg-more"> Drag to look around the tray.</span></span>
     </div>
     <div id="app"></div>
     <script>

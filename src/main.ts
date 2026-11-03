@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { APP_TITLE, createWorldOptions } from './config';
 import { DEFAULT_PLACEMENT, toHeadFrame, type Head } from './anchor';
 import { startSession } from './enter';
-import { DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial } from 'three';
+import { BoxGeometry, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
 import { occupiedAt, pickGear, snapAxle } from './grab';
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
@@ -12,7 +12,7 @@ import { trackMr } from './mr';
 import { tuneForSoftwareGl } from './render';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
-import { buttonAt, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button } from './ui';
+import { SCREENS, buttonAt, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button } from './ui';
 import { createPanels } from './panels';
 import { createGhostHand, ghostAt, ghostTwistAt } from './ghost';
 import { easeOut, tweenAt } from './tween';
@@ -26,6 +26,7 @@ import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
 import { goalOf, goalText } from './goal';
 import { createGoalBadge } from './badge';
+import { DESKTOP_EYE, DESKTOP_TARGET, desktopDistance, faceView, viewContent } from './fit';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('#app container missing');
@@ -64,10 +65,10 @@ tuneForSoftwareGl(world.renderer);
 const built = buildScene(level, world.scene, world.renderer);
 
 // Desktop preview: from above, behind and a little right of the seated head, so the board reads in depth (bevel,
-// gear thickness, the bird standing up) and the panel above it stays in frame.
-world.camera.position.set(0.107, 0.225, 0.364);
+// gear thickness, the bird standing up) and the panel above it stays in frame. A narrow window backs it off (fitView).
+world.camera.position.set(...DESKTOP_EYE);
 const controls = new OrbitControls(world.camera, world.renderer.domElement);
-controls.target.set(0.015, -0.08, -0.36);
+controls.target.set(...DESKTOP_TARGET);
 controls.update();
 world.renderer.xr.addEventListener('sessionstart', () => (controls.enabled = false));
 world.renderer.xr.addEventListener('sessionend', () => (controls.enabled = true));
@@ -131,8 +132,62 @@ const sound = createSound();
 const panels = createPanels();
 world.scene.add(panels.root);
 let anchor: Anchor = panelAnchor(level);
-const placePanels = () => panels.setAnchor((anchor = panelAnchor(level, currentPose())));
+/** The camera's backward axis (from what it looks at towards the eye). */
+const cameraBack = (): Vec3 => world.camera.getWorldDirection(new Vector3()).negate().toArray();
+/** In XR the card tilts to face the head; on desktop it lies face on to the preview camera, so it reads square. */
+const placePanels = () => {
+  const a = panelAnchor(level, currentPose());
+  panels.setAnchor((anchor = world.renderer.xr.isPresenting ? a : faceView(a, cameraBack())));
+};
 placePanels();
+world.renderer.xr.addEventListener('sessionstart', placePanels);
+controls.addEventListener('change', placePanels);
+
+/**
+ * Desktop: back the camera off along its line of sight until this level's board and parts strip, the dial, the bird and
+ * the card on show (the wide level select, or the others) fit the window, staying under the wordmark and Enter MR where
+ * they reach the top corners. Never nearer than the tuned landscape view. On resize it jumps there; after a level load
+ * or a card change (`keepZoom`) it eases there, keeping the player's own zoom in proportion. Then places the cards.
+ */
+const TUNED_DISTANCE = new Vector3(...DESKTOP_EYE).distanceTo(new Vector3(...DESKTOP_TARGET));
+const FIT_MS = 400;
+const PLAY_SCREENS = SCREENS.filter((s) => s !== 'select');
+const xrEntry = document.getElementById('xr-entry')!;
+let fitted = TUNED_DISTANCE;
+let cameraTween: { from: Vec3; to: Vec3; start: number } | null = null;
+function fitView(keepZoom = false): void {
+  if (!world.renderer.xr.isPresenting) moveToFit(keepZoom);
+  placePanels();
+}
+function moveToFit(keepZoom: boolean): void {
+  const offset = world.camera.position.clone().sub(controls.target);
+  // Mid-ease, the zoom to keep is where the ease was going.
+  const now = cameraTween ? controls.target.distanceTo(new Vector3(...cameraTween.to)) : offset.length();
+  cameraTween = null;
+  offset.normalize();
+  const dir = offset.toArray();
+  const [title, entry] = [heading?.getBoundingClientRect(), xrEntry.getBoundingClientRect()];
+  const d = desktopDistance({
+    target: controls.target.toArray(),
+    dir,
+    base: TUNED_DISTANCE,
+    fovDeg: world.camera.fov,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    margin: { top: 16, right: 12, bottom: 12, left: 12 },
+    header: { left: (title?.right ?? 0) + 16, right: entry.left - 16, bottom: Math.max(title?.bottom ?? 0, entry.bottom) + 8 },
+    points: viewContent(level, levels.length, currentPose(), dir, flow.name === 'select' ? ['select'] : PLAY_SCREENS),
+  });
+  const to = controls.target.clone().addScaledVector(offset, keepZoom ? (now * d) / fitted : d);
+  fitted = d;
+  if (keepZoom && to.distanceTo(world.camera.position) > 1e-6) cameraTween = { from: world.camera.position.toArray(), to: to.toArray(), start: performance.now() };
+  else if (!keepZoom) {
+    world.camera.position.copy(to);
+    controls.update();
+  }
+}
+fitView();
+window.addEventListener('resize', () => fitView());
 
 const firstMove = () => Object.entries(level.solution)[0]!;
 const ghost = createGhostHand(built.loose.get(firstMove()[0])!.geometry);
@@ -286,6 +341,7 @@ function send(e: FlowEvent): void {
     burst.position.set(...trayLocal(DIAL_AT[0], DIAL_AT[1], 0.008));
   }
   showPanel();
+  fitView(true); // a new level or card may want the camera nearer or further
 }
 
 const PRESS: Record<string, FlowEvent> = {
@@ -464,7 +520,10 @@ canvas.addEventListener('pointercancel', mouseUp);
 // Pause whenever the player is pulled away: tab hidden, headset menu or headset off, session over.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') send({ type: 'pause' });
-  else rolloverDaily();
+  else {
+    rolloverDaily();
+    fitView(true);
+  }
 });
 world.renderer.xr.addEventListener('sessionstart', () => {
   const session = world.renderer.xr.getSession();
@@ -607,6 +666,12 @@ world.scene.onBeforeRender = () => {
   }
   built.updateShadows();
   cue.update(now);
+  if (cameraTween && !world.renderer.xr.isPresenting) {
+    const { pos, done } = tweenAt(cameraTween.from, cameraTween.to, now - cameraTween.start, FIT_MS);
+    world.camera.position.set(...pos);
+    controls.update();
+    if (done) cameraTween = null;
+  }
 
   // WebXR has no general eye-gaze API, so in XR the gaze ray is the head (viewer pose) forward direction.
   let ray: [Vec3, Vec3] | null = mouseRay;
@@ -721,6 +786,28 @@ const toScreen = (p: Vec3): [number, number] => {
   const v = new Vector3(...p).project(world.camera);
   const rect = canvas.getBoundingClientRect();
   return [rect.left + ((v.x + 1) / 2) * rect.width, rect.top + ((1 - v.y) / 2) * rect.height];
+};
+const panelCorners = () => {
+  const l = panels.panelMesh.visible ? panels.current?.layout : undefined;
+  if (!l) return [];
+  return ([[-1, 0], [1, 0], [-1, 1], [1, 1]] as const).map(([sx, k]) => toScreen(panelToWorld(anchor, [(sx * l.width) / 2, k * l.height, 0])));
+};
+/** For tests: the page-pixel box round the corners of each visible mesh's own bounding box, null if none. */
+const screenBox = (meshes: Mesh[]): [number, number, number, number] | null => {
+  const ps = meshes.flatMap((m) => {
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+    const { min, max } = m.geometry.boundingBox!;
+    m.updateWorldMatrix(true, false);
+    return [min.x, max.x].flatMap((x) => [min.y, max.y].flatMap((y) => [min.z, max.z].map((z) => toScreen(new Vector3(x, y, z).applyMatrix4(m.matrixWorld).toArray()))));
+  });
+  return boxOf(ps);
+};
+const boxOf = (ps: [number, number][]): [number, number, number, number] | null =>
+  ps.length ? [Math.min(...ps.map((p) => p[0])), Math.min(...ps.map((p) => p[1])), Math.max(...ps.map((p) => p[0])), Math.max(...ps.map((p) => p[1]))] : null;
+const meshesIn = (o: Object3D): Mesh[] => {
+  const out: Mesh[] = [];
+  o.traverseVisible((c) => c instanceof Mesh && out.push(c));
+  return out;
 };
 
 window.__chrono = Object.freeze({
@@ -860,10 +947,17 @@ window.__chrono = Object.freeze({
       return { id: b.id, label: b.label, world: w, screen: toScreen(w) };
     });
   },
-  panelCorners() {
-    const l = panels.panelMesh.visible ? panels.current?.layout : undefined;
-    if (!l) return [];
-    return ([[-1, 0], [1, 0], [-1, 1], [1, 1]] as const).map(([sx, k]) => toScreen(panelToWorld(anchor, [(sx * l.width) / 2, k * l.height, 0])));
+  panelCorners,
+  viewBoxes() {
+    // The board and the ledge are the tray's own box meshes.
+    const board = built.tray.children.filter((c): c is Mesh => c instanceof Mesh && c.geometry instanceof BoxGeometry);
+    return { board: screenBox(board), dial: screenBox(meshesIn(escapement.root)), bird: screenBox(meshesIn(automaton.root)), card: boxOf(panelCorners()) };
+  },
+  get cameraAt() {
+    return world.camera.position.toArray();
+  },
+  get cameraMoving() {
+    return cameraTween !== null;
   },
   toScreen,
 });

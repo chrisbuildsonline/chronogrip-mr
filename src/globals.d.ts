@@ -94,6 +94,15 @@ interface ChronoHook {
   buttons(): { id: string; label: string; world: readonly [number, number, number]; screen: [number, number] }[];
   /** Page pixel positions of the shown panel's four corners (bottom left, bottom right, top left, top right); empty when none is up. */
   panelCorners(): [number, number][];
+  /**
+   * Page-pixel boxes [x0, y0, x1, y1] round the board and ledge, the escapement dial, the bird (each from its meshes' own
+   * bounding box corners) and the card now up; null when not shown.
+   */
+  viewBoxes(): Record<'board' | 'dial' | 'bird' | 'card', [number, number, number, number] | null>;
+  /** Live: the camera's position (the desktop preview eye outside XR). */
+  readonly cameraAt: [number, number, number];
+  /** Live: true while the desktop camera eases to a new fit (a level or card change on a narrow window). */
+  readonly cameraMoving: boolean;
   /** Page pixel coordinates of a world point, for driving the mouse in tests. */
   toScreen(p: readonly [number, number, number]): [number, number];
 }
