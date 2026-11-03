@@ -8,7 +8,7 @@
       html, body { margin: 0; height: 100%; overflow: hidden; background: #14110d radial-gradient(ellipse 60% 70% at 50% 58%, #3a2a1c 0%, #241a12 55%, #120f0b 100%); }
       #app { position: fixed; inset: 0; }
       #app canvas { display: block; width: 100%; height: 100%; }
-      /* Palette and type: design/DESIGN.md */
+      /* Palette and type: design/DESIGN.md (src/palette.ts) */
       h1 {
         position: fixed; top: 18px; left: 24px; margin: 0; z-index: 1;
         font: 600 1.35rem/1 Georgia, serif; color: #f6efe2; pointer-events: none;
@@ -25,15 +25,101 @@
       }
       #enter-mr:disabled { opacity: 0.5; cursor: not-allowed; }
       #enter-note[hidden] { display: none; }
+
+      /* Loading card: plain markup and CSS, so it is up at first paint while the 5.5 MB SDK chunk loads. main.ts adds
+         .done once the world is built (it fades and stops taking the pointer); a startup error adds .failed. */
+      #loading {
+        position: fixed; inset: 0; z-index: 2; display: grid; place-items: center;
+        transition: opacity 0.5s ease, visibility 0s linear 0.5s;
+      }
+      #loading.done { opacity: 0; visibility: hidden; pointer-events: none; }
+      #loading:not(.done) ~ #title, #loading:not(.done) ~ #xr-entry { opacity: 0; }
+      #title, #xr-entry { transition: opacity 0.5s ease 0.2s; }
+      .cg-card {
+        width: min(340px, calc(100vw - 48px)); box-sizing: border-box; padding: 30px 36px 32px; border-radius: 24px;
+        background: #f6efe2; text-align: center; font-family: system-ui, sans-serif;
+        box-shadow: 0 10px 30px rgba(20, 12, 4, 0.35), 0 30px 80px rgba(0, 0, 0, 0.35);
+        animation: cg-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+        transition: transform 0.5s ease;
+      }
+      #loading.done .cg-card { transform: translateY(-8px) scale(0.98); }
+      .cg-gears { display: block; width: 128px; height: 80px; margin: 0 auto 14px; overflow: visible; }
+      .cg-eyebrow { margin: 0; font: 700 0.7rem/1 system-ui, sans-serif; letter-spacing: 0.2em; color: #665a4c; }
+      .cg-wordmark { margin: 8px 0 14px; font: 600 2.25rem/1 Georgia, serif; color: #1c1712; }
+      .cg-status { margin: 0; font: 600 0.95rem/1.35 system-ui, sans-serif; color: #665a4c; }
+      .cg-detail { margin: 8px 0 0; font: 500 0.85rem/1.4 system-ui, sans-serif; color: #665a4c; }
+      .cg-detail:empty { display: none; }
+      #loading.failed .cg-status { color: #1c1712; }
+      /* Escapement motion: each gear jumps one tooth per beat (outer group, steps) while the inner group eases the jump
+         out over the first quarter of the beat, so the train ticks and rests like a clock. Both beat every 0.5 s. */
+      .cg-big .cg-turn { animation: cg-big 6s steps(12, jump-start) infinite; }
+      .cg-big .cg-ease { animation: cg-big-ease 0.5s infinite; }
+      .cg-small .cg-turn { animation: cg-small 4s steps(8, jump-start) infinite; }
+      .cg-small .cg-ease { animation: cg-small-ease 0.5s infinite; }
+      #loading.failed .cg-turn, #loading.failed .cg-ease { animation-play-state: paused; }
+      @keyframes cg-big { to { transform: rotate(360deg); } }
+      @keyframes cg-small { to { transform: rotate(-360deg); } }
+      @keyframes cg-big-ease { 0% { transform: rotate(-30deg); animation-timing-function: cubic-bezier(0.3, 1.6, 0.5, 1); } 28%, 100% { transform: rotate(0); } }
+      @keyframes cg-small-ease { 0% { transform: rotate(45deg); animation-timing-function: cubic-bezier(0.3, 1.6, 0.5, 1); } 28%, 100% { transform: rotate(0); } }
+      @keyframes cg-rise { from { opacity: 0; transform: translateY(12px) scale(0.98); } }
+      @media (prefers-reduced-motion: reduce) {
+        .cg-card, .cg-turn, .cg-ease { animation: none; }
+        #loading, .cg-card, #title, #xr-entry { transition: none; }
+      }
     </style>
   </head>
   <body>
+    <div id="loading" role="status" aria-live="polite">
+      <div class="cg-card">
+        <svg class="cg-gears" viewBox="0 0 128 80" aria-hidden="true">
+          <defs>
+            <linearGradient id="cg-brass" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#dcb873" />
+              <stop offset="1" stop-color="#a47a40" />
+            </linearGradient>
+          </defs>
+          <g class="cg-big" transform="translate(44 40)">
+            <g class="cg-turn"><g class="cg-ease">
+              <path fill="url(#cg-brass)" fill-rule="evenodd" d="M18.35 -4.92L18.77 -2.97L27.89 -2.49L27.89 2.49L18.77 2.97L18.35 4.92L17.74 6.81L25.4 11.79L22.91 16.1L14.77 11.96L13.43 13.44L11.96 14.77L16.1 22.91L11.79 25.4L6.81 17.74L4.92 18.35L2.97 18.77L2.49 27.89L-2.49 27.89L-2.97 18.77L-4.92 18.35L-6.81 17.74L-11.79 25.4L-16.1 22.91L-11.96 14.77L-13.44 13.43L-14.77 11.96L-22.91 16.1L-25.4 11.79L-17.74 6.81L-18.35 4.92L-18.77 2.97L-27.89 2.49L-27.89 -2.49L-18.77 -2.97L-18.35 -4.92L-17.74 -6.81L-25.4 -11.79L-22.91 -16.1L-14.77 -11.96L-13.43 -13.44L-11.96 -14.77L-16.1 -22.91L-11.79 -25.4L-6.81 -17.74L-4.92 -18.35L-2.97 -18.77L-2.49 -27.89L2.49 -27.89L2.97 -18.77L4.92 -18.35L6.81 -17.74L11.79 -25.4L16.1 -22.91L11.96 -14.77L13.44 -13.43L14.77 -11.96L22.91 -16.1L25.4 -11.79L17.74 -6.81Z M15.5 0a4.5 4.5 0 1 0 -9 0a4.5 4.5 0 1 0 9 0Z M-6.5 0a4.5 4.5 0 1 0 -9 0a4.5 4.5 0 1 0 9 0Z M4.5 11a4.5 4.5 0 1 0 -9 0a4.5 4.5 0 1 0 9 0Z M4.5 -11a4.5 4.5 0 1 0 -9 0a4.5 4.5 0 1 0 9 0Z" />
+              <circle r="3.2" fill="#4a3322" />
+            </g></g>
+          </g>
+          <g class="cg-small" transform="translate(84 40)">
+            <g class="cg-turn"><g class="cg-ease"><g transform="rotate(22.5)">
+              <path fill="url(#cg-brass)" d="M10.16 -4.21L10.7 -2.57L19.82 -2.66L19.82 2.66L10.7 2.57L10.16 4.21L9.38 5.75L15.9 12.13L12.13 15.9L5.75 9.38L4.21 10.16L2.57 10.7L2.66 19.82L-2.66 19.82L-2.57 10.7L-4.21 10.16L-5.75 9.38L-12.13 15.9L-15.9 12.13L-9.38 5.75L-10.16 4.21L-10.7 2.57L-19.82 2.66L-19.82 -2.66L-10.7 -2.57L-10.16 -4.21L-9.38 -5.75L-15.9 -12.13L-12.13 -15.9L-5.75 -9.38L-4.21 -10.16L-2.57 -10.7L-2.66 -19.82L2.66 -19.82L2.57 -10.7L4.21 -10.16L5.75 -9.38L12.13 -15.9L15.9 -12.13L9.38 -5.75Z" />
+              <circle r="5" fill="#d99a2b" />
+              <circle r="2.2" fill="#4a3322" />
+            </g></g></g>
+          </g>
+        </svg>
+        <p class="cg-eyebrow">A CLOCKWORK PUZZLE</p>
+        <p class="cg-wordmark">ChronoGrip</p>
+        <p class="cg-status" id="loading-status">Winding the clockwork…</p>
+        <p class="cg-detail" id="loading-detail"></p>
+      </div>
+    </div>
     <h1 id="title">ChronoGrip</h1>
     <div id="xr-entry">
       <button id="enter-mr" type="button" disabled>Enter MR</button>
       <span id="enter-note">Mixed reality needs a Quest browser. Drag to look around the tray.</span>
     </div>
     <div id="app"></div>
+    <script>
+      // Until main.ts marks the loading card done, a startup failure (a file that did not arrive, World.create throwing)
+      // shows on the card instead of leaving it winding forever.
+      (() => {
+        const fail = (why) => {
+          const card = document.getElementById('loading');
+          if (!card || card.classList.contains('done')) return;
+          const text = String(why || 'A file the game needs did not load.').replace(/^Uncaught\s+/, '').replace(/^\w*Error:\s*/, '');
+          card.classList.add('failed');
+          document.getElementById('loading-status').textContent = 'The clockwork would not start.';
+          document.getElementById('loading-detail').textContent = `${text}${/[.!?]$/.test(text) ? '' : '.'} Reload to try again.`;
+        };
+        addEventListener('error', (e) => fail(e.message), true);
+        addEventListener('unhandledrejection', (e) => fail(e.reason && e.reason.message));
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
