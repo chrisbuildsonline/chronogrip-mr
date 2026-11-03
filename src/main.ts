@@ -28,7 +28,7 @@ import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
 import { goalOf, goalText } from './goal';
 import { createGoalBadge } from './badge';
-import { DESKTOP_EYE, DESKTOP_TARGET, desktopDistance, faceView, viewContent } from './fit';
+import { DESKTOP_EYE, DESKTOP_TARGET, desktopDistance, faceView, isPhone, phoneCard, phoneReserve, phoneShift, viewContent } from './fit';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('#app container missing');
@@ -136,10 +136,41 @@ world.scene.add(panels.root);
 let anchor: Anchor = panelAnchor(level);
 /** The camera's backward axis (from what it looks at towards the eye). */
 const cameraBack = (): Vec3 => world.camera.getWorldDirection(new Vector3()).negate().toArray();
-/** In XR the card tilts to face the head; on desktop it lies face on to the preview camera, so it reads square. */
+const PLAY_SCREENS = SCREENS.filter((s) => s !== 'select');
+/** The cards the camera fits for: the wide level select alone, or the others (so it holds still between them). */
+const fitScreens = () => (flow.name === 'select' ? (['select'] as const) : PLAY_SCREENS);
+const xrEntry = document.getElementById('xr-entry')!;
+/** The page header's foot in px: the wordmark and the Enter MR column, plus a little air. */
+const headerBottom = () => Math.max(heading?.getBoundingClientRect().bottom ?? 0, xrEntry.getBoundingClientRect().bottom) + 8;
+/** Pixels kept clear inside each edge of the desktop view. */
+const FIT_MARGIN = { top: 16, right: 12, bottom: 12, left: 12 };
+/** A phone in portrait, outside XR: the cards become a bottom sheet in the narrow layouts. */
+const phone = () => !world.renderer.xr.isPresenting && isPhone(window.innerWidth, window.innerHeight);
+/** The room a phone keeps for the board, in px from the top: under the header, over the bottom-sheet card. */
+const phoneRoom = () => ({ top: headerBottom() + FIT_MARGIN.top, bottom: window.innerHeight - phoneReserve(window.innerWidth, fitScreens(), levels.length) });
+/** Phone: raises the view (a camera view offset) so the board sits midway in its room; returns how many px. */
+function raiseView(): number {
+  const [w, h] = [window.innerWidth, window.innerHeight];
+  const offset = world.camera.position.clone().sub(controls.target);
+  const dir = offset.clone().normalize().toArray();
+  const shift = phoneShift({ target: controls.target.toArray(), dir, fovDeg: world.camera.fov, width: w, height: h, d: offset.length(), points: viewContent(level, levels.length, currentPose(), dir, []), ...phoneRoom() });
+  world.camera.setViewOffset(w, h, 0, shift, w, h);
+  return shift;
+}
+/**
+ * In XR the card tilts to face the head; on desktop it lies face on to the preview camera, so it reads square. On a phone
+ * it is a bottom sheet held in front of the camera, a phone width wide, whatever the orbit or zoom.
+ */
 const placePanels = () => {
   const a = panelAnchor(level, currentPose());
-  panels.setAnchor((anchor = world.renderer.xr.isPresenting ? a : faceView(a, cameraBack())));
+  if (phone()) {
+    const eye = world.camera.getWorldPosition(new Vector3()).toArray();
+    anchor = phoneCard({ eye, back: cameraBack(), fovDeg: world.camera.fov, width: window.innerWidth, height: window.innerHeight, shift: raiseView() });
+  } else {
+    if (world.camera.view?.enabled) world.camera.clearViewOffset();
+    anchor = world.renderer.xr.isPresenting ? a : faceView(a, cameraBack());
+  }
+  panels.setAnchor(anchor);
 };
 placePanels();
 world.renderer.xr.addEventListener('sessionstart', placePanels);
@@ -153,8 +184,6 @@ controls.addEventListener('change', placePanels);
  */
 const TUNED_DISTANCE = new Vector3(...DESKTOP_EYE).distanceTo(new Vector3(...DESKTOP_TARGET));
 const FIT_MS = 400;
-const PLAY_SCREENS = SCREENS.filter((s) => s !== 'select');
-const xrEntry = document.getElementById('xr-entry')!;
 let fitted = TUNED_DISTANCE;
 let cameraTween: { from: Vec3; to: Vec3; start: number } | null = null;
 function fitView(keepZoom = false): void {
@@ -169,6 +198,8 @@ function moveToFit(keepZoom: boolean): void {
   offset.normalize();
   const dir = offset.toArray();
   const [title, entry] = [heading?.getBoundingClientRect(), xrEntry.getBoundingClientRect()];
+  // A phone keeps the card out of the 3D fit: the board fits its room, under the header and over the bottom-sheet card.
+  const room = phone() && phoneRoom();
   const d = desktopDistance({
     target: controls.target.toArray(),
     dir,
@@ -176,9 +207,9 @@ function moveToFit(keepZoom: boolean): void {
     fovDeg: world.camera.fov,
     width: window.innerWidth,
     height: window.innerHeight,
-    margin: { top: 16, right: 12, bottom: 12, left: 12 },
-    header: { left: (title?.right ?? 0) + 16, right: entry.left - 16, bottom: Math.max(title?.bottom ?? 0, entry.bottom) + 8 },
-    points: viewContent(level, levels.length, currentPose(), dir, flow.name === 'select' ? ['select'] : PLAY_SCREENS),
+    margin: room ? { ...FIT_MARGIN, top: room.top, bottom: window.innerHeight - room.bottom } : FIT_MARGIN,
+    header: { left: (title?.right ?? 0) + 16, right: entry.left - 16, bottom: headerBottom() },
+    points: viewContent(level, levels.length, currentPose(), dir, room ? [] : fitScreens()),
   });
   const to = controls.target.clone().addScaledVector(offset, keepZoom ? (now * d) / fitted : d);
   fitted = d;
@@ -938,6 +969,7 @@ function showPanel(now = performance.now()): void {
     hover: mouseButton ?? tipButton.left ?? tipButton.right,
     goal: badge.root.visible ? goal() : null,
     fault: faultKind(fault),
+    narrow: phone(),
   });
 }
 
@@ -1130,7 +1162,20 @@ window.__chrono = Object.freeze({
   buttons() {
     return shownButtons().map((b) => {
       const w = panelToWorld(anchor, [b.x, b.y, 0]);
-      return { id: b.id, label: b.label, world: w, screen: toScreen(w) };
+      const corners = ([[-1, -1], [1, -1], [-1, 1], [1, 1]] as const).map(([sx, sy]) => toScreen(panelToWorld(anchor, [b.x + (sx * b.w) / 2, b.y + (sy * b.h) / 2, 0])));
+      return { id: b.id, label: b.label, world: w, screen: toScreen(w), rect: boxOf(corners)! };
+    });
+  },
+  get card() {
+    const c = panels.panelMesh.visible ? panels.current : null;
+    return c && { screen: c.screen, width: c.layout.width, height: c.layout.height };
+  },
+  labels() {
+    if (!panels.panelMesh.visible) return [];
+    // A word's height on screen: its font size, measured upright on the card where it is drawn.
+    return panels.labels.map((t) => {
+      const [a, b] = [toScreen(panelToWorld(anchor, [t.x, t.y - t.size / 2, 0])), toScreen(panelToWorld(anchor, [t.x, t.y + t.size / 2, 0]))];
+      return { text: t.text, size: t.size, height: Math.hypot(a[0] - b[0], a[1] - b[1]) };
     });
   },
   panelCorners,

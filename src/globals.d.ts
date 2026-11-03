@@ -109,8 +109,12 @@ interface ChronoHook {
   readonly paused: boolean;
   /** Live: true while the level 1 ghost hand demonstrates the first move. */
   readonly ghostHand: boolean;
-  /** Buttons on the panel now shown, with world centre and page pixel position. */
-  buttons(): { id: string; label: string; world: readonly [number, number, number]; screen: [number, number] }[];
+  /** Buttons on the panel now shown, with world centre, page pixel position and page-pixel box [x0, y0, x1, y1]. */
+  buttons(): { id: string; label: string; world: readonly [number, number, number]; screen: [number, number]; rect: [number, number, number, number] }[];
+  /** Live: the card now up (its screen and panel-space size in metres), null when none is shown. */
+  readonly card: { readonly screen: 'title' | 'select' | 'hud' | 'complete' | 'paused'; readonly width: number; readonly height: number } | null;
+  /** The words on the card now up: text, font size in panel metres, and that size in page pixels as seen now. */
+  labels(): { text: string; size: number; height: number }[];
   /** Page pixel positions of the shown panel's four corners (bottom left, bottom right, top left, top right); empty when none is up. */
   panelCorners(): [number, number][];
   /**
