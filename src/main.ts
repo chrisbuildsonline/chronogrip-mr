@@ -784,6 +784,9 @@ window.__chrono = Object.freeze({
   get automatonRunning() {
     return regulator.calibrated;
   },
+  get tickPhase() {
+    return regulator.phase;
+  },
   get regulatorAt() {
     return worldOf(new Vector3(...trayLocal(KNOB[0], KNOB[1], KNOB_TOP)));
   },

@@ -53,6 +53,8 @@ interface ChronoHook {
   readonly render: { readonly calls: number; readonly triangles: number };
   /** Live: true once the escapement is calibrated and the automaton runs. */
   readonly automatonRunning: boolean;
+  /** Live: the escapement's tick count so far (fractional); the bird's wings snap up at each whole tick. */
+  readonly tickPhase: number;
   /** Live: world position of the top of the regulator knob, where a pinch grabs it. */
   readonly regulatorAt: readonly [number, number, number];
   /** Live: index of the loaded level in LEVELS. */

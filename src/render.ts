@@ -13,8 +13,14 @@ export function pixelRatioFor(software: boolean, devicePixelRatio: number): numb
   return software ? Math.min(devicePixelRatio, SOFTWARE_PIXEL_RATIO) : devicePixelRatio;
 }
 
-/** Lowers the renderer's pixel ratio when it runs on a software rasteriser. */
+/** True when the page URL asks for full resolution (`?shots`, used by the README screenshot capture). */
+export function fullResolution(search: string): boolean {
+  return new URLSearchParams(search).has('shots');
+}
+
+/** Lowers the renderer's pixel ratio when it runs on a software rasteriser, unless `?shots` asks for full resolution. */
 export function tuneForSoftwareGl(renderer: WebGLRenderer): void {
+  if (fullResolution(location.search)) return;
   const gl = renderer.getContext();
   const ext = gl.getExtension('WEBGL_debug_renderer_info');
   const name = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';

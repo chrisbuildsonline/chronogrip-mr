@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSoftwareRenderer, pixelRatioFor } from '../../src/render';
+import { fullResolution, isSoftwareRenderer, pixelRatioFor } from '../../src/render';
 import playwrightConfig from '../../playwright.config.ts?raw';
 
 const specs = import.meta.glob('../e2e/*.spec.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
@@ -22,6 +22,13 @@ describe('software renderer', () => {
     expect(pixelRatioFor(true, 1)).toBe(0.75);
     expect(pixelRatioFor(true, 0.5)).toBe(0.5);
     expect(pixelRatioFor(false, 2)).toBe(2);
+  });
+
+  it('keeps the full device ratio for README screenshots (?shots), even on software GL', () => {
+    expect(fullResolution('?shots')).toBe(true);
+    expect(fullResolution('?level=2&shots')).toBe(true);
+    expect(fullResolution('')).toBe(false);
+    expect(fullResolution('?shot')).toBe(false);
   });
 });
 
