@@ -24,6 +24,7 @@ import { createSound, ticksBetween } from './sound';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
 import { firstUnsolved, loadProgress, recordSolve, saveProgress, type Progress } from './progress';
 import { dailySeed, tinkerLevel, withDaily } from './tinker';
+import { decodeSeed, encodeSeed } from './seed';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
 import { goalOf, goalText } from './goal';
@@ -43,8 +44,18 @@ if (!enterButton || !enterNote) throw new Error('Enter MR controls missing');
 
 const world = await World.create(container, createWorldOptions());
 
-// The hand-made levels, then today's daily tinker puzzle after them.
-let levels: readonly Level[] = [...LEVELS, tinkerLevel(dailySeed(new Date()))];
+// ?seed=CODE: a shared tinker puzzle. It takes the daily's slot (the last level) and is the board the title opens on;
+// its best time is saved under its own id (t<seed>), so the daily's and l1-l5's saved times are never touched.
+const seedParam = new URLSearchParams(location.search).get('seed');
+const sharedSeed = seedParam === null ? null : decodeSeed(seedParam);
+const seedNote = document.getElementById('seed-note');
+if (seedParam !== null && sharedSeed === null && seedNote) {
+  seedNote.textContent = 'That puzzle code didn’t work, here’s today’s puzzle';
+  seedNote.hidden = false;
+  setTimeout(() => (seedNote.hidden = true), 8000);
+}
+// The hand-made levels, then today's daily tinker puzzle (or the shared one) after them.
+let levels: readonly Level[] = [...LEVELS, tinkerLevel(sharedSeed ?? dailySeed(new Date()))];
 let levelIds = levels.map((l) => l.id);
 // Saved best times. Reading localStorage itself can throw (storage blocked), so fall back to none.
 const storage = (() => {
@@ -61,7 +72,7 @@ let newBest = false;
 const continueAt = () => firstUnsolved(progress, levelIds);
 const resume = () => levelIds.some((id) => Object.hasOwn(progress.best, id));
 
-let levelIndex = continueAt();
+let levelIndex = sharedSeed === null ? continueAt() : levels.length - 1;
 let level: Level = levels[levelIndex]!;
 tuneForSoftwareGl(world.renderer);
 const built = buildScene(level, world.scene, world.renderer);
@@ -294,10 +305,32 @@ const collectTargets = () => {
 collectTargets();
 
 /** A fresh board for a level: every gear back on the strip, the clock at zero. */
+/** The short code of a tinker level (ids t<seed>); null for a hand-made one. */
+const codeOf = (l: Level): string | null => (/^t\d+$/.test(l.id) ? encodeSeed(Number(l.id.slice(1))) : null);
+/** Copy link on the complete card: idle, copied (back to idle after a moment), or failed (the card shows the link). */
+let copy: { state: 'idle' | 'copied' | 'failed'; link: string | null } = { state: 'idle', link: null };
+const COPIED_MS = 2500;
+async function copyLink(): Promise<void> {
+  const code = codeOf(level);
+  if (!code || world.renderer.xr.isPresenting) return;
+  const link = `${location.origin}${location.pathname}?seed=${code}`;
+  const id = level.id;
+  try {
+    await navigator.clipboard.writeText(link);
+    copy = { state: 'copied', link };
+    setTimeout(() => {
+      if (copy.state === 'copied' && level.id === id) copy = { state: 'idle', link: null };
+    }, COPIED_MS);
+  } catch {
+    copy = { state: 'failed', link };
+  }
+}
+
 function loadLevel(i: number): void {
   levelIndex = i;
   level = levels[i]!;
   newBest = false;
+  copy = { state: 'idle', link: null };
   dropGearEntities();
   built.load(level);
   axleOf = new Map(level.axles.map((a) => [a.id, a]));
@@ -345,7 +378,7 @@ function putBack(): void {
 
 /** On the title or level select, swaps in today's daily if the date has rolled over since it was picked (a session left open past midnight). */
 function rolloverDaily(): void {
-  if (flow.name !== 'title' && flow.name !== 'select') return;
+  if (sharedSeed !== null || (flow.name !== 'title' && flow.name !== 'select')) return;
   const fresh = withDaily(levels, new Date());
   if (fresh === levels) return;
   levels = fresh;
@@ -411,7 +444,8 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   if (by === 'hand' && now - pressedAt < PRESS_GAP_MS) return;
   pressedAt = now;
   const n = /^level-(\d+)$/.exec(id);
-  if (n) send({ type: 'select', level: Number(n[1]) - 1 });
+  if (id === 'copy') void copyLink();
+  else if (n) send({ type: 'select', level: Number(n[1]) - 1 });
   else if (id === 'back') send({ type: 'back', level: continueAt() });
   else send(PRESS[id]!);
 }
@@ -963,7 +997,10 @@ function showPanel(now = performance.now()): void {
   panels.show(waiting ? null : screenOf(flow), {
     level: levelIndex,
     levels: levels.length,
-    daily: true,
+    daily: sharedSeed === null, // a shared puzzle in the last slot is not today's daily: no "Daily" name or tile
+    code: codeOf(level),
+    link: copy.state === 'failed' ? copy.link : null,
+    copy: world.renderer.xr.isPresenting || !codeOf(level) ? undefined : copy.state === 'copied' ? 'Copied' : 'Copy link',
     resume: resume(),
     newBest,
     time: levelClock.seconds,
@@ -1123,6 +1160,15 @@ window.__chrono = Object.freeze({
   get levelIndex() {
     return levelIndex;
   },
+  get seedCode() {
+    return codeOf(level);
+  },
+  get seedNote() {
+    return seedNote && !seedNote.hidden ? seedNote.textContent : null;
+  },
+  get copy() {
+    return { ...copy };
+  },
   get levelTime() {
     return levelClock.seconds;
   },
@@ -1192,7 +1238,8 @@ window.__chrono = Object.freeze({
     // A word's height on screen: its font size, measured upright on the card where it is drawn.
     return panels.labels.map((t) => {
       const [a, b] = [toScreen(panelToWorld(anchor, [t.x, t.y - t.size / 2, 0])), toScreen(panelToWorld(anchor, [t.x, t.y + t.size / 2, 0]))];
-      return { text: t.text, size: t.size, height: Math.hypot(a[0] - b[0], a[1] - b[1]) };
+      const [l, r] = [toScreen(panelToWorld(anchor, [t.x0, t.y, 0])), toScreen(panelToWorld(anchor, [t.x1, t.y, 0]))];
+      return { text: t.text, size: t.size, height: Math.hypot(a[0] - b[0], a[1] - b[1]), y: (a[1] + b[1]) / 2, left: Math.min(l[0], r[0]), right: Math.max(l[0], r[0]) };
     });
   },
   panelCorners,

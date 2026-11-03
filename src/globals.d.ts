@@ -124,7 +124,13 @@ interface ChronoHook {
   /** Live: the card now up (its screen and panel-space size in metres), null when none is shown. */
   readonly card: { readonly screen: 'title' | 'select' | 'hud' | 'complete' | 'paused'; readonly width: number; readonly height: number } | null;
   /** The words on the card now up: text, font size in panel metres, and that size in page pixels as seen now. */
-  labels(): { text: string; size: number; height: number }[];
+  labels(): { text: string; size: number; height: number; y: number; left: number; right: number }[];
+  /** Live: the puzzle code of the loaded level (a tinker level), null for a hand-made one. */
+  readonly seedCode: string | null;
+  /** Live: the note shown for an invalid ?seed= while it is up, else null. */
+  readonly seedNote: string | null;
+  /** Live: the complete card's Copy link; `link` is what was (or would be) copied, null while idle. */
+  readonly copy: { readonly state: 'idle' | 'copied' | 'failed'; readonly link: string | null };
   /** Page pixel positions of the shown panel's four corners (bottom left, bottom right, top left, top right); empty when none is up. */
   panelCorners(): [number, number][];
   /**

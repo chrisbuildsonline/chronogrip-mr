@@ -33,9 +33,9 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
 
 /**
  * `daily`: the last level is today's tinker puzzle. `resume`: a level is solved, so the title offers Continue.
- * `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
+ * `copy`: the label of the Copy link pill on the complete card (absent: no pill). `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
  */
-export type LayoutCtx = { level: number; levels: number; daily?: boolean; resume?: boolean; narrow?: boolean };
+export type LayoutCtx = { level: number; levels: number; daily?: boolean; resume?: boolean; narrow?: boolean; copy?: string };
 
 /** Width of every card on a phone in portrait (outside XR), metres of panel space. */
 export const NARROW_W = 0.3;
@@ -104,6 +104,11 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       const last = ctx.level + 1 >= ctx.levels;
       const items: Parameters<typeof row>[1] = [['next', last ? 'Levels' : 'Next', 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW]];
       if (!last) items.push(['levels', 'Levels', 'secondary', secondaryW]);
+      if (ctx.copy && last) {
+        // The tinker puzzle is always the last level; only it has room for a third pill. On a phone "Copy link" needs a little more than 72 mm, so the primary gives it 8.
+        items[0]![3] = narrow ? 0.092 : primaryW;
+        items.push(['copy', ctx.copy, 'secondary', narrow ? 0.082 : secondaryW]);
+      }
       return { width: narrow ? NARROW_W : 0.35, height: 0.17, buttons: row(low, items) };
     }
     case 'paused':

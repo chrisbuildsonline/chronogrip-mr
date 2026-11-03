@@ -35,6 +35,12 @@ export type PanelCtx = {
   fault?: keyof typeof FAULT_WORDS | null;
   /** A phone in portrait outside XR: the narrow layouts and the phone type scale. */
   narrow?: boolean;
+  /** The puzzle code of the level on the complete card (a tinker level), null for a hand-made one. */
+  code?: string | null;
+  /** The share link shown in place of the code line after the clipboard refused it. */
+  link?: string | null;
+  /** The Copy link pill's label on the complete card; absent where it is not offered (hand-made levels, XR). */
+  copy?: string;
 };
 
 const isDaily = (ctx: PanelCtx, i: number) => ctx.daily && i === ctx.levels - 1;
@@ -47,7 +53,7 @@ function pill(g: Draw, x: number, y: number, w: number, h: number, r = h / 2) {
 }
 
 /** A word or line drawn on the card, for the test hook: its text, canvas position and font size in canvas pixels. */
-type Drawn = { text: string; x: number; y: number; px: number };
+type Drawn = { text: string; x: number; y: number; px: number; x0: number; x1: number };
 /** Collects the card's words while `draw` runs; null otherwise (the hint is not a card). */
 let drawn: Drawn[] | null = null;
 
@@ -58,8 +64,10 @@ function text(g: Draw, s: string, x: number, y: number, f: string, color: string
   g.textBaseline = 'middle';
   g.letterSpacing = `${tracking}px`;
   g.fillText(s, x, y);
+  const w = g.measureText(s).width;
   g.letterSpacing = '0px';
-  drawn?.push({ text: s.trim(), x, y, px: Number(/([\d.]+)px/.exec(f)![1]) });
+  const x0 = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
+  drawn?.push({ text: s.trim(), x, y, px: Number(/([\d.]+)px/.exec(f)![1]), x0, x1: x0 + w });
 }
 
 /** A short tinted status pill centred (or left/right aligned) at x, y; `size` is its text height in mm. */
@@ -199,6 +207,13 @@ function faultLine(g: Draw, kind: keyof typeof FAULT_WORDS, x: number, y: number
   text(g, ` ${rest}`, tx + leadW, y + 1, font(600, size), C.muted, 'left');
 }
 
+/** The share link in muted type, shrunk to fit `room` if it is long. */
+function linkLine(g: Draw, link: string, x: number, y: number, room: number) {
+  g.font = font(600, T.body);
+  const size = T.body * Math.min(1, room / g.measureText(link).width);
+  text(g, link, x, y, font(600, size), C.muted, 'left');
+}
+
 function chevron(g: Draw, left: number, y: number, w: number, h: number, line: number) {
   g.beginPath();
   g.moveTo(left + w, y - h);
@@ -301,6 +316,12 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       text(g, clock(ctx.time), right(0.016), y(0.11), font(700, T.xl), C.ink, 'right');
       // Under the time: the New best pill, or the saved best this run did not beat.
       const best = ctx.best[ctx.level];
+      // Muted, on the row under the heading: the puzzle code, or the link itself once the clipboard refused it.
+      if (ctx.link) {
+        linkLine(g, ctx.link, left(0.016), y(0.08), right(0.016) - left(0.016));
+        break;
+      }
+      if (ctx.code) text(g, `Puzzle code ${ctx.code}`, left(0.016), y(0.08), font(600, T.body), C.muted, 'left');
       if (ctx.newBest) status(g, 'NEW BEST', right(0.016), y(0.08), 'right', T.body * 0.8);
       else if (best != null && best < ctx.time) text(g, `Best ${clock(best)}`, right(0.016), y(0.08), font(600, T.body), C.muted, 'right');
       break;
@@ -353,7 +374,7 @@ export function createPanels() {
   let key = '';
   let current: { screen: Screen; layout: Layout } | null = null;
   /** The words on the card up now, in panel space (metres): centre height y, left/centre x as drawn, font size. */
-  let labels: { text: string; x: number; y: number; size: number }[] = [];
+  let labels: { text: string; x: number; y: number; size: number; x0: number; x1: number }[] = [];
 
   const hintH = 0.03;
   /** Side room between a pill's end and its words, metres. */
@@ -415,7 +436,7 @@ export function createPanels() {
       resize(panel, l.width, l.height, l.height / 2);
       drawn = [];
       draw(panel.g, screen, l, ctx);
-      labels = drawn.map((d) => ({ text: d.text, x: (d.x - MARGIN) / PX - l.width / 2, y: l.height - (d.y - MARGIN) / PX, size: d.px / PX }));
+      labels = drawn.map((d) => ({ text: d.text, x: (d.x - MARGIN) / PX - l.width / 2, y: l.height - (d.y - MARGIN) / PX, size: d.px / PX, x0: (d.x0 - MARGIN) / PX - l.width / 2, x1: (d.x1 - MARGIN) / PX - l.width / 2 }));
       drawn = null;
       panel.tex.needsUpdate = true;
       hint.mesh.position.y = l.height + PILL_GAP + hintH / 2;
