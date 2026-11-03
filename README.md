@@ -6,6 +6,16 @@ A seated mixed-reality clockwork puzzle you play with your bare hands: pinch bra
 
 Built for the [Meta VR Start Developer Competition 2026](https://start-developer-competition-26.devpost.com/). **Track:** Gaming. **Division:** New Experience.
 
+<table>
+  <tr>
+    <td width="33%" valign="top"><img src="docs/title.png" alt="The ChronoGrip title card, with Start and Levels buttons, floating over a wooden tray of brass gears while a translucent ghost hand carries a gear to its axle"><br><sub>The title card floats over the tray. On level 1 a ghost hand shows the first move.</sub></td>
+    <td width="33%" valign="top"><img src="docs/puzzle.png" alt="Level 2 in play: one gear placed, a second gear carried above the board, and amber rings around the two axles it can go on"><br><sub>Carry a gear and the axles it fits pulse with an amber ring.</sub></td>
+    <td width="33%" valign="top"><img src="docs/complete.png" alt="Level 2 complete: four meshed gears on their axles, the regulator dial in its amber band, the brass bird with its wings up, and the complete card showing the time"><br><sub>Calibrated: the train runs, the brass bird flaps and the card shows your time.</sub></td>
+  </tr>
+</table>
+
+*Screenshots from the desktop preview in Chromium, driven by the mouse; in a Quest the same tray sits in front of you in passthrough. `bun run screenshots` takes them again.*
+
 ## What it is and who it is for
 
 ChronoGrip is a small puzzle game for people who are sitting down: on a plane, on a bus, on the couch. Everything sits on a 40 x 30 cm tray in front of you, within arm's reach and inside a comfortable view cone (the tests check every part of every level against the cone in `src/seat.ts`), so you never stand, turn or stretch. You see your real surroundings through passthrough. There are five hand-made levels and a new seeded daily puzzle each day.
@@ -91,6 +101,7 @@ bun run preview     # serve dist/ on http://localhost:4173
 bun run typecheck   # tsc --noEmit
 bun run test        # unit tests (Vitest)
 bun run e2e         # Playwright, both projects; starts its own servers (about 7 minutes on software GL)
+bun run screenshots # retakes the README screenshots in docs/ (not part of e2e)
 ```
 
 Or in Docker, with no browsers or Node tools on the host:
