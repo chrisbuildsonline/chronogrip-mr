@@ -28,7 +28,7 @@ cream deep and 4.6:1 on a hovered tile (tests/unit/palette.test.ts). The colours
 | Number XL (level number, time) | 24 mm | system sans, 700 |
 | Heading | 18 mm | Georgia, serif, 600 |
 | Button | 12.5 mm | system sans, 600 |
-| Body / secondary ("N of 6 solved", tile best times, "Best m:ss", pause line) | 13.5 mm | system sans, 500-700, muted |
+| Body / secondary ("N of 9 solved", HUD goal line, tile best times, "Best m:ss", pause line) | 13.5 mm | system sans, 500-700, muted |
 | Eyebrow | 8.5 mm | system sans, 700, caps, +1 px tracking |
 | Status pill ("Solved", "New best") | 10.8 mm | system sans, 700, caps, amber tint |
 
@@ -55,18 +55,30 @@ Times are m:ss; under 10 s they carry tenths (0:00.4, 0:07.2), truncated, so a q
 | Screen | Size (m) | Layout |
 |---|---|---|
 | Title | 0.34 x 0.15 | eyebrow "A clockwork puzzle"; Display "ChronoGrip"; row: Start (primary 13 cm; "Continue" once anything is solved), Levels |
-| Level select | 0.488 x 0.15 | Heading "Levels" with muted "N of 6 solved"; one row: Back pill, then six 50 x 70 mm tiles (1-5, then "Daily" with an amber top edge). A solved tile shows its best m:ss in muted text and a small amber check |
-| HUD (playing, calibrate) | 0.23 x 0.062 | eyebrow "Level" over Number XL level (or "Daily"); Number XL time; round pause button right |
+| Level select | 0.674 x 0.15 | Heading "Levels" with muted "N of 9 solved"; one row (the panel zone's pitch rules out two): Back pill, then nine 50 x 70 mm tiles (1-8, then "Daily" with an amber top edge); the outer tile sits at 34 degrees yaw, inside the 35 degree cone. A solved tile shows its best m:ss in muted text and a small amber check |
+| HUD (playing, calibrate) | 0.27 x 0.096 | top: the goal line (muted "Turn the marked gear", the drawn turn arrow, ink bold "60 rpm", an amber check once matched); below: eyebrow "Level" over Number XL level (or "Daily"); Number XL time; round pause button right, kept on the bottom row so it is no higher in view |
 | Level complete | 0.35 x 0.17 | amber "Solved" pill; Heading "Level N complete"; Number XL time right, an amber "New best" pill under it when a saved time was beaten, else muted "Best m:ss"; row: Next (primary), Restart, Levels. On the daily: Levels (primary), Restart |
 | Pause | 0.35 x 0.15 | Heading "Paused"; muted "Level N - m:ss"; row: Resume (primary), Restart, Levels |
 
 Progress (best times) is saved in localStorage; the title board is the first unsolved level, so Continue picks up there.
-The daily is a seeded "tinker" puzzle generated from the local date and played as a sixth level.
+The daily is a seeded "tinker" puzzle generated from the local date and played after the eight levels, as a ninth.
 
 The title screen leaves the board live: touching a gear starts the level. Level 1 has no text at all: a translucent
 cream ghost hand loops pinch, carry, drop from the first loose gear to its axle until the player first grabs a gear.
 It shows the back of a right hand from the seat: a palm, four two-joint fingers reaching up the board, a thumb from the
 near side, 78% opaque with an amber Fresnel rim so each finger's edge and the outline read against wood and brass.
+
+## Goal badge (on the board)
+- The target gear is marked by a fine amber ring on the board just outside its teeth (3 mm wide, 4 mm out), under the
+  gears, so meshing neighbours pass over it.
+- Beside it lies an 84 x 32 mm cream pill in the tray plane (so it faces the seat like the board), soft shadow, no border:
+  the drawn turn arrow (an open circle with an arrowhead, ↻ clockwise or ↺ anticlockwise as the player sees the gear) and
+  the rpm, number large in ink, "rpm" smaller in muted on the same baseline. Matched (the live train turns the target the
+  right way within tolerance): the pill turns amber with ink text, the same moment the HUD line gets its amber check.
+- Spot (src/goal.ts): the nearest place round the target gear, a little nearer the player preferred, on the board and
+  clear of every pin, fixed and solution gear, the dial, balance wheel and bird; spots clear of the biggest tray gear on
+  every free axle are tried first. Checked on every level and 120 dailies (tests/unit/goal.test.ts). Two draw calls.
+- The HUD repeats it in words: "Turn the marked gear ↻ 60 rpm".
 
 ## Escapement and automaton (on the board)
 - Near-right corner of the tray, on a bronze plate: the regulator dial (88 mm cream face, brass bezel) and a small brass
@@ -107,7 +119,7 @@ speeds and the bird flaps in time; the complete card shows 2 s later.
   and the room environment (0.75).
 - Contact shadows, no shadow maps: a soft radial disc under every gear (one instanced draw call; a lifted gear's spreads)
   and a wide soft one under the whole tray.
-- Render budget (src/budget.ts): at most 100 draw calls and 60k triangles a frame; level 5 draws 53 calls, 34k triangles.
+- Render budget (src/budget.ts): at most 100 draw calls and 60k triangles a frame; level 5 draws 53 calls, 34k triangles (the goal badge and ring add two calls on every level).
 
 ## Desktop
 The same in-world panels, clicked with the mouse (ray cast). The HTML chrome is only the small serif wordmark (top left)

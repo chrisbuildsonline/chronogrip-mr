@@ -18,7 +18,7 @@ Built for the [Meta VR Start Developer Competition 2026](https://start-developer
 
 ## What it is and who it is for
 
-ChronoGrip is a small puzzle game for people who are sitting down: on a plane, on a bus, on the couch. Everything sits on a 40 x 30 cm tray in front of you, within arm's reach and inside a comfortable view cone (the tests check every part of every level against the cone in `src/seat.ts`), so you never stand, turn or stretch. You see your real surroundings through passthrough. There are five hand-made levels and a new seeded daily puzzle each day.
+ChronoGrip is a small puzzle game for people who are sitting down: on a plane, on a bus, on the couch. Everything sits on a 40 x 30 cm tray in front of you, within arm's reach and inside a comfortable view cone (the tests check every part of every level against the cone in `src/seat.ts`), so you never stand, turn or stretch. You see your real surroundings through passthrough. There are eight hand-made levels and a new seeded daily puzzle each day. Levels 6-8 each need at least four gears placed, with a decoy that fits but turns the wrong way, a train of two compound pairs, and a spare gear that jams the train in an odd loop.
 
 ## Inspiration
 
@@ -31,7 +31,7 @@ A pocket watch felt right. It is small, it sits on your lap, and fixing one is a
 1. Open the live URL and press **Enter MR** (an immersive-ar session in passthrough; hand tracking and plane detection are requested as optional features).
 2. **Tray placement.** For the first 3 seconds the game looks for a detected horizontal surface (a table or tray table) 25-70 cm below your head, within 70 cm ahead and at least 25 cm across. If it finds one, the tray stands on it (with a riser if the surface is low). Otherwise the tray takes the default comfort pose: 32 cm ahead of and 19 cm below your head, tilted 50 degrees towards you. When a table places it, a brass dial ring pulses out from under the tray's rim. Next time you press **Enter MR** the tray comes back to the spot it had (a fainter ring shows it was remembered) instead of searching again; a two-hand recenter moves it and saves the new spot.
 3. **Title card.** A cream card floats just above the board: **Start** (or **Continue** once you have solved something) and **Levels**. Touching a gear on the board also starts the level.
-4. **Place gears.** Loose gears wait on a ledge along the far edge. Pinch one (thumb and index tip together, within 4 cm of the gear) to pick it up, carry it and let go over an axle. While you carry it, the axles it could go on pulse with an amber ring. Released within 2.5 cm of a free axle it snaps on with a click; anywhere else it floats back to the ledge. Connect the driver to the target gear so it turns the right way at the right speed. A loop of gears that cannot turn jams and grinds.
+4. **Place gears.** Loose gears wait on a ledge along the far edge. Pinch one (thumb and index tip together, within 4 cm of the gear) to pick it up, carry it and let go over an axle. While you carry it, the axles it could go on pulse with an amber ring. Released within 2.5 cm of a free axle it snaps on with a click; anywhere else it floats back to the ledge. Connect the driver to the target gear so it turns the right way at the right speed. The target is ringed in amber and a cream badge beside it shows the goal, a turn arrow and the rpm; the HUD says it in words ("Turn the marked gear ↻ 90 rpm"). The badge turns amber when the train matches. A loop of gears that cannot turn jams and grinds.
 5. **Calibrate the escapement.** When the train is right, the level clock stops and the escapement in the near-right corner starts ticking. Pinch the regulator dial and roll your wrist like turning a key: the knob turns one to one with your wrist (160 degrees end to end), clockwise ticks faster, anticlockwise slower, from 1 to 5 ticks a second. Hold the needle in the amber target band (within 10% of the target rate) for 0.8 s.
 6. **Reward.** The gears flash, the train runs at its true speeds, the brass bird on its perch flaps and bobs on every tick, and the complete card shows your time, with **Next**, **Restart** and **Levels** (on the daily: **Levels** and **Restart**).
 
@@ -64,7 +64,7 @@ The same scene and cards run in any desktop browser with WebGL. Where the browse
 - Best times are saved in the browser's localStorage (key `chronogrip.progress.v1`); corrupt or blocked storage starts clean.
 - The tray's spot in MR is saved under `chronogrip.tray.v1`; a corrupt, old or out-of-reach value is ignored and the game looks for a table as usual.
 - The title card says **Continue** once any level is solved, and it starts the first level you have not solved.
-- **Levels** shows six tiles: levels 1-5 and **Daily**. Solved tiles show your best time and a check. Beating a saved time shows **New best**.
+- **Levels** shows nine tiles: levels 1-8 and **Daily**. Solved tiles show your best time and a check. Beating a saved time shows **New best**.
 - The **Daily** is a puzzle generated from today's local date: the same for everyone on a given day, different the next. If the game is left open past midnight, the new daily swaps in the next time you are on the title or level select.
 
 ## Testing it (for judges)
@@ -121,7 +121,7 @@ That serves the production build at http://localhost:4173 (`bun run docker:build
 - **preview**: the production build on port 4173, no emulator, mouse only. Page load with a clean console, rendering, drag-and-drop gears, hover hints, the level flow, calibration, saved progress and the daily, sound, and the render budget on every level.
 - **dev**: the dev server on port 5174 with the IWER emulator posing as a Quest 3. Entering the XR session, the default tray pose, the hands hint, pinch grab and drop, head gaze and hand glow, two-hand recenter, poking card buttons, pause from the headset menu and on session end; and a table placing the tray with its ring, the tray coming back to the same spot after a reload (pinned to the emulator's room, and from localStorage alone when the room pin cannot be restored), a recenter overwriting it, and the hand occluders following the joints.
 
-The unit tests cover the gear geometry, the train solver, the levels, tray placement, the regulator, the flow (including Given/When/Then acceptance tests), saved progress and the daily generator, with fuzz tests for the gear geometry, the train solver and level parsing.
+The unit tests cover the gear geometry, the train solver, the levels (with an exhaustive search proving levels 6-8 cannot be solved with three gears or fewer), the goal badge, tray placement, the regulator, the flow (including Given/When/Then acceptance tests), saved progress and the daily generator, with fuzz tests for the gear geometry, the train solver and level parsing.
 
 Deploys: `.github/workflows/deploy.yml` typechecks, runs the unit tests, builds and publishes `dist/` to GitHub Pages on every push to `main` (the repo's Pages source must be set to "GitHub Actions"). The build uses relative asset paths, so it works under `/chronogrip-mr/`.
 
@@ -150,7 +150,7 @@ ChronoGrip is a web app: TypeScript, IWSDK (`@iwsdk/core`, the Immersive Web SDK
 | `seat.ts` | Seated layout, comfort cone, tray coordinates |
 | `gear.ts` | Involute spur gear outlines generated in code, extruded into meshes |
 | `train.ts` | Deterministic gear-train solver: speeds, directions, jams, collisions |
-| `levels.ts`, `tinker.ts` | The five levels and the seeded daily generator |
+| `levels.ts`, `tinker.ts` | The eight levels and the seeded daily generator |
 | `grab.ts`, `hover.ts` | Pick and snap rules; gaze, hand glow and valid-axle hints |
 | `escapement.ts`, `clockwork.ts` | The regulator (wrist twist to tick rate); the dial, balance wheel and bird |
 | `flow.ts`, `progress.ts` | Title, play, calibrate, complete, pause, level select; level clock; saved best times |
