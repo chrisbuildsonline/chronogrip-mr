@@ -99,6 +99,10 @@ interface ChronoHook {
    * bounding box corners) and the card now up; null when not shown.
    */
   viewBoxes(): Record<'board' | 'dial' | 'bird' | 'card', [number, number, number, number] | null>;
+  /** Page-pixel box [x0, y0, x1, y1] round the ghost hand's visible meshes (and anything it carries); null while it is hidden. */
+  ghostBox(): [number, number, number, number] | null;
+  /** Page-pixel box [x0, y0, x1, y1] round the regulator's cream dial face alone. */
+  dialFaceBox(): [number, number, number, number] | null;
   /** Live: the camera's position (the desktop preview eye outside XR). */
   readonly cameraAt: [number, number, number];
   /** Live: true while the desktop camera eases to a new fit (a level or card change on a narrow window). */

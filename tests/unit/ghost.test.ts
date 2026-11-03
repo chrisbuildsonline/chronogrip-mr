@@ -38,12 +38,14 @@ describe('ghost twist loop', () => {
   it('comes down onto the knob, pinches, rolls the wrist the way to turn, lets go and fades', () => {
     const start = ghostTwistAt(GHOST_TWIST_S * 0.05, knob, 1);
     expect(start.pinch).toBe(0);
-    expect(start.roll).toBe(0);
+    // It starts turned half a radian against the twist and ends half a radian past square, so the forearm swings half as far each way.
+    expect(start.roll).toBeCloseTo(-0.5);
     const turned = ghostTwistAt(GHOST_TWIST_S * 0.65, knob, 1);
     expect(turned.pos[0]).toBeCloseTo(knob[0]);
     expect(turned.pos[1]).toBeCloseTo(knob[1]);
     expect(turned.pinch).toBe(1);
-    expect(turned.roll).toBeGreaterThan(0.5);
+    expect(turned.roll).toBeGreaterThan(0.4);
+    expect(turned.roll! - start.roll!).toBeGreaterThan(0.9);
     expect(turned.carrying).toBe(false);
     expect(ghostTwistAt(GHOST_TWIST_S * 0.65, knob, -1).roll).toBeCloseTo(-turned.roll!);
     const done = ghostTwistAt(GHOST_TWIST_S * 0.9, knob, 1);

@@ -19,7 +19,7 @@ import { easeOut, tweenAt } from './tween';
 import type { GearSpin } from './train';
 import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
 import { createSound, ticksBetween } from './sound';
-import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, createAutomaton, createEscapement } from './clockwork';
+import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
 import { firstUnsolved, loadProgress, recordSolve, saveProgress, type Progress } from './progress';
 import { dailySeed, tinkerLevel, withDaily } from './tinker';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
@@ -516,6 +516,9 @@ const mouseUp = () => {
 };
 canvas.addEventListener('pointerup', mouseUp);
 canvas.addEventListener('pointercancel', mouseUp);
+// The note's "Drag to look around the tray." has done its job at the first drag (orbit, gear or knob): it fades for good.
+const lookNote = enterNote.querySelector('.cg-more');
+canvas.addEventListener('pointermove', (e) => e.buttons && lookNote?.classList.add('gone'));
 
 // Pause whenever the player is pulled away: tab hidden, headset menu or headset off, session over.
 document.addEventListener('visibilitychange', () => {
@@ -744,8 +747,7 @@ world.scene.onBeforeRender = () => {
   const [from, to] = firstMove();
   ghost.root.visible = ghostOn();
   if (ghostTwist()) {
-    const s = ghostTwistAt(now / 1000, DIAL_AT, settingOf(regulator.target) >= regulator.setting ? 1 : -1);
-    ghost.update({ ...s, pos: [s.pos[0], s.pos[1], s.pos[2] + KNOB_TOP - 0.006] });
+    ghost.update(ghostTwistAt(now / 1000, TWIST_CUE_AT, settingOf(regulator.target) >= regulator.setting ? 1 : -1));
   } else if (ghostOn()) {
     const slot = slots.get(from)!;
     const axle = axleOf.get(to)!;
@@ -953,6 +955,8 @@ window.__chrono = Object.freeze({
     const board = built.tray.children.filter((c): c is Mesh => c instanceof Mesh && c.geometry instanceof BoxGeometry);
     return { board: screenBox(board), dial: screenBox(meshesIn(escapement.root)), bird: screenBox(meshesIn(automaton.root)), card: boxOf(panelCorners()) };
   },
+  ghostBox: () => screenBox(meshesIn(ghost.root)),
+  dialFaceBox: () => screenBox([escapement.face]),
   get cameraAt() {
     return world.camera.position.toArray();
   },

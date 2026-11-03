@@ -1,5 +1,6 @@
-import { CapsuleGeometry, Group, Mesh, MeshStandardMaterial, Vector3, type BufferGeometry } from 'three';
+import { BoxGeometry, CapsuleGeometry, Group, Mesh, MeshStandardMaterial, Vector3, type BufferGeometry } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { gearGeometry } from './gear';
 import { easeOut } from './tween';
 import { trayLocal, type Vec3 } from './seat';
 
@@ -9,7 +10,7 @@ const GRIP = 0.012;
 const HOVER = 0.07;
 const ARC = 0.05;
 
-/** One loop of the twist cue: come down onto the knob, pinch, roll the wrist, let go, lift off. */
+/** One loop of the twist cue: come down onto the (ghost) knob, pinch, roll the wrist, let go, lift off. */
 export const GHOST_TWIST_S = 2.8;
 /** How far the cue rolls the wrist, radians. */
 const TWIST_ROLL = 1;
@@ -38,7 +39,8 @@ export function ghostTwistAt(t: number, at: readonly [number, number], dir: 1 | 
   const u = (((t % GHOST_TWIST_S) + GHOST_TWIST_S) % GHOST_TWIST_S) / GHOST_TWIST_S;
   const lift = u < 0.2 ? HOVER - (HOVER - GRIP) * easeOut(span(u, 0, 0.2)) : GRIP + (HOVER - GRIP) * easeOut(span(u, 0.8, 0.95));
   const pinch = u < 0.2 ? 0 : u < 0.28 ? span(u, 0.2, 0.28) : u < 0.74 ? 1 : 1 - span(u, 0.74, 0.8);
-  const roll = dir * TWIST_ROLL * (u < 0.8 ? easeOut(span(u, 0.3, 0.66)) : 1);
+  // Centred on square: it starts turned half the roll against the twist, so the forearm swings half as far either way.
+  const roll = dir * TWIST_ROLL * ((u < 0.8 ? easeOut(span(u, 0.3, 0.66)) : 1) - 0.5);
   const opacity = u < 0.1 ? span(u, 0, 0.1) : u < 0.8 ? 1 : 1 - span(u, 0.8, 1);
   return { pos: [at[0], at[1], lift], pinch, opacity, carrying: false, roll };
 }
@@ -63,7 +65,7 @@ function ghostSkin() {
  * Seen from the seat it shows the back of the hand: a palm, four jointed fingers reaching up the board and a thumb
  * from the near side. A pinch closes the tips of thumb and index on the origin.
  */
-export function createGhostHand(gearGeometry: BufferGeometry) {
+export function createGhostHand(carried: BufferGeometry) {
   const skin = ghostSkin();
   const ghostBrass = new MeshStandardMaterial({ color: 0xd9b26a, emissive: 0xd99a2b, emissiveIntensity: 0.4, metalness: 0.6, roughness: 0.4, transparent: true, depthWrite: false });
   const hand = new Group();
@@ -106,9 +108,18 @@ export function createGhostHand(gearGeometry: BufferGeometry) {
   const thumb = finger(0.0086, knuckle.thumb, v(-0.016, 0.026, 0.034), v(0, 0, 0.022));
   const [joint, tip] = [new Vector3(), new Vector3()];
 
-  const gear = new Mesh(gearGeometry, ghostBrass);
+  const gear = new Mesh(carried, ghostBrass);
   gear.rotation.x = -Math.PI / 2;
   root.add(gear);
+
+  // The twist cue mimes it beside the dial, off its face, on a ghost of the knob (knurl and ridge) that stays at grip height.
+  const knob = new Group();
+  const knurl = new Mesh(gearGeometry({ module: 0.0008, teeth: 30, thickness: 0.009 }), ghostBrass);
+  knurl.rotation.x = -Math.PI / 2;
+  const ridge = new Mesh(new BoxGeometry(0.0026, 0.0024, 0.018), ghostBrass);
+  ridge.position.set(0, 0.0056, -0.002);
+  knob.add(knurl, ridge);
+  root.add(knob);
 
   return {
     root,
@@ -122,6 +133,9 @@ export function createGhostHand(gearGeometry: BufferGeometry) {
       gear.visible = s.carrying;
       gear.position.y = -0.004;
       hand.rotation.y = -(s.roll ?? 0);
+      knob.visible = s.roll !== undefined;
+      knob.position.y = GRIP - s.pos[2] - 0.0015;
+      knob.rotation.y = hand.rotation.y;
       const gap = 0.004 + 0.018 * (1 - s.pinch);
       index(joint.set(0.005, 0.036, -0.004 - 0.4 * gap), tip.set(0, 0, -gap));
       thumb(joint.set(-0.016, 0.026, 0.026 + 0.4 * gap), tip.set(0, 0, gap));

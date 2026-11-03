@@ -47,6 +47,11 @@ export const PROPS: readonly { x: number; y: number; r: number }[] = [
   { x: BALANCE_AT[0], y: BALANCE_AT[1], r: 0.03 },
   { x: BIRD_AT[0], y: BIRD_AT[1], r: 0.03 },
 ];
+/**
+ * Where the level 1 ghost hand mimes the twist (level metres): just off the tray's right edge beside the escapement plate,
+ * below the bird, so the hand never covers the dial face it is teaching.
+ */
+export const TWIST_CUE_AT = [0.235, -0.085] as const;
 /** Height of the knob's top above the tray surface; a pinch is aimed here. */
 export const KNOB_TOP = 0.019;
 /** A pinch (or a mouse press) this close to the knob grabs it: the whole dial is the target, metres. */
@@ -221,6 +226,8 @@ export function createEscapement() {
 
   return {
     root,
+    /** The cream dial face, for tests that keep things off it. */
+    face: faceMesh,
     update(v: EscapementView) {
       knob.rotation.y = -angleOf(v.setting);
       balance.rotation.y = v.ticking ? 2.3 * Math.sin(Math.PI * v.phase) : 0;

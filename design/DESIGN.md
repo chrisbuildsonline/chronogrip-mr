@@ -91,7 +91,11 @@ near side, 78% opaque with an amber Fresnel rim so each finger's edge and the ou
   deeper amber and at once shows a quarter filled in full amber, filling the rest over the 0.8 s hold; a progress ring
   round the knob appears with it and sweeps once round over the hold, so the hold reads even with the needle over the arc.
 - Desktop: press the knob and drag sideways (right = faster); the cursor shows a horizontal resize arrow over it.
-- Level 1: the ghost hand comes down onto the knob, pinches and rolls its wrist the way to turn, until the first grab.
+- Level 1: until the knob is first turned, the ghost hand mimes the twist beside the dial, never over it: just off the
+  tray's right edge, level with the dial and under the bird (`TWIST_CUE_AT`), it comes down onto a translucent ghost of
+  the knob (knurl and ridge), pinches and rolls its wrist the way to turn. The roll is centred on square (half a radian
+  against, half past), so the forearm swings half as far either way. Its screen box stays clear of the dial face all loop
+  at 1440 x 900, 1280 x 720 and 375 x 812 (tests/e2e/hints.spec.ts).
 - Automaton: a brass bird (1.6x its 6 cm model) on a perch, on a bronze bracket off the tray's right edge, standing upright
   whatever the tray's tilt. Upright on the tilted tray it leans up the board, so it sits off the board: on it, its head
   hung over the parts strip and its body among the gears. It must stay clear of every pin, gear and strip slot on every
@@ -125,6 +129,10 @@ speeds and the bird flaps in time; the complete card shows 2 s later.
 The same in-world panels, clicked with the mouse (ray cast). The HTML chrome is only the small serif wordmark (top left)
 and the Enter MR pill with its note (top right, so it never covers the board), in the same palette, over a warm walnut
 radial vignette that lets the tray's shadow read.
+
+The note's second sentence, "Drag to look around the tray.", fades out (0.4 s) at the player's first drag on the canvas
+(an orbit, a gear or the knob) and stays gone for the session; once faded it gives up its room, so "Mixed reality needs
+a Quest browser." sits flush right in two lines, as on a phone.
 
 Loading: from first paint (plain markup and CSS in index.html, before the 5.5 MB SDK chunk arrives) a cream card in the
 middle: two brass gears that tick one tooth per half second and rest, the eyebrow, the Display wordmark and a muted
