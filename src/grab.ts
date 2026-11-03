@@ -7,6 +7,43 @@ export const GRAB_M = 0.04;
 /** A released gear within this distance of a free axle snaps onto it, metres. */
 export const SNAP_M = 0.025;
 
+export type Hand = 'left' | 'right';
+/** 'iwsdk': IWSDK's GrabSystem picks gears up (the default). 'pinch': our raw-joint pinch does (`?grab=pinch`). */
+export type GrabMode = 'iwsdk' | 'pinch';
+/** Frames the raw pinch waits for IWSDK's grab to arrive before it picks the gear up itself. */
+export const GRAB_WAIT_FRAMES = 4;
+
+export const grabModeOf = (search: string): GrabMode => (new URLSearchParams(search).get('grab') === 'pinch' ? 'pinch' : 'iwsdk');
+
+/** Who picks up the gear a pinch is on: the raw path now, it keeps waiting, or it skips because IWSDK has grabbed it. */
+export function pinchOwner(mode: GrabMode, framesWaited: number, grabbed: boolean): 'raw' | 'wait' | 'skip' {
+  if (mode === 'pinch') return 'raw';
+  if (grabbed) return 'skip';
+  return framesWaited >= GRAB_WAIT_FRAMES ? 'raw' : 'wait';
+}
+
+/** The hand carrying a gear: the one IWSDK says, else the nearest pinching hand to the gear, else null. */
+export function holderHand(
+  iwsdk: Hand | null,
+  pinching: Record<Hand, boolean>,
+  points: Record<Hand, Vec3 | null>,
+  at: Vec3,
+): Hand | null {
+  if (iwsdk) return iwsdk;
+  let best: Hand | null = null;
+  let bestD = Infinity;
+  for (const h of ['left', 'right'] as const) {
+    const p = points[h];
+    if (!pinching[h] || !p) continue;
+    const d = Math.hypot(p[0] - at[0], p[1] - at[1], p[2] - at[2]);
+    if (d < bestD) {
+      best = h;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
 /** Nearest candidate to a tray-space point [x, y, lift], or null if none is within `maxM`. */
 export function pickGear(point: Vec3, candidates: readonly { id: string; x: number; y: number; lift: number }[], maxM = GRAB_M): string | null {
   let best: string | null = null;

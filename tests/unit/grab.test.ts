@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { occupiedAt, pickGear, snapAxle } from '../../src/grab';
+import { GRAB_WAIT_FRAMES, grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle } from '../../src/grab';
 import { LEVELS } from '../../src/levels';
 import { TRAY_POSE, layerLift, trayToWorld, worldToTray, type TrayPose, type Vec3 } from '../../src/seat';
 
@@ -48,6 +48,50 @@ describe('occupiedAt', () => {
   it('ignores the gear being moved', () => {
     expect(occupiedAt(l1, { br: 'a1' }, 'br')).toEqual(occupiedAt(l1, {}));
     expect(occupiedAt(l1, { br: 'a1' })).toContainEqual({ axle: 'a1', layer: 0 });
+  });
+});
+
+describe('grabModeOf', () => {
+  it('uses IWSDK grabbing unless the URL asks for the raw pinch', () => {
+    expect(grabModeOf('')).toBe('iwsdk');
+    expect(grabModeOf('?level=2')).toBe('iwsdk');
+    expect(grabModeOf('?grab=pinch')).toBe('pinch');
+    expect(grabModeOf('?x=1&grab=pinch')).toBe('pinch');
+    expect(grabModeOf('?grab=iwsdk')).toBe('iwsdk');
+    expect(grabModeOf('?grab=other')).toBe('iwsdk');
+  });
+});
+
+describe('pinchOwner', () => {
+  it('the raw path owns every pinch in pinch mode, at once', () => {
+    expect(pinchOwner('pinch', 0, false)).toBe('raw');
+    expect(pinchOwner('pinch', 0, true)).toBe('raw');
+  });
+  it('in iwsdk mode the raw path waits, then skips if IWSDK grabbed', () => {
+    expect(pinchOwner('iwsdk', 0, false)).toBe('wait');
+    expect(pinchOwner('iwsdk', GRAB_WAIT_FRAMES - 1, false)).toBe('wait');
+    expect(pinchOwner('iwsdk', 0, true)).toBe('skip');
+    expect(pinchOwner('iwsdk', GRAB_WAIT_FRAMES + 3, true)).toBe('skip');
+  });
+  it('in iwsdk mode the raw path takes over once IWSDK stays silent', () => {
+    expect(pinchOwner('iwsdk', GRAB_WAIT_FRAMES, false)).toBe('raw');
+  });
+});
+
+describe('holderHand', () => {
+  const pts = { left: [0, 0, 0] as Vec3, right: [0.2, 0, 0] as Vec3 };
+  it('trusts the hand IWSDK reports', () => {
+    expect(holderHand('left', { left: false, right: true }, pts, [0.2, 0, 0])).toBe('left');
+    expect(holderHand('right', { left: true, right: false }, pts, [0, 0, 0])).toBe('right');
+  });
+  it('falls back to the nearest pinching hand', () => {
+    expect(holderHand(null, { left: true, right: true }, pts, [0.15, 0, 0])).toBe('right');
+    expect(holderHand(null, { left: true, right: true }, pts, [0.01, 0, 0])).toBe('left');
+    expect(holderHand(null, { left: true, right: false }, pts, [0.2, 0, 0])).toBe('left');
+  });
+  it('is null when no hand pinches', () => {
+    expect(holderHand(null, { left: false, right: false }, pts, [0, 0, 0])).toBeNull();
+    expect(holderHand(null, { left: true, right: true }, { left: null, right: null }, [0, 0, 0])).toBeNull();
   });
 });
 
