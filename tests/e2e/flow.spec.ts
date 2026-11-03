@@ -33,7 +33,6 @@ async function place(page: Page, gear: string, axle: string) {
 }
 
 test('desktop: title, start, solve level 1, complete card, next loads level 2', async ({ page }) => {
-  test.setTimeout(90_000); // five screenshots on software GL
   const errors = await open(page);
   expect(await page.evaluate(() => window.__chrono!.flow)).toBe('title');
   expect(await page.evaluate(() => window.__chrono!.ghostHand)).toBe(true);
@@ -75,7 +74,6 @@ test('desktop: title, start, solve level 1, complete card, next loads level 2', 
 });
 
 test('desktop: level select reaches level 3; a hidden tab pauses and resume keeps the board', async ({ page }) => {
-  test.setTimeout(90_000);
   const errors = await open(page);
   await click(page, 'levels');
   await page.waitForFunction(() => window.__chrono!.flow === 'select');

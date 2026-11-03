@@ -76,7 +76,6 @@ async function movePinchTo(page: Page, target: Vec3) {
 }
 
 test('dev server: head gaze, hand glow and valid-axle pulses', async ({ page }) => {
-  test.setTimeout(90_000);
   const errors = await enterWithHands(page);
   expect(await page.evaluate(() => window.__chrono!.validAxles)).toEqual([]);
 

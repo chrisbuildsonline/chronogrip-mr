@@ -1,5 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
+// No @types/node in this project; only the env is read from Node.
+declare const process: { env: Record<string, string | undefined> };
+
 const launchOptions = {
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 };
@@ -7,10 +10,10 @@ const launchOptions = {
 export default defineConfig({
   testDir: 'tests/e2e',
   outputDir: 'test-results/artifacts',
-  // ponytail: software GL is CPU-bound; 10 workers starve each other into timeouts (fails before and after sound). Raise if CI has a GPU.
-  workers: 4,
-  // ponytail: cold servers plus software GL push default-30s specs over (home, grab); 90s matches the per-test budgets. Lower it if CI has a GPU.
-  timeout: 90_000,
+  // ponytail: software GL is CPU-bound; 10 workers starve each other into timeouts. Ceiling 4; on CI one worker per 2 CPUs. E2E_WORKERS overrides.
+  workers: Number(process.env.E2E_WORKERS) || (process.env.CI ? Math.min(4, Math.max(1, Math.floor(navigator.hardwareConcurrency / 2))) : 4),
+  // ponytail: cold servers plus software GL push default-30s specs over; 120s on a host, 240s on CI. Specs must not override it. Lower it if CI has a GPU.
+  timeout: process.env.CI ? 240_000 : 120_000,
   reporter: 'list',
   projects: [
     // Production build, no emulator.

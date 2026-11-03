@@ -37,14 +37,12 @@ const pinch = (page: Page, left: number, right: number) =>
   );
 
 test('dev server: the hands hint hides when hands appear', async ({ page }) => {
-  test.setTimeout(90_000); // software GL makes screenshots slow in XR
   const errors = await enterWithHands(page);
   await page.screenshot({ path: 'test-results/f6-dev-hands.png' });
   expect(errors).toEqual([]);
 });
 
 test('dev server: pinching both hands for a second recenters the tray once; one hand does not', async ({ page }) => {
-  test.setTimeout(90_000); // the hold is timed in XR frame time, which lags wall-clock on software GL
   const errors = await enterWithHands(page);
   expect(await page.evaluate(() => window.__chrono?.recenters)).toBe(0);
 

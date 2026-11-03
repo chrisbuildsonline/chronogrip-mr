@@ -44,7 +44,6 @@ async function place(page: Page, gear: string, axle: string) {
 }
 
 test('desktop: a solved level is saved, survives a reload and shows its best time on its tile', async ({ page }) => {
-  test.setTimeout(90_000);
   const errors = await open(page);
   expect(await page.evaluate(() => window.__chrono!.progress)).toEqual({ best: {} });
   expect(await label(page, 'start')).toBe('Start');
@@ -101,7 +100,6 @@ test('desktop: with level 1 solved the title reads Continue and starts level 2; 
 });
 
 test('desktop: beating a saved time shows New best and saves the lower time', async ({ page }) => {
-  test.setTimeout(90_000);
   await seed(page, JSON.stringify({ best: { l1: 999 } }));
   const errors = await open(page);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l2');
@@ -123,7 +121,6 @@ test('desktop: beating a saved time shows New best and saves the lower time', as
 });
 
 test("desktop: the Daily tile plays today's tinker puzzle through to its complete card", async ({ page }) => {
-  test.setTimeout(120_000);
   const daily = tinkerLevel(dailySeed(new Date()));
   const errors = await open(page);
   await click(page, 'levels');

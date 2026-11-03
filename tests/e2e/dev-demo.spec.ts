@@ -7,7 +7,6 @@ const shot = (page: import('@playwright/test').Page, name: string) => page.scree
 const audio = (page: import('@playwright/test').Page) => page.evaluate(() => ({ ...window.__chrono!.audio }));
 
 test('demo story (headset): seated, pinch the escapement gear in passthrough, twist to calibrate, the clockwork ticks to life', async ({ page }) => {
-  test.setTimeout(120_000); // software GL
   let errors: string[] = [];
   const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
   let clicksBefore = 0;

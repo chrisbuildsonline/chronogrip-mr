@@ -64,7 +64,6 @@ async function pinchAt(page: Page, target: Vec3) {
 const near = (a: readonly number[], b: readonly number[], m: number) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!) < m;
 
 test('dev server: pinching a loose gear carries it to its axle and solves level 1', async ({ page }) => {
-  test.setTimeout(90_000); // software GL makes screenshots slow in XR
   const errors = await enterWithHands(page);
   expect(await page.evaluate(() => window.__chrono!.held)).toBeNull();
   expect(await page.evaluate(() => window.__chrono!.solved)).toBe(false);
@@ -99,7 +98,6 @@ test('dev server: pinching a loose gear carries it to its axle and solves level 
 });
 
 test('dev server: releasing far from any axle floats the gear back to the strip', async ({ page }) => {
-  test.setTimeout(90_000);
   const errors = await enterWithHands(page);
   const start = await gearAt(page);
   await pinchAt(page, start);

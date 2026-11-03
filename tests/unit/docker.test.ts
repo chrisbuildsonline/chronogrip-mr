@@ -9,6 +9,10 @@ import pkg from '../../package.json?raw';
 const manifest = JSON.parse(pkg) as { scripts: Record<string, string>; devDependencies: Record<string, string> };
 
 describe('docker image', () => {
+  it('sets CI so the e2e run picks the slow-machine settings', () => {
+    expect(dockerfile).toMatch(/^ENV CI=1$/m);
+  });
+
   it('uses the Playwright image that matches @playwright/test exactly', () => {
     const version = manifest.devDependencies['@playwright/test']!;
     expect(version).toMatch(/^\d+\.\d+\.\d+$/); // pinned, no range

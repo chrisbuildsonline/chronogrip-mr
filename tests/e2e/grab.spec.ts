@@ -27,7 +27,6 @@ async function drag(page: Page, from: readonly [number, number], to: readonly [n
 }
 
 test('desktop: dragging the loose gear onto its axle snaps it and solves the level', async ({ page }) => {
-  test.setTimeout(90_000); // software GL under parallel workers
   const errors = await open(page);
   const from = await screen(page, 'gears', gearId);
   const to = await screen(page, 'axles', axleId);

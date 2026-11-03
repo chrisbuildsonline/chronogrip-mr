@@ -8,7 +8,6 @@ const screen = (page: Page, kind: 'gears' | 'axles', id: string) =>
   page.evaluate(([k, i]) => window.__chrono!.toScreen(window.__chrono![k as 'gears' | 'axles'][i!]!), [kind, id] as const);
 
 test('demo story (desktop): click Start, drag the escapement gear onto its axle, drag the regulator, the clockwork ticks to life', async ({ page }) => {
-  test.setTimeout(90_000);
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(`console: ${m.text()}`);

@@ -4,6 +4,9 @@ FROM mcr.microsoft.com/playwright:v1.64.1-noble
 
 RUN npm install -g bun@1.4.2
 
+# CI makes playwright.config.ts pick the slow-machine settings (fewer workers, longer timeouts).
+ENV CI=1
+
 WORKDIR /app
 RUN chown pwuser:pwuser /app
 USER pwuser

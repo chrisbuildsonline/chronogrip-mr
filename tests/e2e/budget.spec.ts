@@ -11,7 +11,6 @@ async function click(page: Page, id: string) {
 const frames = (page: Page) => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 
 test('every level and the daily stay inside the render budget while playing', async ({ page }) => {
-  test.setTimeout(120_000);
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(`console: ${m.text()}`);

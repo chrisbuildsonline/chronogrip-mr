@@ -8,7 +8,6 @@ const screen = (page: Page, kind: 'gears' | 'axles', id: string) =>
   page.evaluate(([k, i]) => window.__chrono!.toScreen(window.__chrono![k as 'gears' | 'axles'][i!]!), [kind, id] as const);
 
 test('desktop: sound unlocks on the first click, a snap clicks, calibrating ticks, calibrated chimes', async ({ page }) => {
-  test.setTimeout(90_000);
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(`console: ${m.text()}`);
@@ -56,7 +55,6 @@ async function click(page: Page, id: string) {
 }
 
 test('desktop: a gear that jams the train snaps with a click and grinds', async ({ page }) => {
-  test.setTimeout(90_000);
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(`console: ${m.text()}`);
@@ -85,7 +83,6 @@ test('desktop: a gear that jams the train snaps with a click and grinds', async 
 });
 
 test('desktop: pausing suspends the audio and resuming brings it back', async ({ page }) => {
-  test.setTimeout(60_000);
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(`console: ${m.text()}`);

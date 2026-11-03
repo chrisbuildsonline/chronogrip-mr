@@ -4,7 +4,6 @@ import { twistRight, twistToTarget } from './calibrate';
 import { CLEAR, axleAt, carry, device, enterWithHands, flow, gearAt, movePinchTo, nudge, pinch, pinchAt, poke, type Device } from './hands';
 
 test('dev server: poke Start, the ghost hand shows until the first grab, solve level 1 by hand, Next', async ({ page }) => {
-  test.setTimeout(90_000);
   const errors = await enterWithHands(page);
   const t0 = Date.now();
   expect(await flow(page)).toBe('title');
@@ -56,7 +55,6 @@ test('dev server: poke Start, the ghost hand shows until the first grab, solve l
 });
 
 test('dev server: the headset menu pauses mid-level; the board and the clock hold until Resume; session end pauses', async ({ page }) => {
-  test.setTimeout(90_000);
   const errors = await enterWithHands(page);
   await poke(page, 'levels');
   await page.waitForFunction(() => window.__chrono!.flow === 'select', undefined, { timeout: 10_000 });
@@ -103,7 +101,6 @@ test('dev server: the headset menu pauses mid-level; the board and the clock hol
 });
 
 test('dev server: a two-hand pinch while one hand carries a gear does not recenter', async ({ page }) => {
-  test.setTimeout(90_000);
   const errors = await enterWithHands(page);
   const [gear] = Object.entries(LEVELS[0]!.solution)[0]!;
   await pinchAt(page, await gearAt(page, gear));

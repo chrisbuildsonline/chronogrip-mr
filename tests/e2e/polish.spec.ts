@@ -63,7 +63,6 @@ async function inFrame(page: Page, screenName: string) {
 }
 
 test('desktop 1280x720: every panel in frame, a real time on a quick solve, shots of each screen, no console errors', async ({ page }) => {
-  test.setTimeout(120_000);
   await page.setViewportSize({ width: 1280, height: 720 });
   const errors: string[] = [];
   page.on('console', (m) => {

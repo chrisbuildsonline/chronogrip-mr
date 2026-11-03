@@ -33,7 +33,6 @@ const setVisibility = (page: Page, state: 'hidden' | 'visible') =>
   }, state);
 
 test('desktop: a solved train waits for the escapement; drag the regulator into the band, the bird runs, then the complete card', async ({ page }) => {
-  test.setTimeout(90_000);
   const errors = await open(page);
   const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
   await place(page, gear, axle);
