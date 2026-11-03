@@ -171,3 +171,13 @@ the bird and the card on show fit with 12 px to spare, and anything reaching a t
 Enter MR (src/fit.ts). It never comes nearer than the tuned view, so landscape is unchanged. The wide level select needs
 more room, so a phone eases back 0.4 s for it and in again after. Under 500 px the header tightens to 16 px from the
 edges and the note keeps only "Mixed reality needs a Quest browser." in two balanced lines (tests/e2e/fit.spec.ts).
+
+Phone cards (under 500 px wide and taller than 1.4x the width, outside XR): not a shrunk desktop card but a bottom sheet,
+one job per screen with the primary pill under the thumb. Every card is 0.30 m of panel space drawn 16 px in from the
+sides and 16 px over the bottom edge (343 px wide at 375, so about 1.14 px per mm), held in front of the camera whatever
+the orbit. The same screens and buttons in one phone width: title Start 150 mm, Levels 106 mm; pause and complete a
+100 mm primary and 72 mm secondaries; the HUD as wide as the others. Level select is a 5-column grid of 44 x 60 mm cells
+in two rows: Back (chevron over the word, tile corners) top left where a phone keeps it, then 1-8 and Daily. Buttons and
+eyebrows grow to 14 mm and 11 mm, so every button is 44 px or more and every word 12 px or more on screen
+(tests/e2e/phone.spec.ts). The board fits the room between the header and the tallest card of its kind, and the view is
+raised (a camera view offset) to centre it there, so it holds still from title to HUD to complete.
