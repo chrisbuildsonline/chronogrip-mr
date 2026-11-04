@@ -531,16 +531,17 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       // A shared puzzle reads "SHARED" over "Puzzle", and the time moves over to make room.
       // Random has no column split: one eyebrow line, "RANDOM · HARD", with the time under it at the left, so the difficulty is
       // never squeezed beside the time.
-      const timeX = random ? 0.016 : shared ? 0.08 : ctx.stage ? 0.092 : 0.066; // "SHARED" and "MEDIUM · LEVEL" are wider than "LEVEL"
+      const timeX = random ? 0.016 : shared ? 0.08 : ctx.stage ? (ctx.narrow ? 0.08 : 0.092) : 0.066; // "SHARED" and "MEDIUM · LEVEL" are wider than "LEVEL"
       // The heading shrinks to stop short of the time ("Step 12" is the widest).
       const headSize = (words: string) => {
         g.font = font(600, T.heading, SERIF);
         return T.heading * Math.min(1, mm((timeX - 0.016 - 0.008) * 1000) / g.measureText(words).width);
       };
-      const eyebrow = random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : shared ? 'SHARED' : ctx.stage ? `${ctx.stage.toUpperCase()} · LEVEL` : 'LEVEL';
-      // "MEDIUM · LEVEL" shrinks to stop short of the time column.
+      // A phone's card is too narrow for "MEDIUM · LEVEL" at a readable size: it reads the stage alone over the number.
+      const eyebrow = random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : shared ? 'SHARED' : ctx.stage ? (ctx.narrow ? ctx.stage.toUpperCase() : `${ctx.stage.toUpperCase()} · LEVEL`) : 'LEVEL';
+      // On the wide card the longer words shrink to stop short of the time column.
       g.font = font(700, T.eyebrow);
-      const eyebrowSize = T.eyebrow * Math.min(1, mm((timeX - 0.016 - 0.006) * 1000) / (g.measureText(eyebrow).width + eyebrow.length));
+      const eyebrowSize = ctx.narrow ? T.eyebrow : T.eyebrow * Math.min(1, mm((timeX - 0.016 - 0.006) * 1000) / (g.measureText(eyebrow).width + eyebrow.length));
       text(g, eyebrow, left(0.016), y(0.048), font(700, random ? T.eyebrow : eyebrowSize), C.muted, 'left', 1);
       if (!random) {
         if (shared) text(g, 'Puzzle', left(0.016), y(0.022), font(600, headSize('Puzzle'), SERIF), C.ink, 'left');

@@ -107,7 +107,7 @@ test('desktop: Restart is a new puzzle at the same level, and the run clock keep
   await cardIs(page, 'paused');
   await click(page, 'restart');
   await playing(page);
-  await page.waitForFunction(() => window.__chrono!.levelTime < 1);
+  await page.waitForFunction((was) => JSON.stringify([window.__chrono!.levelId, window.__chrono!.solution, window.__chrono!.axles, window.__chrono!.gears]) !== was, before);
   const after = await layoutOf(page);
   expect(after).not.toBe(before);
   expect(await page.evaluate(() => window.__chrono!.levelIndex)).toBe(0);
