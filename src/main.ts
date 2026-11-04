@@ -1499,7 +1499,7 @@ window.__chrono = Object.freeze({
   },
   /** The black layer behind the menus: `full` over a flat view, `backing` panel behind the card in XR, absent in play. */
   get scrim() {
-    const mode = scrim.visible ? 'full' : panels.backing ? 'backing' : null;
+    const mode = scrim.visible ? ('full' as const) : panels.backing ? ('backing' as const) : null;
     return { mode, opacity: (scrim.material as MeshBasicMaterial).opacity, backingOpacity: SCRIM_OPACITY };
   },
   get card() {

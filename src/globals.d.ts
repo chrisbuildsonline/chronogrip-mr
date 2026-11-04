@@ -138,6 +138,8 @@ interface ChronoHook {
   readonly ghostHand: boolean;
   /** Buttons on the panel now shown, with world centre, page pixel position and page-pixel box [x0, y0, x1, y1]. */
   buttons(): { id: string; label: string; world: readonly [number, number, number]; screen: [number, number]; rect: [number, number, number, number] }[];
+  /** Live: the black layer behind the menus: `full` over a flat view, `backing` panel behind the card in XR, null in play. */
+  readonly scrim: { readonly mode: 'full' | 'backing' | null; readonly opacity: number; readonly backingOpacity: number };
   /** Live: the card now up (its screen and panel-space size in metres), null when none is shown. */
   readonly card: { readonly screen: 'title' | 'select' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options'; readonly width: number; readonly height: number } | null;
   /** The words on the card now up: text, font size in panel metres, and that size in page pixels as seen now. */
