@@ -16,7 +16,7 @@ export function withDaily(levels: readonly Level[], now: Date): readonly Level[]
 
 type Rand = () => number;
 
-function mulberry32(seed: number): Rand {
+export function mulberry32(seed: number): Rand {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -29,12 +29,12 @@ function mulberry32(seed: number): Rand {
 
 const M = 0.004;
 const mesh = (z1: number, z2: number) => (M * (z1 + z2)) / 2;
-const int = (r: Rand, lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1));
+export const int = (r: Rand, lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1));
 
 /** A chain of axles in a row: driver, the axles to fill, target. `out` makes a middle axle a compound pair on layers L and 1 - L. */
-type Spec = { drv: number; tgt: number; rpm: number; mids: { z: number; out?: number }[]; decoys: { teeth: number; layer: number }[]; y: number };
+export type Spec = { drv: number; tgt: number; rpm: number; mids: { z: number; out?: number }[]; decoys: { teeth: number; layer: number }[]; y: number };
 
-function build(id: string, s: Spec, r: Rand): Level {
+export function build(id: string, s: Spec, r: Rand): Level {
   const axles: Axle[] = [{ id: 'a0', x: 0, y: 0 }];
   const fixed: PlacedGear[] = [{ id: 'drv', axle: 'a0', teeth: s.drv, layer: 0 }];
   const tray: LooseGear[] = [];
@@ -78,7 +78,7 @@ function build(id: string, s: Spec, r: Rand): Level {
 }
 
 /** Every rule the shipped levels are tested for, plus: unsolved when empty, and loose decoys alone never solve it. */
-function valid(level: Level): boolean {
+export function valid(level: Level): boolean {
   try {
     parseLevel(level);
     const r = checkLevel(level, level.solution);
