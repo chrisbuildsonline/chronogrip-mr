@@ -5,8 +5,8 @@
  */
 export type StageId = 'easy' | 'medium' | 'hard';
 export type BackdropOf = 'c1' | 'c2' | 'c3';
-/** The music themes (src/music.ts): the gentle music box, the mallet and plucks of the atelier, the clockwork ostinato. */
-export type ThemeId = 'box' | 'marimba' | 'clockwork';
+/** The music themes (src/music.ts): the calm menu pad, the gentle music box, the mallet and plucks of the atelier, the clockwork ostinato. */
+export type ThemeId = 'menu' | 'box' | 'marimba' | 'clockwork';
 
 /** Levels in a stage. */
 export const LEVELS_PER_STAGE = 20;
@@ -23,8 +23,8 @@ export const stageOf = (id: StageId) => STAGES.find((s) => s.id === id) ?? STAGE
 export const stageIndex = (id: StageId) => Math.max(0, STAGE_IDS.indexOf(id));
 /** The backdrop the menus show. */
 export const MENU_BACKDROP: BackdropOf = 'c2';
-/** The music the menus play: Easy's. */
-export const MENU_THEME: ThemeId = 'box';
+/** The music of the start screen, options, high scores, the stage picker, the result card and the name entry: its own calm theme. */
+export const MENU_THEME: ThemeId = 'menu';
 
 /** The measured score the global scale spans: `scoreAt(0)` to `scoreAt(1)`, linear. */
 export const SCORE_MIN = 1.5;

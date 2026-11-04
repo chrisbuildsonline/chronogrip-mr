@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MENU_THEME, STAGES, type ThemeId } from '../../src/stages';
-import { THEMES, beatOf, pitchClassesOf, BASS, BEATS_PER_BAR, BEAT_S, BPM, DUCK, FADE_S, LOWPASS_HZ, MUSIC_DB, MUSIC_GAIN, SCALE, composer, loadMusicOn, midiToHz, saveMusicOn } from '../../src/music';
+import { CHORDS, PAUSE_GAIN, THEMES, beatOf, pitchClassesOf, BASS, BEATS_PER_BAR, BEAT_S, BPM, DUCK, FADE_S, LOWPASS_HZ, MUSIC_DB, MUSIC_GAIN, SCALE, composer, loadMusicOn, midiToHz, saveMusicOn } from '../../src/music';
 
 const bars = (seed: number, n = 64) => {
   const c = composer(seed);
@@ -96,19 +96,21 @@ describe('the music settings', () => {
   });
 });
 
-const IDS: ThemeId[] = ['box', 'marimba', 'clockwork'];
+const IDS: ThemeId[] = ['menu', 'box', 'marimba', 'clockwork'];
 const themeBars = (id: ThemeId, seed: number, n = 64) => {
   const c = composer(seed, id);
   return Array.from({ length: n }, () => c.next());
 };
 
 describe('a theme per stage', () => {
-  it('the stage table names them: Easy the music box, Medium the marimba, Hard the clockwork; the menus play Easy\'s', () => {
+  it('the stage table names them: Easy the music box, Medium the marimba, Hard the clockwork; the menus have their own', () => {
     expect(STAGES.map((s) => s.theme)).toEqual(['box', 'marimba', 'clockwork']);
-    expect(MENU_THEME).toBe(STAGES[0]!.theme);
+    expect(MENU_THEME).toBe('menu');
+    expect(STAGES.map((s) => s.theme)).not.toContain(MENU_THEME);
   });
 
-  it('runs at about 72, 84 and 96 bpm', () => {
+  it('runs at 60 (menus), about 72, 84 and 96 bpm', () => {
+    expect(THEMES.menu.bpm).toBeLessThanOrEqual(60);
     expect(THEMES.box.bpm).toBeGreaterThanOrEqual(70);
     expect(THEMES.box.bpm).toBeLessThanOrEqual(76);
     expect(THEMES.marimba.bpm).toBe(84);
@@ -116,9 +118,11 @@ describe('a theme per stage', () => {
     for (const id of IDS) expect(beatOf(id)).toBeCloseTo(60 / THEMES[id].bpm, 9);
     expect(beatOf('clockwork')).toBeLessThan(beatOf('marimba'));
     expect(beatOf('marimba')).toBeLessThan(beatOf('box'));
+    expect(beatOf('box')).toBeLessThan(beatOf('menu'));
   });
 
   it.each([
+    ['menu', [5, 7, 9, 11, 0, 2, 4]], // F Lydian: F G A B C D E
     ['box', [9, 0, 2, 4, 7]], // A minor pentatonic: A C D E G
     ['marimba', [2, 4, 5, 7, 9, 11, 0]], // D Dorian: D E F G A B C
     ['clockwork', [4, 5, 7, 9, 11, 0, 2]], // E Phrygian: E F G A B C D
@@ -134,9 +138,28 @@ describe('a theme per stage', () => {
           expect(n.vel).toBeGreaterThan(0);
           expect(n.vel).toBeLessThanOrEqual(1);
         }
-        expect(bar.melody.length, 'always something').toBeGreaterThan(0);
+        expect(bar.melody.length + bar.pad.length, 'always something').toBeGreaterThan(0);
       }
     }
+  });
+
+  it('the menu theme is calm: one sustained chord a bar, no ticks, only now and then a chime, and a lower level than the stages', () => {
+    const list = themeBars('menu', 4, 64);
+    for (const bar of list) {
+      expect(bar.ticks).toEqual([]);
+      expect(bar.pad.length).toBeGreaterThanOrEqual(4);
+      expect(bar.pad.every((n) => n.beats === BEATS_PER_BAR && n.at === 0)).toBe(true);
+      expect(CHORDS.some((c) => c.join() === bar.pad.map((n) => n.midi).join())).toBe(true);
+      expect(bar.melody.length).toBeLessThanOrEqual(1);
+      for (const n of bar.melody) expect(n.midi, 'a high chime').toBeGreaterThanOrEqual(72);
+    }
+    const chimes = list.filter((b) => b.melody.length).length;
+    expect(chimes, 'occasional').toBeGreaterThan(5);
+    expect(chimes).toBeLessThan(40);
+    list.forEach((b, i) => i % 4 === 3 && expect(b.pad[0]!.midi).toBe(CHORDS[0]![0]));
+    for (const id of ['box', 'marimba', 'clockwork'] as const) expect(THEMES.menu.level, id).toBeLessThan(THEMES[id].level);
+    expect(THEMES.menu.level).toBeGreaterThan(0.4);
+    expect(PAUSE_GAIN).toBeCloseTo(0.5, 1); // 6 dB down
   });
 
   it('is different music: the marimba adds a counterline, the clockwork a low pulse and eighth ticks, the box neither', () => {

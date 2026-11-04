@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSound } from '../../src/sound';
-import { BEAT_S, MUSIC_GAIN, SCALE, BASS, FADE_S, beatOf, pitchClassesOf } from '../../src/music';
+import { BEAT_S, MUSIC_GAIN, SCALE, BASS, FADE_S, PAUSE_GAIN, THEMES, beatOf, pitchClassesOf } from '../../src/music';
 
 /** A stand-in for WebAudio: records every node made and lets the test move the clock. */
 class FakeParam {
@@ -182,7 +182,7 @@ describe('the themes', () => {
   const pc = (o: FakeNode) => Math.round(69 + 12 * Math.log2(hz(o) / 440)) % 12;
   const isTick = (o: FakeNode) => hz(o) === 1700 || hz(o) === 1900;
 
-  it('starts on the menus\' theme, and a theme set before the first gesture is the one that plays', async () => {
+  it('a theme set before the first gesture is the one that plays', async () => {
     const s = createSound();
     expect(s.theme).toBe('box');
     s.setTheme('clockwork');
@@ -251,5 +251,43 @@ describe('the themes', () => {
     for (const g of made.gains) for (const [k, v] of g.gain.calls) if (k === 'ramp') expect(v).toBeLessThanOrEqual(1);
     expect(MUSIC_GAIN).toBeLessThan(0.07);
   });
-});
 
+  it('the menu theme fades in at a lower level than a stage theme, and its notes are F Lydian', async () => {
+    const s = createSound();
+    s.setTheme('menu');
+    s.unlock();
+    await Promise.resolve();
+    run(10);
+    expect(made.gains.some((g) => g.gain.value === THEMES.menu.level), 'its gain sits at the menu level, under 1').toBe(true);
+    expect(THEMES.menu.level).toBeLessThan(1);
+    const scale = pitchClassesOf('menu');
+    for (const o of made.osc) expect(scale.has(pc(o)), `${hz(o)} Hz`).toBe(true);
+    expect(made.osc.filter(isTick), 'no ticks in the menus').toHaveLength(0);
+    // Crossfading into a stage theme ramps the menu down to 0 and the stage up to its level (1), both over 2 s.
+    const t0 = now;
+    s.setTheme('clockwork');
+    run(0.5);
+    const ramps = made.gains.flatMap((g) => g.gain.calls.filter(([k, , t]) => k === 'ramp' && Math.abs((t ?? 0) - (t0 + FADE_S)) < 1e-6).map(([, v]) => v));
+    expect(ramps.sort()).toEqual([0, 1]);
+  });
+
+  it('a pause keeps the theme and steps the music down 6 dB over half a second, and back up on resume', async () => {
+    const s = createSound();
+    s.setTheme('marimba');
+    s.unlock();
+    await Promise.resolve();
+    run(4);
+    const t0 = now;
+    s.setDucked(true);
+    expect(s.theme).toBe('marimba');
+    expect(s.ducked).toBe(true);
+    const down = made.gains.flatMap((g) => g.gain.calls.filter(([k, v, t]) => k === 'ramp' && Math.abs(v - PAUSE_GAIN) < 1e-9 && Math.abs((t ?? 0) - (t0 + 0.5)) < 1e-6));
+    expect(down).toHaveLength(1);
+    expect(20 * Math.log10(PAUSE_GAIN)).toBeCloseTo(-6, 0);
+    run(2);
+    s.setDucked(false);
+    const up = made.gains.flatMap((g) => g.gain.calls.filter(([k, v]) => k === 'ramp' && v === 1));
+    expect(up.length).toBeGreaterThan(0);
+    expect(s.ducked).toBe(false);
+  });
+});

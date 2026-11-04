@@ -108,19 +108,24 @@ test('Sound off silences the music too', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('each stage has its own music: Easy the box, Hard the clockwork, the menus back to the box; it keeps playing across the crossfade without errors', async ({ page }) => {
+test('each stage has its own music: the menus their own calm theme, Easy the box, Hard the clockwork; a pause ducks the stage theme; it keeps playing across the crossfades without errors', async ({ page }) => {
   const errors = await open(page);
   const theme = () => page.evaluate(() => window.__chrono!.musicTheme);
-  expect(await theme(), 'the menus play the Easy theme').toBe('box');
-  await newGame(page, (id) => click(page, id), 'easy');
+  expect(await theme(), 'the start screen plays the menu theme').toBe('menu');
+  expect(await page.evaluate(() => window.__chrono!.musicDucked)).toBe(false);
+  await click(page, 'start');
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'stages');
+  expect(await theme(), 'so does the stage picker').toBe('menu');
+  await click(page, 'stage-easy');
+  await page.waitForFunction(() => window.__chrono!.flow !== 'title');
   await page.waitForFunction(() => window.__chrono!.audio.state === 'running');
   await page.waitForFunction(() => window.__chrono!.audio.notes > 3, undefined, { timeout: 15_000 });
-  expect(await theme()).toBe('box');
+  await page.waitForFunction(() => window.__chrono!.musicTheme === 'box');
   // Give up, then New Game on Hard: the theme changes with the stage.
   await click(page, 'pause');
   await click(page, 'giveup');
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'result');
-  expect(await theme(), 'the result card is a menu').toBe('box');
+  await page.waitForFunction(() => window.__chrono!.musicTheme === 'menu'); // the result card is a menu
   await newGame(page, (id) => click(page, id), 'hard');
   await page.waitForFunction(() => window.__chrono!.musicTheme === 'clockwork');
   const heard = await notes(page);
@@ -128,9 +133,15 @@ test('each stage has its own music: Easy the box, Hard the clockwork, the menus 
   // Pause is a menu in the level: the stage's music keeps going; Main menu returns to the box.
   await click(page, 'pause');
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'paused');
-  expect(await theme()).toBe('clockwork');
+  expect(await theme(), 'pause keeps the stage theme').toBe('clockwork');
+  expect(await page.evaluate(() => window.__chrono!.musicDucked), '6 dB down').toBe(true);
+  await click(page, 'resume');
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && !window.__chrono!.musicDucked);
+  await click(page, 'pause');
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'paused');
   await click(page, 'menu');
-  await page.waitForFunction(() => window.__chrono!.musicTheme === 'box');
+  await page.waitForFunction(() => window.__chrono!.musicTheme === 'menu');
+  expect(await page.evaluate(() => window.__chrono!.musicDucked)).toBe(false);
   expect(await page.evaluate(() => window.__chrono!.musicOn)).toBe(true);
   expect(errors).toEqual([]);
 });

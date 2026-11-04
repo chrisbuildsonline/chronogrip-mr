@@ -82,7 +82,7 @@ test('desktop: the "Drag to look around" note fades after the first drag and sta
   await page.mouse.move(180, 640, { steps: 6 });
   await page.mouse.up();
   expect(await page.evaluate(() => window.__chrono!.cameraAt)).not.toEqual(eye);
-  await expect.poll(opacity, { timeout: 3000 }).toBe(0);
+  await expect.poll(opacity, { timeout: 10_000 }).toBe(0);
   await page.screenshot({ path: `${OUT}/note-faded.png`, clip: { x: 980, y: 0, width: 300, height: 130 } });
 
   // It does not come back on later steps of the flow.

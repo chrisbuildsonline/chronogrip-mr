@@ -20,6 +20,8 @@ export const MUSIC_GAIN = 10 ** (MUSIC_DB / 20);
 export const FADE_S = 2;
 export const LOWPASS_HZ = 2400;
 export const DUCK = { to: 0.45, seconds: 3 } as const;
+/** The pause menu steps the stage music down 6 dB. */
+export const PAUSE_GAIN = 10 ** (-6 / 20);
 
 /** A minor pentatonic as MIDI notes, A3 up to E5: the melody never leaves this scale. */
 export const SCALE: readonly number[] = [57, 60, 62, 64, 67, 69, 72, 74, 76];
@@ -37,21 +39,23 @@ export type Tick = { at: number; accent: boolean };
 export type Bar = { melody: Note[]; pad: Note[]; counter: Note[]; ostinato: Note[]; ticks: Tick[] };
 
 /** A theme: its tempo and the notes it may play (MIDI), every one of them in its mode. */
-export type Theme = { id: ThemeId; bpm: number; mode: string; melody: readonly number[]; counter: readonly number[]; bass: readonly number[]; above: readonly number[]; pulse: readonly number[] };
+export type Theme = { id: ThemeId; bpm: number; /** Its share of the music level (1 is the stage themes'). */ level: number; mode: string; melody: readonly number[]; counter: readonly number[]; bass: readonly number[]; above: readonly number[]; pulse: readonly number[] };
 
 export const THEMES: Record<ThemeId, Theme> = {
-  box: { id: 'box', bpm: BPM, mode: 'A minor pentatonic', melody: SCALE, counter: [], bass: BASS, above: ABOVE, pulse: [] },
+  // F Lydian at 60 bpm: soft sustained chords (Fmaj7, G add9, Am7, Cmaj9) and now and then a distant chime, a little under the stage themes.
+  menu: { id: 'menu', bpm: 60, level: 0.7, mode: 'F Lydian', melody: [72, 74, 76, 77, 79, 81, 84], counter: [], bass: [41, 43, 45, 36], above: [], pulse: [] },
+  box: { id: 'box', bpm: BPM, level: 1, mode: 'A minor pentatonic', melody: SCALE, counter: [], bass: BASS, above: ABOVE, pulse: [] },
   // D Dorian: D E F G A B C. The melody D4-E5, the counterline D3-D4, the pad on D, G and A with a fifth or third above.
-  marimba: { id: 'marimba', bpm: 84, mode: 'D Dorian', melody: [62, 64, 65, 67, 69, 71, 72, 74, 76], counter: [50, 52, 53, 55, 57, 59, 60, 62], bass: [50, 55, 57], above: [57, 62, 64], pulse: [] },
+  marimba: { id: 'marimba', bpm: 84, level: 1, mode: 'D Dorian', melody: [62, 64, 65, 67, 69, 71, 72, 74, 76], counter: [50, 52, 53, 55, 57, 59, 60, 62], bass: [50, 55, 57], above: [57, 62, 64], pulse: [] },
   // E Phrygian: E F G A B C D. A few high notes, a drone on E and B, the ostinato on E and now and then F.
-  clockwork: { id: 'clockwork', bpm: 96, mode: 'E Phrygian', melody: [76, 77, 79, 81, 83, 84, 86], counter: [], bass: [52], above: [59], pulse: [40, 41] },
+  clockwork: { id: 'clockwork', bpm: 96, level: 1, mode: 'E Phrygian', melody: [76, 77, 79, 81, 83, 84, 86], counter: [], bass: [52], above: [59], pulse: [40, 41] },
 };
 /** Seconds per beat of a theme. */
 export const beatOf = (id: ThemeId): number => 60 / THEMES[id].bpm;
 /** Every pitch class a theme may play: the test of "only notes of its scale". */
 export const pitchClassesOf = (id: ThemeId): Set<number> => {
   const t = THEMES[id];
-  return new Set([...t.melody, ...t.counter, ...t.bass, ...t.above, ...t.pulse].map((m) => m % 12));
+  return new Set([...t.melody, ...t.counter, ...t.bass, ...t.above, ...t.pulse, ...(id === 'menu' ? CHORDS.flat() : [])].map((m) => m % 12));
 };
 
 const BEAT_TICKS: Tick[] = [0, 1, 2, 3].map((at) => ({ at, accent: at % 2 === 0 }));
@@ -75,6 +79,7 @@ function stream(seed: number): () => number {
  * and its fifth for the bar, the bass moving by the seeded stream.
  */
 export function composer(seed: number, theme: ThemeId = 'box'): { next(): Bar } {
+  if (theme === 'menu') return menuComposer(seed);
   if (theme === 'marimba') return marimbaComposer(seed);
   if (theme === 'clockwork') return clockworkComposer(seed);
   const r = stream(seed);
@@ -110,6 +115,31 @@ export function composer(seed: number, theme: ThemeId = 'box'): { next(): Bar } 
       ];
       bar++;
       return { melody, pad, counter: [], ostinato: [], ticks: BEAT_TICKS };
+    },
+  };
+}
+
+/** The menu's chords, four voices each: Fmaj7, G add9, Am7 and Cmaj9, all of F Lydian. */
+export const CHORDS: readonly (readonly number[])[] = [[41, 53, 57, 60, 64], [43, 55, 59, 62, 64], [45, 57, 60, 64, 67], [36, 52, 55, 59, 62]];
+
+/**
+ * The menus: F Lydian at 60 bpm. One soft chord is held for a bar (it comes home to Fmaj7 every fourth bar), no ticks, and in
+ * about two bars of five a single distant chime rings over it, high and far apart.
+ */
+function menuComposer(seed: number): { next(): Bar } {
+  const r = stream(seed);
+  const T = THEMES.menu;
+  let chord = 0;
+  let bar = 0;
+  return {
+    next(): Bar {
+      if (r() < 0.55) chord = Math.floor(r() * CHORDS.length);
+      if (bar % 4 === 3) chord = 0;
+      const pad: Note[] = CHORDS[chord]!.map((midi, i) => ({ at: 0, midi, beats: BEATS_PER_BAR, vel: i === 0 ? 0.5 : 0.3 }));
+      const melody: Note[] = [];
+      if (r() < 0.4) melody.push({ at: Math.floor(r() * 3) + (r() < 0.5 ? 0 : 0.5), midi: T.melody[Math.floor(r() * T.melody.length)]!, beats: 3, vel: 0.3 + r() * 0.2 });
+      bar++;
+      return { melody, pad, counter: [], ostinato: [], ticks: [] };
     },
   };
 }

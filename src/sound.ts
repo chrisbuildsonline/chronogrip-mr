@@ -1,5 +1,5 @@
 import type { Vec3 } from './seat';
-import { BEATS_PER_BAR, DUCK, FADE_S, LOWPASS_HZ, MUSIC_GAIN, beatOf, composer, midiToHz, type Bar } from './music';
+import { BEATS_PER_BAR, DUCK, FADE_S, LOWPASS_HZ, MUSIC_GAIN, PAUSE_GAIN, THEMES, beatOf, composer, midiToHz, type Bar } from './music';
 import type { ThemeId } from './stages';
 
 /** Seconds between ticks at a rate in ticks per second; no rate, no ticks. */
@@ -70,6 +70,8 @@ export function createSound() {
   // It starts with the context (after the first gesture), fades in and out over 2 s, and plays only while Music and Sound are both on.
   let musicOn = true;
   let musicGain: GainNode | null = null;
+  let pauseGain: GainNode | null = null;
+  let ducked = false;
   let nextBar = 0;
   let pump: ReturnType<typeof setInterval> | null = null;
   let hiddenSuspend = false;
@@ -97,7 +99,7 @@ export function createSound() {
     for (const [id, g] of themeGains) {
       g.gain.cancelScheduledValues(t);
       g.gain.setValueAtTime(g.gain.value, t);
-      g.gain.linearRampToValueAtTime(id === theme ? 1 : 0, t + FADE_S);
+      g.gain.linearRampToValueAtTime(id === theme ? THEMES[id].level : 0, t + FADE_S);
     }
   };
   const musicWanted = () => musicOn && !muted;
@@ -121,12 +123,12 @@ export function createSound() {
     env.gain.setValueAtTime(0.0001, at);
     env.gain.exponentialRampToValueAtTime(Math.max(0.0002, vel * (pad ? 0.35 : voice === 'pulse' ? 0.45 : 0.6)), at + (pad ? 1.2 : voice === 'pulse' ? 0.012 : 0.006));
     env.gain.exponentialRampToValueAtTime(0.0001, at + len);
-    env.connect(themeGain(c, id, id === theme ? 1 : 0));
-    (pad ? ['sine'] : voice === 'pulse' ? ['triangle'] : ['sine', 'triangle']).forEach((type, i) => {
+    env.connect(themeGain(c, id, id === theme ? THEMES[id].level : 0));
+    (pad ? (id === 'menu' ? ['sine', 'sine'] : ['sine']) : voice === 'pulse' ? ['triangle'] : ['sine', 'triangle']).forEach((type, i) => {
       const o = c.createOscillator();
       o.type = type as OscillatorType;
       o.frequency.value = midiToHz(midi);
-      o.detune.value = pad ? 0 : i * 7 - 3;
+      o.detune.value = pad ? (id === 'menu' ? i * 10 - 5 : 0) : i * 7 - 3; // the menu pad's two voices drift a little apart, like tape
       o.connect(env);
       o.start(at);
       o.stop(at + len + 0.05);
@@ -148,7 +150,7 @@ export function createSound() {
       env.gain.setValueAtTime(id === 'clockwork' ? (tick.accent ? 0.06 : 0.035) : 0.05, when);
       env.gain.exponentialRampToValueAtTime(0.0001, when + 0.025);
       o.connect(env);
-      env.connect(themeGain(c, id, id === theme ? 1 : 0));
+      env.connect(themeGain(c, id, id === theme ? THEMES[id].level : 0));
       o.start(when);
       o.stop(when + 0.04);
     }
@@ -180,6 +182,18 @@ export function createSound() {
     setMusic(on: boolean): void {
       musicOn = on;
       musicLevel();
+    },
+    /** The pause card: the stage's music stays but steps down about 6 dB, and comes back with the level. */
+    get ducked() {
+      return ducked;
+    },
+    setDucked(on: boolean): void {
+      ducked = on;
+      if (!ctx || !pauseGain) return;
+      const t = ctx.currentTime;
+      pauseGain.gain.cancelScheduledValues(t);
+      pauseGain.gain.setValueAtTime(pauseGain.gain.value, t);
+      pauseGain.gain.linearRampToValueAtTime(on ? PAUSE_GAIN : 1, t + 0.5);
     },
     /** The theme playing (or about to, before the first gesture). */
     get theme(): ThemeId {
@@ -215,9 +229,12 @@ export function createSound() {
           musicGain = c.createGain();
           musicGain.gain.value = 0;
           const soft = filter(c, 'lowpass', LOWPASS_HZ, 0.5);
-          musicGain.connect(soft);
+          // A pause steps the music down about 6 dB (`setDucked`), through its own gain so it never fights the fanfare's duck.
+          pauseGain = c.createGain();
+          musicGain.connect(pauseGain);
+          pauseGain.connect(soft);
           soft.connect(c.destination);
-          themeGain(c, theme, 1);
+          themeGain(c, theme, THEMES[theme].level);
           nextBar = c.currentTime + 0.3;
           pump = setInterval(feed, 250);
           musicLevel();
