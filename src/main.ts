@@ -22,7 +22,8 @@ import type { GearSpin } from './train';
 import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
 import { createSound, ticksBetween } from './sound';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
-import { firstUnsolved, loadProgress, recordSolve, saveProgress, type Progress } from './progress';
+import { firstUnsolved, loadProgress, recordOutcome, recordSolve, saveProgress, type Progress } from './progress';
+import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
 import { dailySeed, tinkerLevel, withDaily } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
@@ -68,12 +69,18 @@ const storage = (() => {
 let progress: Progress = loadProgress(storage);
 /** True on the complete card when this solve beat a saved time. */
 let newBest = false;
+/** Relaxed: no timer. Default off (timer on), saved across visits. */
+let relaxed = loadRelaxed(storage);
+/** The time limit of the level on the board, and whether the solve on the complete card beat it (null while playing, and in Relaxed). */
+let par = 0;
+let outcome: Outcome | null = null;
 /** The title board is the level Continue plays: the first one not yet solved. */
 const continueAt = () => firstUnsolved(progress, levelIds);
 const resume = () => levelIds.some((id) => Object.hasOwn(progress.best, id));
 
 let levelIndex = sharedSeed === null ? continueAt() : levels.length - 1;
 let level: Level = levels[levelIndex]!;
+par = parFor(level);
 tuneForSoftwareGl(world.renderer);
 const built = buildScene(level, world.scene, world.renderer);
 
@@ -330,6 +337,8 @@ function loadLevel(i: number): void {
   levelIndex = i;
   level = levels[i]!;
   newBest = false;
+  par = parFor(level);
+  outcome = null;
   copy = { state: 'idle', link: null };
   dropGearEntities();
   built.load(level);
@@ -417,7 +426,10 @@ function send(e: FlowEvent): void {
     const r = recordSolve(progress, level.id, levelClock.seconds);
     progress = r.progress;
     newBest = had && r.newBest;
-    if (r.newBest) saveProgress(storage, progress);
+    // Held to par unless Relaxed: past it the bird still wakes, but the card says over time. The best time is kept either way.
+    outcome = relaxed ? null : outcomeOf(levelClock.seconds, par);
+    if (outcome) progress = recordOutcome(progress, level.id, outcome);
+    if (r.newBest || outcome) saveProgress(storage, progress);
     burst.position.set(...trayLocal(DIAL_AT[0], DIAL_AT[1], 0.008));
   }
   showPanel();
@@ -445,6 +457,10 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   pressedAt = now;
   const n = /^level-(\d+)$/.exec(id);
   if (id === 'copy') void copyLink();
+  else if (id === 'relaxed') {
+    relaxed = !relaxed;
+    saveRelaxed(storage, relaxed);
+  }
   else if (n) send({ type: 'select', level: Number(n[1]) - 1 });
   else if (id === 'back') send({ type: 'back', level: continueAt() });
   else send(PRESS[id]!);
@@ -1005,6 +1021,10 @@ function showPanel(now = performance.now()): void {
     resume: resume(),
     newBest,
     time: levelClock.seconds,
+    relaxed,
+    timer: relaxed || screenOf(flow) !== 'hud' ? null : { par, ...timerView(levelClock.seconds, par) }, // only the HUD carries it, so no other card redraws as it counts
+    outcome,
+    par: outcome ? par : null,
     best: levelIds.map((id) => progress.best[id] ?? null),
     hover: mouseButton ?? tipButton.left ?? tipButton.right,
     goal: badge.root.visible ? goal() : null,
@@ -1178,6 +1198,19 @@ window.__chrono = Object.freeze({
   },
   get newBest() {
     return newBest;
+  },
+  get timer() {
+    return { relaxed, par, ring: panels.ring, ...timerView(levelClock.seconds, par) };
+  },
+  get outcome() {
+    return outcome;
+  },
+  get outcomes() {
+    return { ...progress.outcome };
+  },
+  /** Test hook: plays `s` seconds of level time at once, so the clock can run out without waiting. */
+  advanceClock(s: number) {
+    levelClock.advance(s);
   },
   get paused() {
     return flow.name === 'paused';

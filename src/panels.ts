@@ -3,6 +3,7 @@ import { clock, layout, type Anchor, type Button, type Layout, type Screen } fro
 import { C } from './palette';
 import { rpmLabel, type Goal } from './goal';
 import { FAULT_WORDS } from './fault';
+import type { Outcome } from './timer';
 
 /** Canvas drawing of the in-world panels, per design/DESIGN.md. */
 const PX = 3000; // canvas pixels per metre: 3 px per mm
@@ -43,6 +44,13 @@ export type PanelCtx = {
   link?: string | null;
   /** The Copy link pill's label on the complete card; absent where it is not offered (hand-made levels, XR). */
   copy?: string;
+  /** The Relaxed (no timer) setting: the toggle's state. */
+  relaxed?: boolean;
+  /** The HUD's countdown ring: par, whole seconds left and over, share of par left. Absent in Relaxed mode. */
+  timer?: { par: number; left: number; over: number; fraction: number } | null;
+  /** The complete card: whether this solve beat par, and the par it was held to. Absent in Relaxed mode. */
+  outcome?: Outcome | null;
+  par?: number | null;
 };
 
 const isDaily = (ctx: PanelCtx, i: number) => ctx.daily && i === ctx.levels - 1;
@@ -59,6 +67,8 @@ function pill(g: Draw, x: number, y: number, w: number, h: number, r = h / 2) {
 type Drawn = { text: string; x: number; y: number; px: number; x0: number; x1: number };
 /** Collects the card's words while `draw` runs; null otherwise (the hint is not a card). */
 let drawn: Drawn[] | null = null;
+/** Set by `draw` when the HUD it drew carries the countdown ring. */
+let ringShown = false;
 
 function text(g: Draw, s: string, x: number, y: number, f: string, color: string, align: CanvasTextAlign = 'center', tracking = 0) {
   g.font = f;
@@ -73,8 +83,8 @@ function text(g: Draw, s: string, x: number, y: number, f: string, color: string
   drawn?.push({ text: s.trim(), x, y, px: Number(/([\d.]+)px/.exec(f)![1]), x0, x1: x0 + w });
 }
 
-/** A short tinted status pill centred (or left/right aligned) at x, y; `size` is its text height in mm. */
-function status(g: Draw, s: string, x: number, y: number, align: 'left' | 'center' | 'right' = 'center', size = T.eyebrow) {
+/** A short tinted status pill centred (or left/right aligned) at x, y; `size` is its text height in mm. Returns its right edge. */
+function status(g: Draw, s: string, x: number, y: number, align: 'left' | 'center' | 'right' = 'center', size = T.eyebrow): number {
   const k = size / T.eyebrow;
   g.font = font(700, size);
   g.letterSpacing = '1px';
@@ -85,6 +95,52 @@ function status(g: Draw, s: string, x: number, y: number, align: 'left' | 'cente
   g.fillStyle = C.tint;
   g.fill();
   text(g, s, cx, y + 1, font(700, size), C.tintInk, 'center', 1);
+  return cx + w / 2;
+}
+
+/**
+ * The HUD's countdown ring: a deep track with an amber arc for the share of par left, sweeping down from twelve o'clock,
+ * and beside it "LEFT" over the time left; past par the arc is gone and it reads "OVER" and "+m:ss". Returns nothing drawn
+ * if there is no timer (Relaxed).
+ */
+function ring(g: Draw, t: NonNullable<PanelCtx['timer']>, x: number, y: number) {
+  const r = mm(9.5);
+  g.lineWidth = mm(3);
+  g.lineCap = 'round';
+  g.beginPath();
+  g.arc(x, y, r, 0, Math.PI * 2);
+  g.strokeStyle = C.deep;
+  g.stroke();
+  if (t.fraction > 0) {
+    g.beginPath();
+    g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + t.fraction * Math.PI * 2);
+    g.strokeStyle = C.amber;
+    g.stroke();
+  }
+  const over = t.left === 0 && t.over > 0;
+  const tx = x + r + mm(7);
+  const whole = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; // the ring counts whole seconds, no tenths
+  text(g, over ? 'OVER' : 'LEFT', tx, y - mm(8.5), font(700, T.eyebrow), C.muted, 'left', 1);
+  text(g, over ? `+${whole(t.over)}` : whole(t.left), tx, y + mm(6), font(700, T.body), C.ink, 'left');
+}
+
+/** The Relaxed toggle: a pill that is cream deep with an empty circle while the timer is on, and amber tint with an amber check once Relaxed is on. */
+function toggle(g: Draw, label: string, on: boolean, x: number, y: number) {
+  const size = WIDE.button; // the phone's 14 mm button type would leave "No timer" no room to breathe in its pill
+  g.font = font(600, size);
+  const disc = mm(4);
+  const gap = mm(2.5);
+  const w = disc * 2 + gap + g.measureText(label).width;
+  const cx = x - w / 2 + disc;
+  if (on) check(g, cx, y, disc);
+  else {
+    g.beginPath();
+    g.arc(cx, y, disc - mm(0.6), 0, Math.PI * 2);
+    g.lineWidth = mm(1.2);
+    g.strokeStyle = C.muted;
+    g.stroke();
+  }
+  text(g, label, x + w / 2, y + 1, font(600, size), on ? C.tintInk : C.ink, 'right');
 }
 
 /** A level tile: its number (or 'Daily'); once solved, the best time in muted text under it and a small amber check. */
@@ -142,16 +198,17 @@ export function turnArrow(g: Draw, x: number, y: number, r: number, dir: Goal['d
 }
 
 /** A small amber disc with a cream tick: solved tiles, a matched goal. */
-function check(g: Draw, cx: number, cy: number) {
+function check(g: Draw, cx: number, cy: number, r = mm(5)) {
+  const k = r / mm(5);
   g.beginPath();
-  g.arc(cx, cy, mm(5), 0, Math.PI * 2);
+  g.arc(cx, cy, r, 0, Math.PI * 2);
   g.fillStyle = C.amber;
   g.fill();
   g.beginPath();
-  g.moveTo(cx - mm(2.4), cy + mm(0.1));
-  g.lineTo(cx - mm(0.7), cy + mm(1.9));
-  g.lineTo(cx + mm(2.5), cy - mm(1.8));
-  g.lineWidth = mm(1.2);
+  g.moveTo(cx - mm(2.4) * k, cy + mm(0.1) * k);
+  g.lineTo(cx - mm(0.7) * k, cy + mm(1.9) * k);
+  g.lineTo(cx + mm(2.5) * k, cy - mm(1.8) * k);
+  g.lineWidth = mm(1.2) * k;
   g.lineCap = g.lineJoin = 'round';
   g.strokeStyle = C.cream;
   g.stroke();
@@ -259,7 +316,8 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
     g.beginPath();
     g.arc(x, y, h / 2, 0, Math.PI * 2);
   } else pill(g, x, y, w, h);
-  g.fillStyle = b.kind === 'primary' ? (hover ? C.inkHover : C.ink) : hover ? C.deepHover : C.deep;
+  const on = b.kind === 'toggle' && !!ctx.relaxed;
+  g.fillStyle = b.kind === 'primary' ? (hover ? C.inkHover : C.ink) : on ? C.tint : hover ? C.deepHover : C.deep;
   g.fill();
   if (hover) {
     g.lineWidth = mm(3);
@@ -269,7 +327,8 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
   if (b.kind === 'icon') {
     g.fillStyle = C.ink;
     for (const dx of [-mm(3.2), mm(3.2)]) g.fillRect(x + dx - mm(1.5), y - mm(6), mm(3), mm(12));
-  } else if (b.kind === 'tile') tile(g, b, x, y, w, h, ctx);
+  } else if (b.kind === 'toggle') toggle(g, b.label, on, x, y);
+  else if (b.kind === 'tile') tile(g, b, x, y, w, h, ctx);
   else if (b.id === 'back') backLabel(g, b.label, x, y, tall);
   else text(g, b.label, x, y + 1, font(600, T.button), b.kind === 'primary' ? C.cream : C.ink);
 }
@@ -319,11 +378,16 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       else text(g, level, left(0.016), y(0.022), font(700, T.xl), C.ink, 'left');
       text(g, 'TIME', left(timeX), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
       text(g, clock(ctx.time), left(timeX), y(0.022), font(700, T.xl), C.ink, 'left');
+      if (ctx.timer) {
+        ring(g, ctx.timer, left(0.178), y(0.031));
+        ringShown = true;
+      }
       if (ctx.goal && ctx.fault) faultLine(g, ctx.fault, left(0.016), y(0.077), right(0.016) - left(0.016));
       else if (ctx.goal) goalLine(g, ctx.goal, left(0.016), y(0.077));
       break;
     case 'complete': {
-      status(g, 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);
+      const pillEnd = status(g, ctx.outcome === 'over' ? 'OVER TIME' : 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);
+      if (ctx.par) text(g, `PAR ${clock(ctx.par)}`, pillEnd + mm(5), y(0.146) + 1, font(700, T.eyebrow), C.muted, 'left', 1);
       // Shrunk, if need be, to stop short of the time at the right (a long name on a phone).
       const title = `${name} complete`;
       g.font = font(600, T.heading, SERIF);
@@ -331,6 +395,11 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       text(g, title, left(0.016), y(0.11), font(600, titleSize, SERIF), C.ink, 'left');
       text(g, 'TIME', right(0.016), y(0.148), font(700, T.eyebrow), C.muted, 'right', 1);
       text(g, clock(ctx.time), right(0.016), y(0.11), font(700, T.xl), C.ink, 'right');
+      if (ctx.outcome === 'pass') {
+        // Under par: the amber check sits just before the time.
+        g.font = font(700, T.xl);
+        check(g, right(0.016) - g.measureText(clock(ctx.time)).width - mm(8), y(0.11));
+      }
       // Under the time: the New best pill, or the saved best this run did not beat.
       const best = ctx.best[ctx.level];
       // Muted, on the row under the heading: the puzzle code, or the link itself once the clipboard refused it.
@@ -389,6 +458,7 @@ export function createPanels() {
   const note = canvasPlane();
   root.add(panel.mesh, hint.mesh, note.mesh);
   let key = '';
+  let hasRing = false;
   let current: { screen: Screen; layout: Layout } | null = null;
   /** The words on the card up now, in panel space (metres): centre height y, left/centre x as drawn, font size. */
   let labels: { text: string; x: number; y: number; size: number; x0: number; x1: number }[] = [];
@@ -430,6 +500,10 @@ export function createPanels() {
     get labels() {
       return labels;
     },
+    /** Whether the card up now is a HUD with the countdown ring on it (the test hook reads it). */
+    get ring() {
+      return hasRing && !!current && panel.mesh.visible;
+    },
     /** The floating pills for the test hook: words, measured text width, side padding and pill width, metres. */
     get pills() {
       return [HINT_TEXT, SMALL_TABLE_TEXT].map((words) => ({ text: words, textWidth: textWidth(words), padding: PILL_PAD, width: pillWidth }));
@@ -448,11 +522,13 @@ export function createPanels() {
       panel.mesh.visible = screen !== null;
       current = null;
       if (!screen) return;
-      const l = layout(screen, ctx);
+      const l = layout(screen, { ...ctx, over: ctx.outcome === 'over' });
       current = { screen, layout: l };
       resize(panel, l.width, l.height, l.height / 2);
       drawn = [];
+      ringShown = false;
       draw(panel.g, screen, l, ctx);
+      hasRing = ringShown;
       labels = drawn.map((d) => ({ text: d.text, x: (d.x - MARGIN) / PX - l.width / 2, y: l.height - (d.y - MARGIN) / PX, size: d.px / PX, x0: (d.x0 - MARGIN) / PX - l.width / 2, x1: (d.x1 - MARGIN) / PX - l.width / 2 }));
       drawn = null;
       panel.tex.needsUpdate = true;

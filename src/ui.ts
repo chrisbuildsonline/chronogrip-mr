@@ -5,7 +5,7 @@ import { COMFORT, TRAY_POSE, layerLift, ledgeFar, partsStrip, trayToWorld, type 
 export type Screen = 'title' | 'select' | 'hud' | 'complete' | 'paused';
 export const SCREENS: readonly Screen[] = ['title', 'select', 'hud', 'complete', 'paused'];
 
-export type ButtonKind = 'primary' | 'secondary' | 'tile' | 'icon';
+export type ButtonKind = 'primary' | 'secondary' | 'tile' | 'icon' | 'toggle';
 /** A button rectangle in panel space; x, y is its centre. */
 export type Button = { id: string; label: string; kind: ButtonKind; x: number; y: number; w: number; h: number };
 export type Layout = { width: number; height: number; buttons: Button[] };
@@ -33,9 +33,9 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
 
 /**
  * `daily`: the last level is today's tinker puzzle; `shared`: it is a puzzle opened from a ?seed= link. `resume`: a level is solved, so the title offers Continue.
- * `copy`: the label of the Copy link pill on the complete card (absent: no pill). `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
+ * `over`: the level was solved past its par time, so the complete card leads with Retry. `copy`: the label of the Copy link pill on the complete card (absent: no pill). `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
  */
-export type LayoutCtx = { level: number; levels: number; daily?: boolean; shared?: boolean; resume?: boolean; narrow?: boolean; copy?: string };
+export type LayoutCtx = { level: number; levels: number; daily?: boolean; shared?: boolean; resume?: boolean; narrow?: boolean; copy?: string; over?: boolean };
 
 /** Width of every card on a phone in portrait (outside XR), metres of panel space. */
 export const NARROW_W = 0.3;
@@ -50,8 +50,10 @@ const TILE_H = 0.07;
 const BACK_W = 0.076;
 /** Back is navigation, not a level: a little more room sets it apart from the tiles. */
 const BACK_GAP = 0.02;
-/** Wide enough for "Turn the marked gear ↻ 37.5 rpm" in body type. */
-const HUD_W = 0.27;
+/** The Relaxed toggle on the phone's pause card. */
+const TOGGLE_W = 0.082;
+/** Wide enough for "Turn the marked gear ↻ 37.5 rpm" in body type, and for the countdown ring and its time between the clock and the pause button. */
+const HUD_W = 0.3;
 
 export function layout(screen: Screen, ctx: LayoutCtx): Layout {
   const low = PAD + BH / 2;
@@ -63,7 +65,11 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       return {
         width: narrow ? NARROW_W : 0.34,
         height: 0.15,
-        buttons: row(low, [['start', ctx.resume ? 'Continue' : 'Start', 'primary', narrow ? 0.15 : 0.13], ['levels', 'Levels', 'secondary', narrow ? 0.106 : 0.1]]),
+        buttons: row(low, [
+          ['start', ctx.resume ? 'Continue' : 'Start', 'primary', narrow ? 0.08 : 0.106],
+          ['levels', 'Levels', 'secondary', narrow ? 0.07 : 0.09],
+          ['relaxed', 'No timer', 'toggle', narrow ? 0.098 : 0.088],
+        ]),
       };
     case 'select': {
       const n = ctx.levels;
@@ -102,7 +108,10 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
     case 'complete': {
       // After the last level the primary already goes to level select, so there is no second Levels button.
       const last = ctx.level + 1 >= ctx.levels;
-      const items: Parameters<typeof row>[1] = [['next', last ? 'Levels' : 'Next', 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW]];
+      // Over par: Retry leads, and Next stays a plain secondary so a slow solve never blocks the way on.
+      const items: Parameters<typeof row>[1] = ctx.over
+        ? [['restart', 'Retry', 'primary', primaryW], ['next', last ? 'Levels' : 'Next', 'secondary', secondaryW]]
+        : [['next', last ? 'Levels' : 'Next', 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW]];
       if (!last) items.push(['levels', 'Levels', 'secondary', secondaryW]);
       if (ctx.copy && last) {
         // The tinker puzzle is always the last level; only it has room for a third pill. On a phone "Copy link" needs a little more than 72 mm, so the primary gives it 8.
@@ -111,12 +120,23 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       }
       return { width: narrow ? NARROW_W : 0.35, height: 0.17, buttons: row(low, items) };
     }
-    case 'paused':
+    case 'paused': {
+      // Wide: the Relaxed toggle is a fourth pill on the one row, which keeps every target in the panel zone (a card this wide is still well inside the yaw cone).
+      if (!narrow) {
+        return {
+          width: 0.42,
+          height: 0.15,
+          buttons: row(low, [['resume', 'Resume', 'primary', 0.1], ['restart', 'Restart', 'secondary', 0.084], ['levels', 'Levels', 'secondary', 0.084], ['relaxed', 'No timer', 'toggle', 0.09]]),
+        };
+      }
+      // Phone: the row is full, and the zone does not apply outside XR, so the toggle rides the top right beside the "Paused" words.
+      const toggle: Button = { id: 'relaxed', label: 'No timer', kind: 'toggle', x: NARROW_W / 2 - 0.008 - TOGGLE_W / 2, y: 0.104, w: TOGGLE_W, h: BH };
       return {
-        width: narrow ? NARROW_W : 0.35,
+        width: NARROW_W,
         height: 0.15,
-        buttons: row(low, [['resume', 'Resume', 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW], ['levels', 'Levels', 'secondary', secondaryW]]),
+        buttons: [...row(low, [['resume', 'Resume', 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW], ['levels', 'Levels', 'secondary', secondaryW]]), toggle],
       };
+    }
   }
 }
 

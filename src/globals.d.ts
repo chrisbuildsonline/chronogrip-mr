@@ -115,6 +115,17 @@ interface ChronoHook {
   readonly progress: { readonly best: Readonly<Record<string, number>> };
   /** Live: true on the complete card when this solve beat a saved time; false on a first solve. */
   readonly newBest: boolean;
+  /**
+   * Live: the level timer. `relaxed`: the Relaxed (no timer) setting; `par`: this level's time limit in seconds; `left`,
+   * `over`: whole seconds left (0 once out) and past par; `fraction`: share of par left, 0..1; `ring`: the HUD up now carries the countdown ring.
+   */
+  readonly timer: { readonly relaxed: boolean; readonly par: number; readonly left: number; readonly over: number; readonly fraction: number; readonly ring: boolean };
+  /** Live: whether this level's last solve beat par ('pass') or not ('over'); null while playing and in Relaxed. */
+  readonly outcome: 'pass' | 'over' | null;
+  /** Live: saved pass/over per level id (a copy); Relaxed solves are not marked. */
+  readonly outcomes: Readonly<Record<string, 'pass' | 'over'>>;
+  /** Test only: adds `s` seconds to the level clock at once, so the timer can run out without waiting. */
+  advanceClock(s: number): void;
   /** Live: true while the pause card is up. */
   readonly paused: boolean;
   /** Live: true while the level 1 ghost hand demonstrates the first move. */

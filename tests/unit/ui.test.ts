@@ -22,12 +22,41 @@ describe('panel layouts', () => {
 
   it('has the buttons each screen needs', () => {
     const ids = (s: (typeof SCREENS)[number], level = 0) => layout(s, { level, levels: 5 }).buttons.map((b) => b.id);
-    expect(ids('title')).toEqual(['start', 'levels']);
+    expect(ids('title')).toEqual(['start', 'levels', 'relaxed']);
     expect(ids('select')).toEqual(['back', 'level-1', 'level-2', 'level-3', 'level-4', 'level-5']);
     expect(ids('hud')).toEqual(['pause']);
     expect(ids('complete')).toEqual(['next', 'restart', 'levels']);
-    expect(ids('paused')).toEqual(['resume', 'restart', 'levels']);
+    expect(ids('paused')).toEqual(['resume', 'restart', 'levels', 'relaxed']);
     expect(layout('complete', { level: 4, levels: 5 }).buttons[0]!.label).toBe('Levels');
+  });
+
+  it('an over-time complete card leads with Retry (restart) and keeps Next and Levels as secondaries', () => {
+    const over = layout('complete', { level: 0, levels: 9, over: true }).buttons;
+    expect(over.map((b) => [b.id, b.label, b.kind])).toEqual([['restart', 'Retry', 'primary'], ['next', 'Next', 'secondary'], ['levels', 'Levels', 'secondary']]);
+    const last = layout('complete', { level: 8, levels: 9, over: true, copy: 'Copy link' }).buttons;
+    expect(last.map((b) => [b.id, b.kind])).toEqual([['restart', 'primary'], ['next', 'secondary'], ['copy', 'secondary']]);
+    expect(layout('complete', { level: 0, levels: 9, over: true, narrow: true }).buttons.map((b) => b.id)).toEqual(['restart', 'next', 'levels']);
+  });
+
+  it('the Relaxed toggle is the last pill on the title and wide pause rows (in reach), and sits top right on the phone pause card, clear of the words', () => {
+    for (const narrow of [false, true]) {
+      const title = layout('title', { level: 0, levels: 9, narrow, resume: true });
+      const t = title.buttons.find((b) => b.id === 'relaxed')!;
+      expect(t.kind).toBe('toggle');
+      expect(t.label).toBe('No timer'); // plain about what it does, to a first-time player
+      expect(layout('paused', { level: 0, levels: 9, narrow }).buttons.find((b) => b.id === 'relaxed')!.label).toBe('No timer');
+      expect(t.y).toBe(title.buttons[0]!.y);
+      expect(t.x).toBeGreaterThan(title.buttons[1]!.x);
+
+      const paused = layout('paused', { level: 0, levels: 9, narrow });
+      const p = paused.buttons.find((b) => b.id === 'relaxed')!;
+      expect(p.kind).toBe('toggle');
+      if (!narrow) expect(p.y).toBe(paused.buttons[0]!.y);
+      else {
+        expect(p.x).toBeGreaterThan(0.05 + p.w / 2); // right of the centred "Paused" and level line
+        expect(Math.max(...paused.buttons.filter((b) => b !== p).map((b) => b.y + b.h / 2)) + 0.012).toBeLessThanOrEqual(p.y - p.h / 2 + 1e-9);
+      }
+    }
   });
 
   it('buttons do not overlap', () => {
