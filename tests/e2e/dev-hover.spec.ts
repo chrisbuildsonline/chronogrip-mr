@@ -1,6 +1,9 @@
 import { expect, test, type Page } from './fixtures';
 import { LEVELS } from '../../src/levels';
 import type { Vec3 } from '../../src/seat';
+import { begin } from './start';
+import { pinch as releaseHand, poke as pokeButton } from './hands';
+const releaseRight = (page: Page) => releaseHand(page, 'right', 0);
 
 type Hand = { updatePinchValue(v: number): void; position: { x: number; y: number; z: number; set(x: number, y: number, z: number): void } };
 type Quat = { x: number; y: number; z: number; w: number; set(x: number, y: number, z: number, w: number): unknown; copy(q: unknown): unknown };
@@ -77,6 +80,9 @@ async function movePinchTo(page: Page, target: Vec3) {
 
 test('dev server: head gaze, hand glow and valid-axle pulses', async ({ page }) => {
   const errors = await enterWithHands(page);
+  await begin(page, (id) => pokeButton(page, id)); // the menu's backing covers the board: into level 1
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
+  await releaseRight(page);
   expect(await page.evaluate(() => window.__chrono!.validAxles)).toEqual([]);
 
   // Gaze: the head looks at the loose gear, then at the empty axle.

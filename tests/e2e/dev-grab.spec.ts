@@ -1,6 +1,9 @@
 import { expect, test, type Page } from './fixtures';
 import { LEVELS } from '../../src/levels';
 import type { Vec3 } from '../../src/seat';
+import { begin } from './start';
+import { pinch as releaseHand, poke as pokeButton } from './hands';
+const releaseRight = (page: Page) => releaseHand(page, 'right', 0);
 
 type Hand = { updatePinchValue(v: number): void; position: { x: number; y: number; z: number; set(x: number, y: number, z: number): void } };
 type Device = { primaryInputMode: string; hands: { left?: Hand; right?: Hand } };
@@ -65,6 +68,9 @@ const near = (a: readonly number[], b: readonly number[], m: number) => Math.hyp
 
 test('dev server: pinching a loose gear carries it to its axle and solves level 1', async ({ page }) => {
   const errors = await enterWithHands(page);
+  await begin(page, (id) => pokeButton(page, id)); // the menu's backing covers the board: into level 1
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
+  await releaseRight(page);
   expect(await page.evaluate(() => window.__chrono!.held)).toBeNull();
   expect(await page.evaluate(() => window.__chrono!.solved)).toBe(false);
 
@@ -99,6 +105,9 @@ test('dev server: pinching a loose gear carries it to its axle and solves level 
 
 test('dev server: releasing far from any axle floats the gear back to the strip', async ({ page }) => {
   const errors = await enterWithHands(page);
+  await begin(page, (id) => pokeButton(page, id)); // the menu's backing covers the board: into level 1
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
+  await releaseRight(page);
   const start = await gearAt(page);
   await pinchAt(page, start);
   expect(await page.evaluate(() => window.__chrono!.held)).toBe(gearId);

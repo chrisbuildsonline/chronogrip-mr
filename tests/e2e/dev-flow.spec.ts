@@ -109,6 +109,9 @@ test('dev server: the headset menu pauses mid-level; the board and the clock hol
 
 test('dev server: a two-hand pinch while one hand carries a gear does not recenter', async ({ page }) => {
   const errors = await enterWithHands(page);
+  await begin(page, (id) => poke(page, id)); // the menu's backing covers the board: into level 1
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
+  await pinch(page, 'right', 0);
   const [gear] = Object.entries(LEVELS[0]!.solution)[0]!;
   await pinchAt(page, await gearAt(page, gear));
   await page.waitForFunction((g) => window.__chrono!.held === g, gear, { timeout: 10_000 });
