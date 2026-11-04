@@ -2,7 +2,7 @@ import { expect, test } from './fixtures';
 import { toSelect } from './start';
 import { PANEL_ZONE } from '../../src/ui';
 import { inZone } from '../../src/seat';
-import { enterWithHands, flow, pinch, poke } from './hands';
+import { CLEAR, enterWithHands, flow, nudge, pinch, poke } from './hands';
 
 // Runs against the dev server (project "dev") with the IWER emulator: the start panel in a headset session, with hands.
 
@@ -27,6 +27,7 @@ test('dev server: the start panel shows its three buttons inside the comfort zon
   await poke(page, 'options');
   await cardIs(page, 'options');
   await pinch(page, 'right', 0);
+  await nudge(page, CLEAR); // off the card: the next pinch must start on nothing, not press the button under the hand
   const options = await page.evaluate(() => window.__chrono!.buttons());
   expect(options.map((b) => b.id)).toEqual(['relaxed', 'sound', 'reset', 'back']);
   for (const b of options) expect(inZone(b.world, PANEL_ZONE), `${b.id} in the panel zone`).toBe(true);

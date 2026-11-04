@@ -236,6 +236,15 @@ const menuUp = () => (panels.panelMesh.visible && panels.current && MENU_SCREENS
 /** Page pixels per metre of panel space, at most, for a menu card on a desktop screen, and the air kept over and under it. */
 const MENU_MAX_PX = 1700;
 const MENU_MARGIN = 72;
+/** The air kept over and under a menu card: 72 px, or the page header's depth when the card is wide enough to run under the wordmark or the Enter MR note. */
+function menuMargin(card: { width: number; height: number }): number {
+  const [w, h] = [window.innerWidth, window.innerHeight];
+  const px = Math.min(MENU_MAX_PX, (w - 32) / card.width, (h - 2 * MENU_MARGIN) / card.height);
+  const [left, right] = [w / 2 - (card.width * px) / 2, w / 2 + (card.width * px) / 2];
+  const [title, entry] = [heading?.getBoundingClientRect(), xrEntry.getBoundingClientRect()];
+  const clash = left < (title?.right ?? 0) + 8 || right > entry.left - 8;
+  return clash ? Math.max(MENU_MARGIN, headerBottom()) : MENU_MARGIN;
+}
 /** A single column of level tiles needs this many pixels per metre or the words get small; below it, two columns. */
 const SELECT_MIN_PX = 1150;
 /** One column of tiles if the screen has the room, else two; XR is always two (the column would climb out of the comfort cone). */
@@ -256,11 +265,11 @@ const placePanels = () => {
   const view = { eye, back: cameraBack(), fovDeg: world.camera.fov, width: window.innerWidth, height: window.innerHeight };
   if (phone()) {
     const shift = raiseView();
-    anchor = menu ? menuCard({ ...view, shift, card: menu.layout, maxPx: MENU_MAX_PX, margin: MENU_MARGIN }) : phoneCard({ ...view, shift });
+    anchor = menu ? menuCard({ ...view, shift, card: menu.layout, maxPx: MENU_MAX_PX, margin: menuMargin(menu.layout) }) : phoneCard({ ...view, shift });
   } else {
     if (world.camera.view?.enabled) world.camera.clearViewOffset();
     if (world.renderer.xr.isPresenting) anchor = menu ? menuAnchor(menu.layout, level, currentPose()) : a;
-    else anchor = menu ? menuCard({ ...view, card: menu.layout, maxPx: MENU_MAX_PX, margin: MENU_MARGIN }) : faceView(a, cameraBack());
+    else anchor = menu ? menuCard({ ...view, card: menu.layout, maxPx: MENU_MAX_PX, margin: menuMargin(menu.layout) }) : faceView(a, cameraBack());
   }
   panels.setAnchor(anchor);
   placedFor = menu && `${menu.screen}${menu.layout.height}`;
