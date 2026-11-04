@@ -1,33 +1,34 @@
-import { BOARDS, formatDate, sanitiseName, TOP, type Entry } from './scores';
+import { BOARDS, MAX_CLEARED, formatDate, sanitiseName, TOP, type Entry } from './scores';
 
 /**
- * The global high scores: a public Supabase table anyone can read and add to. Only a level, three initials and a time go up
- * . The key below is the publishable one, safe in a frontend by design; the table's own checks and
+ * The global high scores: a public Supabase table anyone can read and add to. Only a board (campaign or random-<band>), three
+ * initials, the levels or puzzles cleared (the step) and the total time go up. The key below is the publishable one, safe in a frontend by design; the table's own checks and
  * policies are what guard it. Everything that comes back is untrusted and is re-checked here before it is drawn.
  */
 export const GLOBAL_BASE = 'https://xsidhlyprisxfnverwdk.supabase.co/rest/v1/chronogrip_scores';
 export const GLOBAL_KEY = 'sb_publishable_Jy8ytY7s0_ifaWOSznEScg_seDnXsrR';
 export const GLOBAL_ORIGIN = new URL(GLOBAL_BASE).origin;
 const TIMEOUT_MS = 4000;
-const MAX_SECONDS = 3600;
+const MAX_SECONDS = 86400;
 
 type Fetch = typeof fetch;
-export type Payload = { level: string; initials: string; seconds: number };
+export type Payload = { level: string; initials: string; seconds: number; step: number };
 
+const isStep = (s: unknown): s is number => typeof s === 'number' && Number.isInteger(s) && s >= 1 && s <= MAX_CLEARED;
 const isSeconds = (s: unknown): s is number => typeof s === 'number' && Number.isFinite(s) && s > 0 && s < MAX_SECONDS;
 
 /** The body to post for a score, or null when anything about it is off (then nothing is sent). */
-export function scorePayload(level: string, initials: string, seconds: number): Payload | null {
+export function scorePayload(level: string, initials: string, seconds: number, step: number): Payload | null {
   if (typeof level !== 'string' || !BOARDS.includes(level) || typeof initials !== 'string' || !/^[A-Z]{3}$/.test(initials)) return null;
   if (typeof seconds !== 'number') return null;
   const s = Math.round(seconds * 100) / 100;
   if (!isSeconds(s)) return null;
-  return { level, initials, seconds: s };
+  return isStep(step) ? { level, initials, seconds: s, step } : null;
 }
 
-/** The query for a board's top ten: by time. */
+/** The query for a board's top ten: most cleared (the step), then least time. */
 export const boardUrl = (board: string): string =>
-  `${GLOBAL_BASE}?select=initials,seconds,created_at&level=eq.${board}&order=seconds.asc&limit=${TOP}`;
+  `${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.${board}&order=step.desc,seconds.asc&limit=${TOP}`;
 
 /** Rows off the wire as entries; every row that is not fit for the board is dropped. */
 export function parseRows(body: unknown, board: string): Entry[] {
@@ -36,11 +37,12 @@ export function parseRows(body: unknown, board: string): Entry[] {
   for (const r of body) {
     if (out.length >= TOP) break;
     if (typeof r !== 'object' || r === null) continue;
-    const { initials, seconds, created_at } = r as Record<string, unknown>;
+    const { initials, seconds, step, created_at } = r as Record<string, unknown>;
     const secs = typeof seconds === 'string' && seconds.trim() !== '' ? Number(seconds) : seconds;
     const date = typeof created_at === 'string' ? created_at.slice(0, 10) : '';
     if (typeof initials !== 'string' || !/^[A-Z]{3}$/.test(initials) || !isSeconds(secs) || !formatDate(date)) continue;
-    out.push({ name: sanitiseName(initials), ms: Math.round(secs * 1000), date });
+    if (!isStep(step) || (board === 'campaign' && step > 20)) continue;
+    out.push({ name: sanitiseName(initials), ms: Math.round(secs * 1000), date, cleared: step });
   }
   return out;
 }
@@ -73,8 +75,8 @@ export async function fetchGlobal(board: string, f: Fetch = fetch, timeoutMs = T
 }
 
 /** Posts a score (time in ms) if it is valid; true when it was accepted. Never throws. */
-export async function submitGlobal(board: string, initials: string, ms: number, f: Fetch = fetch, timeoutMs = TIMEOUT_MS): Promise<boolean> {
-  const body = scorePayload(board, initials, ms / 1000);
+export async function submitGlobal(board: string, initials: string, ms: number, cleared: number, f: Fetch = fetch, timeoutMs = TIMEOUT_MS): Promise<boolean> {
+  const body = scorePayload(board, initials, ms / 1000, cleared);
   if (!body) return false;
   const headers = { apikey: GLOBAL_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' };
   return (await send(f, GLOBAL_BASE, { method: 'POST', headers, body: JSON.stringify(body) }, timeoutMs)) !== null;

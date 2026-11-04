@@ -8,7 +8,7 @@ export const SCREENS: readonly Screen[] = ['title', 'hud', 'complete', 'paused']
 /** How opaque the black layer behind the menus is. */
 export const SCRIM_OPACITY = 0.9;
 /** The menus: the game behind them is dimmed to 90% black (a full-view layer on a flat screen, a backing panel in AR). */
-export const MENU_SCREENS: readonly Screen[] = ['title', 'picker', 'board', 'options'];
+export const MENU_SCREENS: readonly Screen[] = ['title', 'picker', 'board', 'options', 'paused'];
 /** The cards the board is played with: the camera fits for these, the menus are centred over a black layer. */
 export const PLAY_SCREENS: readonly Screen[] = SCREENS.filter((s) => !MENU_SCREENS.includes(s));
 export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options', 'picker'];
@@ -53,15 +53,13 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
 /**
  * `level` is the slot on the board and `levels` how many slots there are: the campaign levels, then one more for a Random level or
  * a puzzle opened from a ?seed= link (`random`, `shared` say which). `resume`: a level is solved, so the title offers Continue.
- * `over`: the level was solved past its par time, so the complete card leads with Retry. `copy`: the label of the Copy link pill on the complete card (absent: no pill). `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
+ * `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
  */
-export type LayoutCtx = { level: number; levels: number; shared?: boolean; random?: boolean; resume?: boolean; narrow?: boolean; copy?: string; over?: boolean; confirm?: boolean };
+export type LayoutCtx = { level: number; levels: number; shared?: boolean; random?: boolean; resume?: boolean; narrow?: boolean; confirm?: boolean };
 
 /** Width of every card on a phone in portrait (outside XR), metres of panel space. */
 export const NARROW_W = 0.3;
 const BACK_W = 0.076;
-/** The Relaxed toggle on the phone's pause card. */
-const TOGGLE_W = 0.082;
 /** The menu cards (start, options, high scores, level select) are one column, one phone width wide, wide or narrow. */
 const MENU_GAP = 0.012;
 /** The start panel's big buttons: 50 mm tall in XR and everywhere else; three stacked, with the words over them. */
@@ -111,44 +109,19 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       return { width, height: 0.096, buttons: [{ id: 'pause', label: 'Pause', kind: 'icon', x: width / 2 - 0.008 - BH / 2, y: 0.031, w: BH, h: BH }] };
     }
     case 'complete': {
-      // The last slot is a Random level or a shared puzzle; the one before it is level 20, after which Next is the menu.
+      // The last slot is a Random level or a shared puzzle; the one before it is level 20, after which Next is Finish (the run's result).
       const special = ctx.level >= ctx.levels - 1;
       const last = ctx.level === ctx.levels - 2;
-      // A campaign level: Retry is a new puzzle at the same difficulty. Over par it leads, and Next stays a plain secondary so a slow solve never blocks the way on.
-      // A Random level: Play again is a new puzzle at the same difficulty. A shared puzzle: Restart is the same puzzle again.
-      const items: Parameters<typeof row>[1] = special
-        ? ctx.random
-          ? [['next', 'Play again', 'primary', primaryW], ['menu', 'Menu', 'secondary', secondaryW]]
-          : [['restart', 'Restart', 'primary', primaryW], ['menu', 'Menu', 'secondary', secondaryW]]
-        : ctx.over
-          ? [['restart', 'Retry', 'primary', primaryW], ['next', last ? 'Menu' : 'Next', 'secondary', secondaryW]]
-          : [['next', last ? 'Menu' : 'Next', 'primary', primaryW], ['restart', 'Retry', 'secondary', secondaryW]];
-      if (ctx.copy) {
-        // On a phone "Copy link" needs a little more than 72 mm, so the primary gives it 8; "Play again" is the longest label and gets 104 mm.
-        if (narrow) {
-          items[0]![3] = special && ctx.random ? 0.104 : 0.092;
-          items[1]![3] = special && ctx.random ? 0.062 : secondaryW;
-        }
-        items.push(['copy', ctx.copy, 'secondary', narrow ? (special && ctx.random ? 0.08 : 0.082) : secondaryW]);
-      }
+      // A level or a Random puzzle cleared: Next. A shared puzzle: Restart plays it again, Menu leaves.
+      const items: Parameters<typeof row>[1] = special && !ctx.random
+        ? [['restart', 'Restart', 'primary', primaryW], ['menu', 'Menu', 'secondary', secondaryW]]
+        : [['next', last ? 'Finish' : 'Next', 'primary', primaryW]];
       return { width: narrow ? NARROW_W : 0.35, height: 0.17, buttons: row(low, items) };
     }
     case 'paused': {
-      // Wide: the Relaxed toggle is a fourth pill on the one row, which keeps every target in the panel zone (a card this wide is still well inside the yaw cone).
-      if (!narrow) {
-        return {
-          width: 0.42,
-          height: 0.15,
-          buttons: row(low, [['resume', 'Resume', 'primary', 0.1], ['restart', 'Restart', 'secondary', 0.08], ['menu', 'Main menu', 'secondary', 0.108], ['relaxed', 'No timer', 'toggle', 0.09]]),
-        };
-      }
-      // Phone: the row is full, and the zone does not apply outside XR, so the toggle rides the top right beside the "Paused" words.
-      const toggle: Button = { id: 'relaxed', label: 'No timer', kind: 'toggle', x: NARROW_W / 2 - 0.008 - TOGGLE_W / 2, y: 0.104, w: TOGGLE_W, h: BH };
-      return {
-        width: NARROW_W,
-        height: 0.15,
-        buttons: [...row(low, [['resume', 'Resume', 'primary', 0.086], ['restart', 'Restart', 'secondary', 0.066], ['menu', 'Main menu', 'secondary', 0.1]]), toggle],
-      };
+      // One column like the other menus: Resume, Restart (a new puzzle), Give up (ends the run), Main menu (the run stays saved), No timer.
+      const items: Parameters<typeof stack>[1] = [['resume', 'Resume', 'primary'], ['restart', 'Restart', 'secondary'], ['giveup', 'Give up', 'secondary'], ['menu', 'Main menu', 'secondary'], ['relaxed', 'No timer', 'toggle']];
+      return { width: NARROW_W, height: PAD + items.length * BH + (items.length - 1) * MENU_GAP + OPTIONS_HEAD, buttons: stack(PAD, items, START_BTN_W, BH) };
     }
     case 'initials': {
       const letter = (k: number) => [`up-${k}`, `down-${k}`] as const;

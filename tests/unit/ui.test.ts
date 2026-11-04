@@ -25,54 +25,33 @@ describe('panel layouts', () => {
     const ids = (s: (typeof SCREENS)[number], level = 0) => layout(s, { level, levels: 5 }).buttons.map((b) => b.id);
     expect(ids('title')).toEqual(['start', 'random', 'options', 'scores']);
     expect(ids('hud')).toEqual(['pause']);
-    expect(ids('complete')).toEqual(['next', 'restart']);
-    expect(ids('paused')).toEqual(['resume', 'restart', 'menu', 'relaxed']);
+    expect(ids('complete')).toEqual(['next']);
+    expect(ids('paused')).toEqual(['resume', 'restart', 'giveup', 'menu', 'relaxed']);
     expect(layout('picker', { level: 0, levels: 21 }).buttons.map((b) => b.id)).toEqual(['easy', 'medium', 'hard', 'expert', 'back']);
     // No level list anywhere: nothing offers Choose level or a tile for a level.
     for (const s of [...SCREENS, 'picker', 'board', 'options'] as const) expect(layout(s, { level: 0, levels: 21 }).buttons.map((b) => b.label), s).not.toContain('Choose level');
-    expect(layout('paused', { level: 0, levels: 21 }).buttons.map((b) => b.label)).toEqual(['Resume', 'Restart', 'Main menu', 'No timer']);
+    expect(layout('paused', { level: 0, levels: 21 }).buttons.map((b) => b.label)).toEqual(['Resume', 'Restart', 'Give up', 'Main menu', 'No timer']);
   });
 
-  it('a campaign complete card leads with Next, Retry (a new puzzle at the same difficulty) beside it; over par, Retry leads and Next stays a secondary', () => {
-    const pass = layout('complete', { level: 0, levels: 21 }).buttons;
-    expect(pass.map((b) => [b.id, b.label, b.kind])).toEqual([['next', 'Next', 'primary'], ['restart', 'Retry', 'secondary']]);
-    const over = layout('complete', { level: 0, levels: 21, over: true, copy: 'Copy link' }).buttons;
-    expect(over.map((b) => [b.id, b.label, b.kind])).toEqual([['restart', 'Retry', 'primary'], ['next', 'Next', 'secondary'], ['copy', 'Copy link', 'secondary']]);
-    expect(layout('complete', { level: 0, levels: 21, over: true, narrow: true }).buttons.map((b) => b.id)).toEqual(['restart', 'next']);
+  it('a level cleared offers Next, and nothing else: no Retry, no Copy link, no code', () => {
+    expect(layout('complete', { level: 0, levels: 21 }).buttons.map((b) => [b.id, b.label, b.kind])).toEqual([['next', 'Next', 'primary']]);
+    expect(layout('complete', { level: 20, levels: 21, random: true }).buttons.map((b) => [b.id, b.label])).toEqual([['next', 'Next']]);
+    expect(layout('complete', { level: 0, levels: 21, narrow: true }).buttons.map((b) => b.id)).toEqual(['next']);
   });
 
-  it('after level 20 the primary is Menu; a Random level offers Play again and Menu; a shared puzzle offers Restart and Menu', () => {
-    expect(layout('complete', { level: 19, levels: 21 }).buttons.map((b) => [b.id, b.label])).toEqual([['next', 'Menu'], ['restart', 'Retry']]);
-    expect(layout('complete', { level: 20, levels: 21, random: true, copy: 'Copy link' }).buttons.map((b) => [b.id, b.label, b.kind])).toEqual([['next', 'Play again', 'primary'], ['menu', 'Menu', 'secondary'], ['copy', 'Copy link', 'secondary']]);
+  it('after level 20 the primary is Finish; a shared puzzle offers Restart and Menu', () => {
+    expect(layout('complete', { level: 19, levels: 21 }).buttons.map((b) => [b.id, b.label])).toEqual([['next', 'Finish']]);
     expect(layout('complete', { level: 20, levels: 21, shared: true }).buttons.map((b) => [b.id, b.label])).toEqual([['restart', 'Restart'], ['menu', 'Menu']]);
   });
 
-  it('the Random level card fits its row on a phone and desktop, over par or not', () => {
+  it('the pause card is one centred column: Resume, Restart, Give up, Main menu, No timer', () => {
     for (const narrow of [false, true]) {
-      for (const over of [false, true]) {
-        const l = layout('complete', { level: 20, levels: 21, random: true, copy: 'Copy link', over, narrow });
-        for (const b of l.buttons) expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(l.width / 2 - 0.0145 + 1e-9);
-      }
-    }
-  });
-
-  it('the Relaxed toggle is the last pill on the wide pause row and the options row (in reach), and sits top right on the phone pause card, clear of the words', () => {
-    for (const narrow of [false, true]) {
-      const options = layout('options', { level: 0, levels: 9, narrow });
-      const t = options.buttons.find((b) => b.id === 'relaxed')!;
-      expect(t.kind).toBe('toggle');
-      expect(t.label).toBe('No timer'); // plain about what it does, to a first-time player
-      expect(layout('paused', { level: 0, levels: 9, narrow }).buttons.find((b) => b.id === 'relaxed')!.label).toBe('No timer');
-      expect(layout('title', { level: 0, levels: 9, narrow }).buttons.map((b) => b.id)).not.toContain('relaxed'); // the settings live in Options now
-
-      const paused = layout('paused', { level: 0, levels: 9, narrow });
-      const p = paused.buttons.find((b) => b.id === 'relaxed')!;
-      expect(p.kind).toBe('toggle');
-      if (!narrow) expect(p.y).toBe(paused.buttons[0]!.y);
-      else {
-        expect(p.x).toBeGreaterThan(0.05 + p.w / 2); // right of the centred "Paused" and level line
-        expect(Math.max(...paused.buttons.filter((b) => b !== p).map((b) => b.y + b.h / 2)) + 0.012).toBeLessThanOrEqual(p.y - p.h / 2 + 1e-9);
-      }
+      const l = layout('paused', { level: 0, levels: 21, narrow });
+      expect(l.buttons.map((b) => [b.id, b.label, b.kind])).toEqual([['resume', 'Resume', 'primary'], ['restart', 'Restart', 'secondary'], ['giveup', 'Give up', 'secondary'], ['menu', 'Main menu', 'secondary'], ['relaxed', 'No timer', 'toggle']]);
+      expect(new Set(l.buttons.map((b) => b.x))).toEqual(new Set([0]));
+      const ys = l.buttons.map((b) => b.y);
+      expect(ys, 'top to bottom').toEqual([...ys].sort((p, q) => q - p));
+      for (const b of l.buttons) expect(b.h).toBeGreaterThanOrEqual(0.04);
     }
   });
 
@@ -98,7 +77,7 @@ describe('phone layouts (narrow, outside XR)', () => {
       expect(narrow(s).buttons.map((b) => b.id), s).toEqual(layout(s, ctx).buttons.map((b) => b.id));
       expect(narrow(s).buttons.map((b) => b.label), s).toEqual(layout(s, ctx).buttons.map((b) => b.label));
     }
-    expect(narrow('complete', { level: 19 }).buttons.map((b) => b.id)).toEqual(['next', 'restart']);
+    expect(narrow('complete', { level: 19 }).buttons.map((b) => b.id)).toEqual(['next']);
   });
 
   it('every target is at least 4 cm, 12 mm apart and inside the padding', () => {
@@ -151,9 +130,9 @@ describe('title', () => {
     expect(layout('title', { level: 1, levels: 6, resume: true }).buttons[0]).toMatchObject({ id: 'continue', label: 'Continue', kind: 'primary' });
   });
 
-  it('the complete card on level 20 leads to the menu', () => {
+  it('the complete card on level 20 leads to the result of the run', () => {
     expect(layout('complete', { level: 18, levels: 21 }).buttons[0]!.label).toBe('Next');
-    expect(layout('complete', { level: 19, levels: 21 }).buttons[0]!.label).toBe('Menu');
+    expect(layout('complete', { level: 19, levels: 21 }).buttons[0]!.label).toBe('Finish');
   });
 });
 

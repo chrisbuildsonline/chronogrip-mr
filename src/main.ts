@@ -23,12 +23,12 @@ import type { GearSpin } from './train';
 import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
 import { createSound, loadSoundOn, saveSoundOn, ticksBetween } from './sound';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
-import { firstUnsolved, loadProgress, recordOutcome, recordSolve, saveProgress, type Progress } from './progress';
+import { carried, clearedWords, loadRun, nextIndex, resultOf, saveRun, solvedLevel, startRun, type Run } from './run';
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
 import { tinkerLevel } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
 import { fetchGlobal, submitGlobal } from './global';
-import { BOARDS, addEntry, backInitial, boardOf, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
+import { BOARDS, addEntry, backInitial, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
 import { CAMPAIGN, DIFFICULTIES, DIFFICULTY_LEVEL, freshSeed, kindOfDifficulty, puzzleFor, randomLevel, type Difficulty } from './random';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
@@ -100,7 +100,8 @@ let levels: readonly Level[] = [...Array.from({ length: CAMPAIGN }, (_, i) => ca
 let levelIds = levels.map((l) => l.id);
 /** The slot after the campaign: always the last one. */
 const randomSlot = () => levels.length - 1;
-let progress: Progress = loadProgress(storage);
+/** The run in progress (or saved): a campaign run from New Game, or a Random level run. A score is entered once per run, when it ends. */
+let run: Run | null = sharedSeed === null ? loadRun(storage) : null;
 // High score boards (src/scores.ts): a top ten per campaign level and one per Random level difficulty, kept on this device.
 let scores: Scores = loadScores(storage);
 /**
@@ -128,17 +129,15 @@ function loadGlobal(board: string): void {
   });
 }
 /** The board of the level last started: the board the Best times card opens on. */
-let lastBoard = BOARDS[0]!;
-/** True on the complete card when this solve beat a saved time. */
-let newBest = false;
+let lastBoard = BOARDS[0]!; // the campaign
 /** Relaxed: no timer. Default off (timer on), saved across visits. */
 let relaxed = loadRelaxed(storage);
 /** The time limit of the level on the board, and whether the solve on the complete card beat it (null while playing, and in Relaxed). */
 let par = 0;
 let outcome: Outcome | null = null;
 /** The title board is the level Continue plays: the first one not yet solved. */
-const continueAt = () => firstUnsolved(progress, levelIds.slice(0, CAMPAIGN));
-const resume = () => levelIds.slice(0, CAMPAIGN).some((id) => Object.hasOwn(progress.best, id));
+const continueAt = () => (run?.kind === 'campaign' ? nextIndex(run) : 0);
+const resume = () => run !== null;
 
 let levelIndex = sharedSeed === null ? continueAt() : randomSlot();
 let level: Level = levels[levelIndex]!;
@@ -422,32 +421,11 @@ const codeOf = (l: Level): string | null => {
   const seed = seedOfLevel.get(l);
   return seed !== undefined ? encodeSeed(seed) : /^t\d+$/.test(l.id) ? encodeSeed(Number(l.id.slice(1))) : null;
 };
-/** Copy link on the complete card: idle, copied (back to idle after a moment), or failed (the card shows the link). */
-let copy: { state: 'idle' | 'copied' | 'failed'; link: string | null } = { state: 'idle', link: null };
-const COPIED_MS = 2500;
-async function copyLink(): Promise<void> {
-  const code = codeOf(level);
-  if (!code || world.renderer.xr.isPresenting) return;
-  const link = `${location.origin}${location.pathname}?seed=${code}`;
-  const id = level.id;
-  try {
-    await navigator.clipboard.writeText(link);
-    copy = { state: 'copied', link };
-    setTimeout(() => {
-      if (copy.state === 'copied' && level.id === id) copy = { state: 'idle', link: null };
-    }, COPIED_MS);
-  } catch {
-    copy = { state: 'failed', link };
-  }
-}
-
 function loadLevel(i: number): void {
   levelIndex = i;
   level = levels[i]!;
-  newBest = false;
   par = parFor(level);
   outcome = null;
-  copy = { state: 'idle', link: null };
   dropGearEntities();
   built.load(level);
   axleOf = new Map(level.axles.map((a) => [a.id, a]));
@@ -504,42 +482,70 @@ function freshLevel(i: number): void {
 const isRandomLevel = (i: number) => i === randomSlot() && special === 'random';
 let randomScored = false;
 
-/** Random level at a difficulty, played at once. */
-function playRandom(d: Difficulty): void {
+/** Random level at a difficulty, played at once; `fresh` starts a new run (the picker), else the run goes on (Next, Continue). */
+function playRandom(d: Difficulty, fresh = false): void {
   randomDiff = d;
   special = 'random';
+  if (fresh) {
+    run = startRun(`random-${d}`);
+    saveRun(storage, run);
+  }
   send({ type: 'play', level: randomSlot() });
 }
 
-/** If this solve makes its board's top ten, the initials card comes up before the complete card. */
-function askInitials(board: string): void {
-  const entry = { ms: Math.round(levelClock.seconds * 1000), date: todayISO() };
-  const q = qualifies(scores, board, { ...entry, name: scores.initials });
-  if (q.ok) overlay = { kind: 'initials', board, rank: q.rank, entry, letters: scores.initials, cursor: 0 };
+/** If the run's score makes its board's top ten, the initials card comes up over the title, with the run's result. */
+function askInitials(result: { board: string; cleared: number; ms: number }): void {
+  const entry = { ms: result.ms, date: todayISO(), cleared: result.cleared };
+  const q = qualifies(scores, result.board, { ...entry, name: scores.initials });
+  if (q.ok) overlay = { kind: 'initials', board: result.board, rank: q.rank, entry, letters: scores.initials, cursor: 0 };
+}
+
+/** A line over the title for a moment (reuses the seed note's pill): a run that ended with nothing to score. */
+function say(text: string): void {
+  if (!seedNote) return;
+  seedNote.textContent = text;
+  seedNote.hidden = false;
+  setTimeout(() => (seedNote.hidden = true), 8000);
+}
+
+/**
+ * The run ends (the time ran out, Give up, or level 20 was solved): back to the title, and the result card asks for initials if the
+ * run cleared anything. The time on the puzzle it ended on counts, unless the run was won.
+ */
+function endRun(why: 'timeout' | 'giveup' | 'won'): void {
+  const r = run;
+  const result = r && resultOf(r, why === 'won' ? 0 : levelClock.seconds);
+  run = null;
+  saveRun(storage, run);
+  send({ type: 'back', level: 0 });
+  if (result) askInitials(result);
+  else if (why === 'timeout') say('Time’s up. Nothing cleared this run.');
+  showPanel();
+  fitView(true);
 }
 
 /** The best times card's board: its name, its rows and what it says while empty. */
 function boardCard(id: string, tab: 'local' | 'global'): NonNullable<PanelCtx['board']> {
   const random = id.startsWith('random-');
-  const name = random ? `Random · ${id.slice('random-'.length).replace(/^./, (c) => c.toUpperCase())}` : `Level ${id.slice(1)}`;
-  const local = { label: name, tab, entries: scores.boards[id]!, empty: `No times yet. Solve ${random ? `a ${name} puzzle` : name.toLowerCase()} to set one.` };
+  const name = random ? `Random · ${id.slice('random-'.length).replace(/^./, (c) => c.toUpperCase())}` : 'Campaign';
+  const local = { label: name, tab, kind: (random ? 'puzzle' : 'level') as 'puzzle' | 'level', entries: scores.boards[id]!, empty: `No runs yet. ${random ? `Finish a ${name} run` : 'Play the campaign'} to set one.` };
   if (tab === 'local') return local;
   // Global: the last good rows; with none, "Loading" while asking and the local rows with a quiet note once it failed.
   const rows = globalRows.get(id);
-  if (rows) return { ...local, entries: rows, empty: 'No global times yet. Be the first.' };
-  if (globalAsk.get(id) === 'offline') return { ...local, note: 'Global scores offline · your times' };
+  if (rows) return { ...local, entries: rows, empty: 'No global runs yet. Be the first.' };
+  if (globalAsk.get(id) === 'offline') return { ...local, note: 'Global scores offline · your runs' };
   return { ...local, entries: [], empty: 'Loading global scores' };
 }
 
 /**
- * Options > Reset progress, once confirmed: forgets every solved level (passes, Continue) and puts level 1 back on the board.
+ * Options > Reset progress, once confirmed: forgets the saved run (Continue) and puts level 1 back on the board.
  * The high scores boards are a separate store and stay.
  */
 function resetProgress(): void {
-  progress = { best: {} };
-  saveProgress(storage, progress);
-  freshLevel(continueAt());
-  loadLevel(continueAt());
+  run = null;
+  saveRun(storage, run);
+  freshLevel(0);
+  loadLevel(0);
   flow = { ...flow, level: levelIndex };
 }
 
@@ -563,7 +569,7 @@ function pressOverlay(id: string): void {
     } else return;
   } else if (o.kind === 'picker') {
     overlay = null;
-    if (id !== 'back' && (DIFFICULTIES as readonly string[]).includes(id)) return playRandom(id as Difficulty);
+    if (id !== 'back' && (DIFFICULTIES as readonly string[]).includes(id)) return playRandom(id as Difficulty, true);
   } else if (o.kind === 'board') {
     if (id === 'back') overlay = null;
     else if (id === 'board-prev' || id === 'board-next') overlay = { ...o, board: BOARDS[(BOARDS.indexOf(o.board) + (id === 'board-next' ? 1 : BOARDS.length - 1)) % BOARDS.length]! };
@@ -577,7 +583,7 @@ function pressOverlay(id: string): void {
     else if (id === 'save') {
       scores = addEntry(scores, o.board, { ...o.entry, name: o.letters });
       saveScores(storage, scores);
-      void submitGlobal(o.board, scores.initials, o.entry.ms); // fire and forget: the card never waits on it
+      if (o.entry.cleared > 0) void submitGlobal(o.board, scores.initials, o.entry.ms, o.entry.cleared); // fire and forget: the card never waits on it
       overlay = null;
     } else if (id === 'skip') overlay = null;
     else return;
@@ -589,9 +595,9 @@ function pressOverlay(id: string): void {
 function send(e: FlowEvent): void {
   const next = step(flow, e, levels.length);
   if (next === flow) return;
-  // A card laid over the flow goes when the flow leaves its place: the board with the title, the initials with the complete card.
-  if (overlay && next.name !== (overlay.kind === 'initials' ? 'complete' : 'title')) overlay = null;
-  if (next.name === 'playing') lastBoard = next.level === randomSlot() ? (special === 'random' ? `random-${randomDiff}` : lastBoard) : (boardOf(levels[next.level]!.id) ?? lastBoard);
+  // A card laid over the flow goes when the flow leaves the title: the board, the options, the picker and the run's result all sit over it.
+  if (overlay && next.name !== 'title') overlay = null;
+  if (next.name === 'playing') lastBoard = run?.kind ?? lastBoard;
   if (next.name === 'paused') {
     putBack();
     letGoKnob();
@@ -600,7 +606,7 @@ function send(e: FlowEvent): void {
   if (reloads(flow, e, next)) {
     // A puzzle is made fresh each time it is started: a level played, the next one, a Retry on the complete card, the board the
     // title shows. A Restart from the pause card puts the same puzzle back.
-    if (e.type === 'play' || e.type === 'next' || e.type === 'back' || (e.type === 'restart' && flow.name === 'complete')) freshLevel(next.level);
+    if (e.type === 'play' || e.type === 'next' || e.type === 'back' || (e.type === 'restart' && flow.name === 'paused')) freshLevel(next.level);
     loadLevel(next.level);
   }
   const entering = next.name !== flow.name && flow.name !== 'paused';
@@ -617,24 +623,10 @@ function send(e: FlowEvent): void {
     rewardAt = calibratedAt = performance.now();
     letGoKnob();
     outcome = relaxed ? null : outcomeOf(levelClock.seconds, par);
-    if (isRandomLevel(levelIndex)) {
-      // A Random level: its times go on its difficulty's board (first solve of a puzzle only), nothing into level progress.
-      newBest = false;
-      if (!randomScored) {
-        randomScored = true;
-        askInitials(`random-${randomDiff}`);
-      }
-    } else {
-      // A first solve is just solved; New best is for beating a time already saved.
-      const had = Object.hasOwn(progress.best, level.id);
-      const r = recordSolve(progress, level.id, levelClock.seconds);
-      progress = r.progress;
-      newBest = had && r.newBest;
-      // Held to par unless Relaxed: past it the bird still wakes, but the card says over time. The best time is kept either way.
-      if (outcome) progress = recordOutcome(progress, level.id, outcome);
-      if (r.newBest || outcome) saveProgress(storage, progress);
-      const board = boardOf(level.id);
-      if (board) askInitials(board);
+    // A level cleared counts towards the run (a shared puzzle is no part of one); the score waits for the run to end.
+    if (run && !(levelIndex === randomSlot() && special === 'shared')) {
+      run = solvedLevel(run, levelClock.seconds);
+      saveRun(storage, run);
     }
     burst.position.set(...trayLocal(DIAL_AT[0], DIAL_AT[1], 0.008));
   }
@@ -671,18 +663,37 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
     showPanel();
     return fitView(true);
   }
-  if (flow.name === 'title' && id === 'start') return send({ type: 'play', level: 0 }); // New Game: level 1
-  if (id === 'menu') return send({ type: 'back', level: continueAt() });
+  if (flow.name === 'title' && id === 'start') {
+    // New Game: a fresh campaign run from level 1.
+    run = startRun('campaign');
+    saveRun(storage, run);
+    return send({ type: 'play', level: 0 });
+  }
+  if (flow.name === 'title' && id === 'continue' && run && run.kind !== 'campaign') return playRandom(run.kind.slice('random-'.length) as Difficulty);
+  if (id === 'giveup') return endRun('giveup');
+  if (id === 'menu') {
+    // The Main menu leaves the run saved, with the time spent on this puzzle carried into it.
+    if (run && flow.name === 'paused') {
+      run = carried(run, levelClock.seconds);
+      saveRun(storage, run);
+    }
+    return send({ type: 'back', level: continueAt() });
+  }
   if (id === 'next' && flow.name === 'complete' && levelIndex >= CAMPAIGN - 1) {
-    // After level 20 the way on is the menu; after a Random level it is another at the same difficulty.
+    // After level 20 the run is won and its result comes up; after a Random level it is another puzzle at the same difficulty.
     if (isRandomLevel(levelIndex)) playRandom(randomDiff);
-    else send({ type: 'back', level: continueAt() });
-  } else if (id === 'copy') void copyLink();
-  else if (id === 'relaxed') {
+    else endRun('won');
+    return;
+  }
+  if (id === 'restart' && run && (levelIndex < CAMPAIGN || isRandomLevel(levelIndex))) {
+    // Restart is a new puzzle at the same level; the run's clock keeps counting what was spent on this one.
+    run = carried(run, levelClock.seconds);
+    saveRun(storage, run);
+  }
+  if (id === 'relaxed') {
     relaxed = !relaxed;
     saveRelaxed(storage, relaxed);
-  }
-  else send(PRESS[id]!);
+  } else send(PRESS[id]!);
 }
 /** Board parts move only while playing: on the menus the board is under the dark layer (or the AR backing panel), so a touch there is a button's. */
 const live = () => flow.name === 'playing';
@@ -1119,6 +1130,8 @@ world.scene.onBeforeRender = () => {
   lastFrame = now;
   stepGrabs();
   levelClock.tick(now, flow.name === 'playing');
+  // A run is lost when the level's time limit runs out (not with No timer).
+  if (flow.name === 'playing' && !relaxed && run && levelClock.seconds >= par) endRun('timeout');
   for (const [id, t] of tweens) {
     const { pos, done } = tweenAt(t.from, t.to, now - t.start);
     built.loose.get(id)?.position.set(...pos);
@@ -1234,18 +1247,14 @@ world.scene.onBeforeRender = () => {
 function showPanel(now = performance.now()): void {
   const waiting = flow.name === 'complete' && now - calibratedAt < COMPLETE_DELAY_MS;
   panels.show(waiting ? null : (overlay?.kind ?? screenOf(flow)), {
-    initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor } : undefined,
+    initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, label: clearedWords(overlay.board, overlay.entry.cleared), ms: overlay.entry.ms } : undefined,
     board: overlay?.kind === 'board' ? boardCard(overlay.board, overlay.tab) : undefined,
     level: levelIndex,
     levels: levels.length,
     shared: special === 'shared',
     random: special === 'random',
     difficulty: randomDiff.replace(/^./, (c) => c.toUpperCase()),
-    code: codeOf(level),
-    link: copy.state === 'failed' ? copy.link : null,
-    copy: world.renderer.xr.isPresenting || !codeOf(level) ? undefined : copy.state === 'copied' ? 'Copied' : 'Copy link',
     resume: resume(),
-    newBest,
     time: levelClock.seconds,
     relaxed,
     sound: soundOn,
@@ -1254,7 +1263,6 @@ function showPanel(now = performance.now()): void {
     timer: relaxed || screenOf(flow) !== 'hud' ? null : { par, ...timerView(levelClock.seconds, par) }, // only the HUD carries it, so no other card redraws as it counts
     outcome,
     par: outcome ? par : null,
-    best: levelIds.map((id) => progress.best[id] ?? null),
     hover: mouseButton ?? tipButton.left ?? tipButton.right,
     goal: badge.root.visible ? goal() : null,
     fault: faultKind(fault),
@@ -1435,26 +1443,18 @@ window.__chrono = Object.freeze({
   get seedNote() {
     return seedNote && !seedNote.hidden ? seedNote.textContent : null;
   },
-  get copy() {
-    return { ...copy };
+  /** Test hook: the run in progress (or saved), null when none. */
+  get run() {
+    return run && { ...run };
   },
   get levelTime() {
     return levelClock.seconds;
-  },
-  get progress() {
-    return { best: { ...progress.best } };
-  },
-  get newBest() {
-    return newBest;
   },
   get timer() {
     return { relaxed, par, ring: panels.ring, ringSpan: [RING.x - RING.r, RING.x + RING.r] as const, ...timerView(levelClock.seconds, par) };
   },
   get outcome() {
     return outcome;
-  },
-  get outcomes() {
-    return { ...progress.outcome };
   },
   /** Test hook: plays `s` seconds of level time at once, so the clock can run out without waiting. */
   advanceClock(s: number) {

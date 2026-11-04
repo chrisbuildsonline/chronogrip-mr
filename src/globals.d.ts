@@ -117,10 +117,8 @@ interface ChronoHook {
   readonly levelIndex: number;
   /** Live: seconds played on this level; runs only while playing. */
   readonly levelTime: number;
-  /** Live: saved best times in seconds per level id (a copy). */
-  readonly progress: { readonly best: Readonly<Record<string, number>> };
-  /** Live: true on the complete card when this solve beat a saved time; false on a first solve. */
-  readonly newBest: boolean;
+  /** Live: the run in progress or saved (board kind, levels or puzzles cleared, total time so far in ms), null when none. */
+  readonly run: { readonly kind: string; readonly cleared: number; readonly ms: number } | null;
   /**
    * Live: the level timer. `relaxed`: the Relaxed (no timer) setting; `par`: this level's time limit in seconds; `left`,
    * `over`: whole seconds left (0 once out) and past par; `fraction`: share of par left, 0..1; `ring`: the HUD up now carries the countdown ring.
@@ -128,8 +126,6 @@ interface ChronoHook {
   readonly timer: { readonly relaxed: boolean; readonly par: number; readonly left: number; readonly over: number; readonly fraction: number; readonly ring: boolean; /** The ring's left and right edge, metres from the card's left edge. */ readonly ringSpan: readonly [number, number] };
   /** Live: whether this level's last solve beat par ('pass') or not ('over'); null while playing and in Relaxed. */
   readonly outcome: 'pass' | 'over' | null;
-  /** Live: saved pass/over per level id (a copy); Relaxed solves are not marked. */
-  readonly outcomes: Readonly<Record<string, 'pass' | 'over'>>;
   /** Test only: adds `s` seconds to the level clock at once, so the timer can run out without waiting. */
   advanceClock(s: number): void;
   /** Live: true while the pause card is up. */
@@ -152,8 +148,8 @@ interface ChronoHook {
   jump(n: number): void;
   /** The solution of the level on the board, gear id to axle id. */
   readonly solution: Record<string, string>;
-  /** Live: the saved high score boards (a copy): the last initials used, and per board id (l1-l8, random) its top ten entries, best first. Random entries carry the `step` solved. */
-  readonly scores: { readonly initials: string; readonly boards: Readonly<Record<string, readonly { readonly name: string; readonly ms: number; readonly date: string; readonly step?: number }[]>> };
+  /** Live: the saved high score boards (a copy): the last initials used, and per board id (campaign, random-easy .. random-expert) its top ten runs, best first; `cleared` is the levels or puzzles the run cleared. */
+  readonly scores: { readonly initials: string; readonly boards: Readonly<Record<string, readonly { readonly name: string; readonly ms: number; readonly date: string; readonly cleared: number }[]>> };
   /** Live: whether sound is on (Options; saved as chronogrip.sound.v1). */
   readonly soundOn: boolean;
   /** Live: the Options card while it is up (whether Reset progress awaits its confirm, the No timer and Sound switches), else null. */
@@ -162,8 +158,6 @@ interface ChronoHook {
   readonly initials: { readonly board: string; readonly rank: number; readonly letters: string; readonly cursor: number } | null;
   /** Live: the note shown for an invalid ?seed= while it is up, else null. */
   readonly seedNote: string | null;
-  /** Live: the complete card's Copy link; `link` is what was (or would be) copied, null while idle. */
-  readonly copy: { readonly state: 'idle' | 'copied' | 'failed'; readonly link: string | null };
   /** Page pixel positions of the shown panel's four corners (bottom left, bottom right, top left, top right); empty when none is up. */
   panelCorners(): [number, number][];
   /**

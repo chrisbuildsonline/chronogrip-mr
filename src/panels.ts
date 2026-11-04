@@ -21,7 +21,7 @@ let T = WIDE;
 const font = (weight: number, sizeMm: number, face = SANS) => `${weight} ${mm(sizeMm)}px ${face}`;
 
 /**
- * `best` is per level index; `newBest`: this solve beat a saved time; `goal`: what the HUD asks of the marked gear;
+ * `goal`: what the HUD asks of the marked gear;
  * `fault`: what is wrong with the train as placed, shown on the HUD in place of the goal line.
  */
 export type PanelCtx = {
@@ -33,20 +33,12 @@ export type PanelCtx = {
   random?: boolean;
   difficulty?: string;
   resume: boolean;
-  newBest: boolean;
   time: number;
-  best: readonly (number | null)[];
   hover: string | null;
   goal: Goal | null;
   fault?: keyof typeof FAULT_WORDS | null;
   /** A phone in portrait outside XR: the narrow layouts and the phone type scale. */
   narrow?: boolean;
-  /** The puzzle code of the level on the complete card (a tinker level), null for a hand-made one. */
-  code?: string | null;
-  /** The share link shown in place of the code line after the clipboard refused it. */
-  link?: string | null;
-  /** The Copy link pill's label on the complete card; absent where it is not offered (hand-made levels, XR). */
-  copy?: string;
   /** The Relaxed (no timer) setting: the toggle's state. */
   relaxed?: boolean;
   /** The Options panel: the Sound switch's state, whether Reset progress is waiting for its confirm, and whether the player is in XR (the grab line says pinch). */
@@ -59,10 +51,10 @@ export type PanelCtx = {
   outcome?: Outcome | null;
   par?: number | null;
   /** The initials card: the rank this solve would take, the three letters, and the slot typing fills next (3: all in). */
-  initials?: { rank: number; letters: string; cursor: number };
+  initials?: { rank: number; letters: string; cursor: number; label: string; ms: number };
   /** The best times card: the board's name, its rows, and the muted line shown while it is empty. */
   /** `tab` is the board shown; `note` is a quiet line over the rows (the global board is offline). */
-  board?: { label: string; entries: readonly Entry[]; empty: string; tab: 'local' | 'global'; note?: string };
+  board?: { label: string; kind: 'level' | 'puzzle'; entries: readonly Entry[]; empty: string; tab: 'local' | 'global'; note?: string };
 };
 
 /** The HUD's countdown ring: its centre from the card's left edge, and its radius with the stroke, metres. */
@@ -264,13 +256,6 @@ function faultLine(g: Draw, kind: keyof typeof FAULT_WORDS, x: number, y: number
   text(g, ` ${rest}`, tx + leadW, y + 1, font(600, size), C.muted, 'left');
 }
 
-/** The share link in muted type, shrunk to fit `room` if it is long. */
-function linkLine(g: Draw, link: string, x: number, y: number, room: number) {
-  g.font = font(600, T.body);
-  const size = T.body * Math.min(1, room / g.measureText(link).width);
-  text(g, link, x, y, font(600, size), C.muted, 'left');
-}
-
 function chevron(g: Draw, left: number, y: number, w: number, h: number, line: number) {
   g.beginPath();
   g.moveTo(left + w, y - h);
@@ -407,13 +392,13 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
     }
     case 'initials': {
       const ini = ctx.initials!;
-      status(g, `#${ini.rank} BEST TIMES`, left(0.016), y(l.height - 0.022), 'left', T.body * 0.8);
-      const time = clock(ctx.time);
+      status(g, `RUN OVER · #${ini.rank} BEST`, left(0.016), y(l.height - 0.022), 'left', T.body * 0.8);
+      const time = clock(ini.ms / 1000);
       g.font = font(700, T.xl);
       const timeW = g.measureText(time).width;
       g.font = font(600, T.heading, SERIF);
-      const size = T.heading * Math.min(1, (right(0.016) - left(0.016) - timeW - mm(10)) / g.measureText(name).width);
-      text(g, name, left(0.016), y(l.height - 0.055), font(600, size, SERIF), C.ink, 'left');
+      const size = T.heading * Math.min(1, (right(0.016) - left(0.016) - timeW - mm(10)) / g.measureText(ini.label).width);
+      text(g, ini.label, left(0.016), y(l.height - 0.055), font(600, size, SERIF), C.ink, 'left');
       text(g, time, right(0.016), y(l.height - 0.055), font(700, T.xl), C.ink, 'right');
       // Each letter is Number XL in a cream-deep slot with its arrows against it (wide: left and right; phone: over and under); the slot typing fills next has the amber ring.
       l.slots!.forEach((slot, k) => {
@@ -455,7 +440,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       const phone = !!ctx.narrow;
       const [size, small] = phone ? [11.5, 11] : [12.5, 12];
       // Offsets from a column's left edge, wide enough for a wide system font (DejaVu) too.
-      const cols = phone ? { name: 0.021, time: 0.105 } : { name: 0.024, time: 0.11 };
+      const cols = phone ? { name: 0.021, cleared: 0.056, time: 0.17 } : { name: 0.024, cleared: 0.058, time: 0.166 };
       (lowered ? b.entries.slice(0, grid.rows - 1) : b.entries).forEach((e, n) => {
         const i = n + (lowered ? 1 : 0);
         const rowY = grid.y0 - (i % grid.rows) * grid.pitch;
@@ -466,6 +451,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
         };
         put(String(n + 1), 0, font(600, small), C.muted, 'left');
         put(e.name, cols.name, font(700, size), C.ink, 'left');
+        put(b.kind === 'puzzle' ? `${e.cleared} solved` : `${e.cleared} / 20`, cols.cleared, font(600, size), C.ink, 'left');
         put(clockTenths(e.ms / 1000), cols.time, font(600, size), C.ink, 'right');
         put(formatDate(e.date), cols.time + 0.012, font(500, small), C.muted, 'left'); // right after the time
       });
@@ -500,7 +486,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       else if (ctx.goal) goalLine(g, ctx.goal, left(0.016), y(0.077));
       break;
     case 'complete': {
-      const pillEnd = status(g, ctx.outcome === 'over' ? 'OVER TIME' : 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);
+      const pillEnd = status(g, 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);
       if (ctx.par) text(g, `PAR ${clock(ctx.par)}`, pillEnd + mm(5), y(0.146) + 1, font(700, T.eyebrow), C.muted, 'left', 1);
       // Shrunk, if need be, to stop short of the time at the right (a long name on a phone).
       const title = `${name} complete`;
@@ -514,21 +500,11 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
         g.font = font(700, T.xl);
         check(g, right(0.016) - g.measureText(clock(ctx.time)).width - mm(8), y(0.11));
       }
-      // Under the time: the New best pill, or the saved best this run did not beat.
-      const best = ctx.best[ctx.level];
-      // Muted, on the row under the heading: the puzzle code, or the link itself once the clipboard refused it.
-      if (ctx.link) {
-        linkLine(g, ctx.link, left(0.016), y(0.08), right(0.016) - left(0.016));
-        break;
-      }
-      if (ctx.code) text(g, `Puzzle code ${ctx.code}`, left(0.016), y(0.08), font(600, T.body), C.muted, 'left');
-      if (ctx.newBest) status(g, 'NEW BEST', right(0.016), y(0.08), 'right', T.body * 0.8);
-      else if (best != null && best < ctx.time) text(g, `Best ${clock(best)}`, right(0.016), y(0.08), font(600, T.body), C.muted, 'right');
       break;
     }
     case 'paused':
-      text(g, 'Paused', cx, y(0.118), font(600, T.heading, SERIF), C.ink);
-      text(g, `${name}  ·  ${clock(ctx.time)}`, cx, y(0.087), font(500, T.body), C.muted);
+      text(g, 'Paused', cx, y(l.height - 0.028), font(600, T.heading, SERIF), C.ink);
+      text(g, `${name}  ·  ${clock(ctx.time)}`, cx, y(l.height - 0.056), font(500, T.body), C.muted);
       break;
   }
   if (l.track) {
@@ -656,7 +632,7 @@ export function createPanels() {
       if (!screen) backing.mesh.visible = false;
       current = null;
       if (!screen) return;
-      const l = layout(screen, { ...ctx, over: ctx.outcome === 'over' });
+      const l = layout(screen, ctx);
       current = { screen, layout: l };
       resize(panel, l.width, l.height, l.height / 2);
       drawn = [];

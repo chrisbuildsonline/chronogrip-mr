@@ -1,114 +1,128 @@
 import { describe, expect, it } from 'vitest';
-import { BOARDS, DEFAULT_INITIALS, TOP, addEntry, backInitial, boardOf, emptyScores, formatDate, loadScores, qualifies, saveScores, stepInitial, typeInitial, type Entry } from '../../src/scores';
+import { BOARDS, DEFAULT_INITIALS, TOP, addEntry, backInitial, emptyScores, formatDate, loadScores, qualifies, saveScores, stepInitial, typeInitial, type Entry } from '../../src/scores';
 
 const KEY = 'chronogrip.scores.v1';
 const store = (raw: string | null) => ({ getItem: (k: string) => (k === KEY ? raw : null) });
-const lvl = (ms: number, date = '2026-11-04', name = 'ABC'): Entry => ({ name, ms, date });
+const lvl = (ms: number, date = '2026-11-04', name = 'ABC', cleared = 5): Entry => ({ name, ms, date, cleared });
 
 describe('boards', () => {
-  it('has one board per campaign level l1-l20 and one per Random level difficulty, and none for a shared puzzle', () => {
-    expect(BOARDS).toEqual([...Array.from({ length: 20 }, (_, i) => `l${i + 1}`), 'random-easy', 'random-medium', 'random-hard', 'random-expert']);
-    expect(boardOf('l1')).toBe('l1');
-    expect(boardOf('l20')).toBe('l20');
-    expect(boardOf('t123456')).toBeNull();
-    expect(boardOf('l21')).toBeNull();
-    expect(boardOf('constructor')).toBeNull();
+  it('has the campaign board and one per Random level difficulty, and none per level or for a shared puzzle', () => {
+    expect(BOARDS).toEqual(['campaign', 'random-easy', 'random-medium', 'random-hard', 'random-expert']);
+    expect(qualifies(emptyScores(), 'l1', lvl(1000)).ok).toBe(false);
+    expect(qualifies(emptyScores(), 't123456', lvl(1000)).ok).toBe(false);
+    expect(qualifies(emptyScores(), 'constructor', lvl(1000)).ok).toBe(false);
+  });
+});
+
+describe('ranking a run', () => {
+  it('ranks by most cleared first, then least time, then the earlier date', () => {
+    let s = emptyScores();
+    s = addEntry(s, 'campaign', lvl(90000, '2026-11-04', 'SLO', 7));
+    s = addEntry(s, 'campaign', lvl(50000, '2026-11-04', 'FAS', 7));
+    s = addEntry(s, 'campaign', lvl(20000, '2026-11-04', 'FEW', 3));
+    s = addEntry(s, 'campaign', lvl(99000, '2026-11-04', 'ALL', 20));
+    s = addEntry(s, 'campaign', lvl(50000, '2026-11-01', 'OLD', 7));
+    expect(s.boards.campaign!.map((e) => e.name)).toEqual(['ALL', 'OLD', 'FAS', 'SLO', 'FEW']);
+  });
+  it('holds an entry to a whole number cleared (20 at most in the campaign), and a time under a day', () => {
+    const s = emptyScores();
+    for (const cleared of [0, -1, 1.5, NaN, 21]) expect(qualifies(s, 'campaign', lvl(1000, '2026-11-04', 'ABC', cleared)).ok, `${cleared}`).toBe(false);
+    expect(qualifies(s, 'random-hard', lvl(1000, '2026-11-04', 'ABC', 21)).ok).toBe(true);
+    expect(qualifies(s, 'random-hard', lvl(1000, '2026-11-04', 'ABC', 1001)).ok).toBe(false);
+    expect(qualifies(s, 'campaign', lvl(86_400_000)).ok).toBe(false);
+    expect(qualifies(s, 'campaign', lvl(86_399_000)).ok).toBe(true);
+  });
+  it('each Random level difficulty is its own board', () => {
+    let s = emptyScores();
+    s = addEntry(s, 'random-hard', lvl(30000, '2026-11-04', 'AAA', 4));
+    expect(s.boards['random-hard']).toHaveLength(1);
+    expect(s.boards['random-easy']).toEqual([]);
   });
 });
 
 describe('addEntry and qualifies on a level board', () => {
   it('sorts by time, fastest first', () => {
     let s = emptyScores();
-    for (const ms of [30000, 10000, 20000]) s = addEntry(s, 'l1', lvl(ms));
-    expect(s.boards.l1!.map((e) => e.ms)).toEqual([10000, 20000, 30000]);
+    for (const ms of [30000, 10000, 20000]) s = addEntry(s, 'campaign', lvl(ms));
+    expect(s.boards.campaign!.map((e) => e.ms)).toEqual([10000, 20000, 30000]);
   });
 
   it('breaks a tie by the earlier date, then by who got there first', () => {
     let s = emptyScores();
-    s = addEntry(s, 'l1', lvl(5000, '2026-11-03', 'OLD'));
-    s = addEntry(s, 'l1', lvl(5000, '2026-11-04', 'NEW'));
-    s = addEntry(s, 'l1', lvl(5000, '2026-11-02', 'EAR'));
-    s = addEntry(s, 'l1', lvl(5000, '2026-11-04', 'TOO'));
-    expect(s.boards.l1!.map((e) => e.name)).toEqual(['EAR', 'OLD', 'NEW', 'TOO']);
+    s = addEntry(s, 'campaign', lvl(5000, '2026-11-03', 'OLD'));
+    s = addEntry(s, 'campaign', lvl(5000, '2026-11-04', 'NEW'));
+    s = addEntry(s, 'campaign', lvl(5000, '2026-11-02', 'EAR'));
+    s = addEntry(s, 'campaign', lvl(5000, '2026-11-04', 'TOO'));
+    expect(s.boards.campaign!.map((e) => e.name)).toEqual(['EAR', 'OLD', 'NEW', 'TOO']);
   });
 
   it('keeps the top ten and drops the slowest', () => {
     let s = emptyScores();
-    for (let i = 1; i <= 12; i++) s = addEntry(s, 'l1', lvl(i * 1000));
-    expect(s.boards.l1).toHaveLength(TOP);
-    expect(s.boards.l1!.map((e) => e.ms)).toEqual([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]);
+    for (let i = 1; i <= 12; i++) s = addEntry(s, 'campaign', lvl(i * 1000));
+    expect(s.boards.campaign).toHaveLength(TOP);
+    expect(s.boards.campaign!.map((e) => e.ms)).toEqual([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]);
   });
 
   it('tells whether an entry would make the top ten, and its rank', () => {
     let s = emptyScores();
-    expect(qualifies(s, 'l2', lvl(99000))).toEqual({ ok: true, rank: 1 });
-    for (let i = 1; i <= 10; i++) s = addEntry(s, 'l2', lvl(i * 1000));
-    expect(qualifies(s, 'l2', lvl(500))).toEqual({ ok: true, rank: 1 });
-    expect(qualifies(s, 'l2', lvl(3500))).toEqual({ ok: true, rank: 4 });
-    expect(qualifies(s, 'l2', lvl(10000, '2026-11-05'))).toEqual({ ok: false, rank: 11 }); // ties the tenth but is later
-    expect(qualifies(s, 'l2', lvl(10000, '2026-11-03'))).toEqual({ ok: true, rank: 10 });
-    expect(qualifies(s, 'l2', lvl(20000))).toEqual({ ok: false, rank: 11 });
+    expect(qualifies(s, 'campaign', lvl(99000))).toEqual({ ok: true, rank: 1 });
+    for (let i = 1; i <= 10; i++) s = addEntry(s, 'campaign', lvl(i * 1000));
+    expect(qualifies(s, 'campaign', lvl(500))).toEqual({ ok: true, rank: 1 });
+    expect(qualifies(s, 'campaign', lvl(3500))).toEqual({ ok: true, rank: 4 });
+    expect(qualifies(s, 'campaign', lvl(10000, '2026-11-05'))).toEqual({ ok: false, rank: 11 }); // ties the tenth but is later
+    expect(qualifies(s, 'campaign', lvl(10000, '2026-11-03'))).toEqual({ ok: true, rank: 10 });
+    expect(qualifies(s, 'campaign', lvl(20000))).toEqual({ ok: false, rank: 11 });
   });
 
   it('ranks a later tie after the entry already there', () => {
-    const s = addEntry(emptyScores(), 'l1', lvl(5000));
-    expect(qualifies(s, 'l1', lvl(5000))).toEqual({ ok: true, rank: 2 });
+    const s = addEntry(emptyScores(), 'campaign', lvl(5000));
+    expect(qualifies(s, 'campaign', lvl(5000))).toEqual({ ok: true, rank: 2 });
   });
 
   it('does not change a board that was not qualified for', () => {
     let s = emptyScores();
-    for (let i = 1; i <= 10; i++) s = addEntry(s, 'l1', lvl(i * 1000));
-    expect(addEntry(s, 'l1', lvl(50000, '2026-11-04', 'ZZZ'))).toBe(s);
+    for (let i = 1; i <= 10; i++) s = addEntry(s, 'campaign', lvl(i * 1000));
+    expect(addEntry(s, 'campaign', lvl(50000, '2026-11-04', 'ZZZ'))).toBe(s);
   });
 
   it('never mutates the scores it is given', () => {
     const s = emptyScores();
-    const t = addEntry(s, 'l1', lvl(1000));
-    expect(s.boards.l1).toEqual([]);
-    expect(t.boards.l1).toHaveLength(1);
+    const t = addEntry(s, 'campaign', lvl(1000));
+    expect(s.boards.campaign).toEqual([]);
+    expect(t.boards.campaign).toHaveLength(1);
   });
 
   it('refuses a bad board, a bad time or a bad date', () => {
     const s = emptyScores();
     expect(qualifies(s, 't99', lvl(1000)).ok).toBe(false);
-    for (const ms of [0, -5, NaN, Infinity]) expect(qualifies(s, 'l1', lvl(ms)).ok).toBe(false);
-    expect(qualifies(s, 'l1', lvl(1000, 'yesterday')).ok).toBe(false);
-    expect(addEntry(s, 'l1', lvl(0))).toBe(s);
+    for (const ms of [0, -5, NaN, Infinity]) expect(qualifies(s, 'campaign', lvl(ms)).ok).toBe(false);
+    expect(qualifies(s, 'campaign', lvl(1000, 'yesterday')).ok).toBe(false);
+    expect(addEntry(s, 'campaign', lvl(0))).toBe(s);
   });
 
   it('remembers the initials of the last saved entry, and keeps boards apart', () => {
     let s = emptyScores();
     expect(s.initials).toBe(DEFAULT_INITIALS);
-    s = addEntry(s, 'l3', lvl(4000, '2026-11-04', 'KIM'));
+    s = addEntry(s, 'campaign', lvl(4000, '2026-11-04', 'KIM'));
     expect(s.initials).toBe('KIM');
-    expect(s.boards.l3).toHaveLength(1);
-    expect(s.boards.l1).toHaveLength(0);
-  });
-});
-
-describe('a Random level difficulty board', () => {
-  it('ranks by time like a level board, one board per difficulty', () => {
-    let s = emptyScores();
-    for (const ms of [30000, 10000, 20000]) s = addEntry(s, 'random-hard', lvl(ms));
-    expect(s.boards['random-hard']!.map((e) => e.ms)).toEqual([10000, 20000, 30000]);
-    expect(s.boards['random-easy']).toEqual([]);
-    expect(qualifies(s, 'random', lvl(1000)).ok).toBe(false); // the old single board is gone
+    expect(s.boards.campaign).toHaveLength(1);
+    expect(s.boards['random-easy']).toHaveLength(0);
   });
 });
 
 describe('names', () => {
   it('are exactly three capital letters, whatever is typed', () => {
-    const s = addEntry(emptyScores(), 'l1', lvl(1000, '2026-11-04', 'a1b'));
-    expect(s.boards.l1![0]!.name).toBe('ABA');
-    expect(addEntry(emptyScores(), 'l1', lvl(1000, '2026-11-04', 'toolong')).boards.l1![0]!.name).toBe('TOO');
-    expect(addEntry(emptyScores(), 'l1', lvl(1000, '2026-11-04', '')).boards.l1![0]!.name).toBe('AAA');
+    const s = addEntry(emptyScores(), 'campaign', lvl(1000, '2026-11-04', 'a1b'));
+    expect(s.boards.campaign![0]!.name).toBe('ABA');
+    expect(addEntry(emptyScores(), 'campaign', lvl(1000, '2026-11-04', 'toolong')).boards.campaign![0]!.name).toBe('TOO');
+    expect(addEntry(emptyScores(), 'campaign', lvl(1000, '2026-11-04', '')).boards.campaign![0]!.name).toBe('AAA');
   });
 });
 
 describe('saveScores and loadScores', () => {
   it('round trips', () => {
     const data: Record<string, string> = {};
-    let s = addEntry(emptyScores(), 'l4', lvl(7200, '2026-11-04', 'ZED'));
+    let s = addEntry(emptyScores(), 'campaign', lvl(7200, '2026-11-04', 'ZED'));
     s = addEntry(s, 'random-hard', lvl(61000, '2026-11-03', 'QUX'));
     saveScores({ setItem: (k, v) => void (data[k] = v) }, s);
     expect(Object.keys(data)).toEqual([KEY]);
@@ -126,8 +140,8 @@ describe('saveScores and loadScores', () => {
     ['null', 'null'],
     ['an array', '[1,2]'],
     ['a number', '7'],
-    ['the wrong version', '{"version":2,"initials":"ZZZ","boards":{"l1":[{"name":"ABC","ms":1000,"date":"2026-11-04"}]}}'],
-    ['no version', '{"initials":"ZZZ","boards":{"l1":[{"name":"ABC","ms":1000,"date":"2026-11-04"}]}}'],
+    ['the wrong version', '{"version":2,"initials":"ZZZ","boards":{"campaign":[{"name":"ABC","ms":1000,"date":"2026-11-04"}]}}'],
+    ['no version', '{"initials":"ZZZ","boards":{"campaign":[{"name":"ABC","ms":1000,"date":"2026-11-04"}]}}'],
     ['boards as a string', '{"version":1,"boards":"x"}'],
     ['boards as an array', '{"version":1,"boards":[]}'],
   ] as const) {
@@ -137,53 +151,55 @@ describe('saveScores and loadScores', () => {
   it('survives storage that throws on read or on write', () => {
     expect(loadScores({ getItem: () => { throw new Error('SecurityError'); } })).toEqual(emptyScores());
     const full = { setItem: () => { throw new Error('QuotaExceededError'); } };
-    expect(() => saveScores(full, addEntry(emptyScores(), 'l1', lvl(1000)))).not.toThrow();
+    expect(() => saveScores(full, addEntry(emptyScores(), 'campaign', lvl(1000)))).not.toThrow();
     expect(() => saveScores(null, emptyScores())).not.toThrow();
   });
 
   it('sanitises names and drops bad entries on load, keeping the good ones sorted and trimmed', () => {
     const entries = [
-      { name: 'abc', ms: 3000, date: '2026-11-04' },
-      { name: 'x-y!z', ms: 2000, date: '2026-11-04' },
-      { name: 'Q', ms: 1000, date: '2026-11-04' },
-      { name: 42, ms: 4000, date: '2026-11-04' },
-      { name: 'BAD', ms: -1, date: '2026-11-04' },
-      { name: 'BAD', ms: 'x', date: '2026-11-04' },
+      { name: 'abc', ms: 3000, date: '2026-11-04', cleared: 5 },
+      { name: 'x-y!z', ms: 2000, date: '2026-11-04', cleared: 5 },
+      { name: 'Q', ms: 1000, date: '2026-11-04', cleared: 5 },
+      { name: 42, ms: 4000, date: '2026-11-04', cleared: 5 },
+      { name: 'BAD', ms: -1, date: '2026-11-04', cleared: 5 },
+      { name: 'BAD', ms: 'x', date: '2026-11-04', cleared: 5 },
       { name: 'BAD', ms: 5000, date: 'soon' },
       null,
       'str',
       { name: 'ZZZ', ms: 6000 },
     ];
-    const raw = JSON.stringify({ version: 1, initials: 'k9', boards: { l1: entries, l2: 'nope', constructor: [{ name: 'ABC', ms: 1, date: '2026-11-04' }] } });
+    const raw = JSON.stringify({ version: 1, initials: 'k9', boards: { campaign: entries, 'random-easy': 'nope', constructor: [{ name: 'ABC', ms: 1, date: '2026-11-04', cleared: 5 }] } });
     const s = loadScores(store(raw));
-    expect(s.boards.l1!.map((e) => [e.name, e.ms])).toEqual([['QAA', 1000], ['XYZ', 2000], ['ABC', 3000], ['AAA', 4000]]);
-    expect(s.boards.l2).toEqual([]);
+    expect(s.boards.campaign!.map((e) => [e.name, e.ms])).toEqual([['QAA', 1000], ['XYZ', 2000], ['ABC', 3000], ['AAA', 4000]]);
+    expect(s.boards['random-easy']).toEqual([]); // 'nope' is not a list
     expect(s.initials).toBe('KAA');
     expect(Object.keys(s.boards)).toEqual([...BOARDS]);
   });
 
   it('trims an oversized stored board to ten', () => {
-    const entries = Array.from({ length: 15 }, (_, i) => ({ name: 'ABC', ms: (15 - i) * 1000, date: '2026-11-04' }));
-    const s = loadScores(store(JSON.stringify({ version: 1, initials: 'ABC', boards: { l5: entries } })));
-    expect(s.boards.l5).toHaveLength(TOP);
-    expect(s.boards.l5![0]!.ms).toBe(1000);
+    const entries = Array.from({ length: 15 }, (_, i) => ({ name: 'ABC', ms: (15 - i) * 1000, date: '2026-11-04', cleared: 5 }));
+    const s = loadScores(store(JSON.stringify({ version: 1, initials: 'ABC', boards: { campaign: entries } })));
+    expect(s.boards.campaign).toHaveLength(TOP);
+    expect(s.boards.campaign![0]!.ms).toBe(1000);
   });
 
-  it('keeps no step on an entry, and ignores the old single Random board', () => {
+  it('drops an old entry with no run count, and ignores the old single Random board and the per-level boards', () => {
     const raw = JSON.stringify({
       version: 1,
       boards: {
         random: [{ name: 'ABC', step: 3, ms: 1000, date: '2026-11-04' }],
-        l1: [{ name: 'ABC', step: 3, ms: 1000, date: '2026-11-04' }],
+        l1: [{ name: 'ABC', ms: 1000, date: '2026-11-04' }],
+        campaign: [{ name: 'ABC', ms: 1000, date: '2026-11-04' }, { name: 'DEF', ms: 2000, date: '2026-11-04', cleared: 4 }],
       },
     });
     const s = loadScores(store(raw));
     expect(s.boards.random).toBeUndefined();
-    expect(s.boards.l1).toEqual([{ name: 'ABC', ms: 1000, date: '2026-11-04' }]);
+    expect(s.boards.l1).toBeUndefined();
+    expect(s.boards.campaign).toEqual([{ name: 'DEF', ms: 2000, date: '2026-11-04', cleared: 4 }]);
   });
 
   it('does not leak a __proto__ key', () => {
-    const s = loadScores(store('{"version":1,"boards":{"__proto__":[{"name":"ABC","ms":1,"date":"2026-11-04"}],"l1":[]},"__proto__":{"polluted":1}}'));
+    const s = loadScores(store('{"version":1,"boards":{"__proto__":[{"name":"ABC","ms":1,"date":"2026-11-04"}],"campaign":[]},"__proto__":{"polluted":1}}'));
     expect(({} as any).polluted).toBeUndefined();
     expect(Object.getPrototypeOf(s.boards)).toBe(Object.prototype);
     expect(Object.keys(s.boards)).toEqual([...BOARDS]);

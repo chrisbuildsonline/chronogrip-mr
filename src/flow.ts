@@ -42,8 +42,8 @@ export function step(f: Flow, e: FlowEvent, levels = LEVEL_COUNT): Flow {
     case 'play':
       return inRange(e.level, levels) ? to('playing', e.level) : f;
     case 'back':
-      // To the title, with the level Continue plays on the board: from a pause or a complete card.
-      return (f.name === 'paused' || f.name === 'complete') && inRange(e.level, levels) ? to('title', e.level) : f;
+      // To the title, with the level Continue plays on the board: from a pause, a level or a complete card.
+      return f.name !== 'title' && inRange(e.level, levels) ? to('title', e.level) : f;
   }
 }
 

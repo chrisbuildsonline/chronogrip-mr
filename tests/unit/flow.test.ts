@@ -65,10 +65,9 @@ describe('flow state machine', () => {
       expect(step(back, { type: 'start' })).toEqual({ name: 'playing', level: 1 });
       expect(step(s, { type: 'back', level: 99 })).toBe(s);
     }
-    for (const name of ['title', 'playing', 'calibrate'] as const) {
-      const f: Flow = { name, level: 2 };
-      expect(step(f, { type: 'back', level: 0 })).toBe(f);
-    }
+    // From a level too (the run ends: time out, Give up); only the title has nowhere to go back to.
+    for (const name of ['playing', 'calibrate'] as const) expect(step({ name, level: 2 }, { type: 'back', level: 0 })).toEqual({ name: 'title', level: 0 });
+    expect(step(TITLE, { type: 'back', level: 0 })).toBe(TITLE);
   });
 
   it('play starts the level it names, from anywhere', () => {
