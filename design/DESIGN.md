@@ -56,10 +56,12 @@ Times are m:ss; under 10 s they carry tenths (0:00.4, 0:07.2), truncated, so a q
 ## Screens
 | Screen | Size (m) | Layout |
 |---|---|---|
-| Title | 0.34 x 0.15 | eyebrow "A clockwork puzzle"; Display "ChronoGrip"; row: Start (primary 11 cm; "Continue" once anything is solved), Levels, "No timer" toggle (see Time limit) |
+| Title | 0.42 x 0.15 | eyebrow "A clockwork puzzle"; Display "ChronoGrip"; row: Start (primary 10 cm; "Continue" once anything is solved), Levels, "Best times" (see Best times), "No timer" toggle (see Time limit). As wide as the Pause card, so the four pills stay on one row inside the panel zone. On a phone 0.30 x 0.208: two rows, Start (100 mm) and Levels (72 mm) under the thumb, Best times (100 mm) and No timer (98 mm) above them, the words lifted a row |
 | Level select | 0.684 x 0.15 | Heading "Levels" with muted "N of 9 solved" (Random is endless, so it is not counted); one row (the panel zone's pitch rules out two): Back pill, then nine 42 x 70 mm tiles (1-8, then "Daily" with an amber top edge, serif shrunk to fit) and the "Random" tile, 70 x 70 mm, last, after the daily or the shared puzzle: "Random" in serif, never smaller than "Daily", with the run's next step ("Step 3") under it in muted body type. The row is no wider than the nine 50 mm tiles were, so the outer tile still sits inside the 35 degree cone (tests/unit/ui.test.ts). A solved tile shows its best m:ss in muted text and a small amber check |
 | HUD (playing, calibrate) | 0.30 x 0.096 | top: the goal line (muted "Turn the marked gear", the drawn turn arrow, ink bold "60 rpm", an amber check once matched); below: eyebrow "Level" over Number XL level (or "Daily"); Number XL time; the countdown ring and its "Left" time (see Time limit); round pause button right, kept on the bottom row so it is no higher in view |
 | Level complete | 0.35 x 0.17 | amber "Solved" pill, then muted eyebrow "PAR m:ss"; Heading "Level N complete"; Number XL time right, an amber check just before it when under par, an amber "New best" pill under it when a saved time was beaten, else muted "Best m:ss"; row: Next (primary), Restart, Levels. On the daily: Levels (primary), Restart. Over par: see Time limit |
+| Initials | 0.58 x 0.18 | Over the complete card, before it, when a solve makes its board's top ten (see Best times). Amber tint pill "#3 BEST TIMES"; Heading "Level 4" or "Random · Step 6" at the left, the time in Number XL at the right; three letters in Number XL over the left of the one button row, each with a bar under it (Amber on the slot typing fills, deep and faint on the others); row: an up and a down round arrow (46 mm) under each letter, then Save (the primary, 88 mm) and Skip (66 mm). One row only, so every target stays inside the panel zone. On a phone 0.30 x 0.29: each letter between an up pill over it and a down pill under it (81 x 44 mm), Save (150 mm) and Skip (106 mm) under the thumb |
+| Best times | 0.48 x 0.22 | Heading "Best times" at the top left; the top ten as two columns of five rows (rank in muted 12 mm, initials in ink bold, the time in ink 600 so the digits stack, the date muted "4 Nov"; a Random row shows "Step 6" before the time); an empty board shows one muted line in the middle of the rows, "No times yet. Solve level 3 to set one." (Random: "Solve a Random puzzle"). One row: Back pill at the left, then at the right a round arrow, the board's name in serif ("Level 3", "Random") and a round arrow. On a phone 0.30 x 0.29: one column of ten rows at 11.5 mm (13 px), the same row of Back and arrows under the thumb |
 | Pause | 0.42 x 0.15 | Heading "Paused"; muted "Level N - m:ss"; row: Resume (primary), Restart, Levels, "No timer" toggle. The card is wider than the others so the fourth pill stays on the bottom row, inside the panel zone (src/ui.ts) |
 
 ## Time limit (src/timer.ts, tests/e2e/timer.spec.ts)
@@ -77,7 +79,7 @@ under par is a pass; over it the bird still wakes but the card says over time.
 - "No timer" toggle (accessibility, the Relaxed mode): a pill labelled "No timer" in button type, so a first-time player
   knows what it does; the stored key and test hooks keep the name `relaxed`. Off: Cream deep with an empty
   Muted circle before the words. On: Amber tint fill, Amber tint ink words and a small Amber check disc, so the state reads
-  without colour alone; hover is the usual Amber ring. It lives on the title row (third pill) and the pause card (fourth
+  without colour alone; hover is the usual Amber ring. It lives on the title row (fourth pill) and the pause card (fourth
   pill; top right on a phone, where the row is full). Default is the timer on; the choice is saved (localStorage
   `chronogrip.relaxed.v1`). While on: no ring, no par, no "over time", and the solve is not marked pass or over.
 - Pass or over is saved per level next to the best times (`outcome` in the progress save, a pass is never undone by a slower
@@ -97,7 +99,7 @@ board is level 1, so the words stay true.
 Tests: tests/e2e/seed.spec.ts (incl. 375 x 812).
 
 ## Random mode (src/random.ts, tests/e2e/random.spec.ts)
-An endless run after the levels, opened from the "Random" tile on level select (the title row keeps its three pills).
+An endless run after the levels, opened from the "Random" tile on level select (the title row has no Random pill).
 The player plays a generated puzzle of a step; step 1 is like level 1 (one idler, one decoy), each step up adds an axle to
 fill, a compound pair or a decoy, 12 steps in all, and past step 12 the puzzles stay as hard as that. Par (see Time limit)
 climbs with the step: 120, 120, 120, 130, 165, 175, 190, 200, 235, 245, 280, 290 s.
@@ -115,6 +117,40 @@ climbs with the step: 120, 120, 120, 130, 165, 175, 190, 200, 235, 245, 280, 290
   On a phone the row gives Next puzzle 104 mm, Restart or Retry 62 mm and Copy link 80 mm.
 - The puzzle code carries the step in its top 4 bits (28 random bits below), so `?seed=CODE` opens the very same puzzle
   (as a "Shared puzzle"); a code with top bits 0 is a plain tinker puzzle, so the daily's and older shared codes are unchanged.
+
+## Best times (src/scores.ts, tests/e2e/scores.spec.ts)
+A top-ten board for each hand-made level (1-8) and one for Random, kept on this device only (localStorage
+`chronogrip.scores.v1`, `{ version: 1, initials, boards }`). The daily and a shared puzzle change every day or are
+one-offs, so they get no board and never ask for initials. Level progress (the best time on the tile, Continue) is
+untouched: it stays in `chronogrip.progress.v1`.
+- Entry: a level entry is `{ name, ms, date }`, ranked by time, fastest first. A Random entry is `{ name, step, ms, date }`,
+  one Random solve (the step solved and that solve's time), ranked by step, highest first, then time. The earlier date
+  wins a tie, and a later entry with the same everything ranks after the one already there. `date` is the local day
+  (YYYY-MM-DD), shown "4 Nov". Each board keeps ten: insert, sort, trim.
+- Names are exactly three capital letters A-Z. Anything else is dropped on load and a short name is padded with A, so a
+  hand-edited save never shows a lowercase letter or a digit. The last initials used are saved with the boards and come
+  back as the default; a new player starts on AAA.
+- Qualifying: a solve that would reach a board's top ten (an empty board always does) shows the Initials card (see
+  Screens) before the complete card, with its rank, prefilled with the last initials. Save writes the entry and shows the
+  complete card; Skip (Esc on a keyboard) shows it without saving; neither touches the level's best time, the pass or
+  over-time mark, the Random step or the Next puzzle button. A solve that misses a full board goes straight to the
+  complete card. Every solve of a level can qualify, retries included; a Random puzzle only counts on its first solve (a
+  Retry after going over par does not add a second row for the same puzzle). With No timer the clock still ran, so
+  those solves count like any other.
+- Initials: desktop and phone with a keyboard type letters A-Z, filling the slots left to right (anything else is ignored;
+  once all three are in, typing waits for Backspace), Backspace goes back a slot so the next letter replaces it, Enter
+  presses Save. The up and down arrows step one letter through the alphabet (Z wraps to A) and make that slot the one
+  typing fills. In XR the arrows, Save and Skip are poked or pinched like any other button.
+- Best times: the title's fourth pill opens it; it lies over the title card, and starting a level (Start, or touching a
+  gear) closes it. It opens on the board of the level last started (Random counts), else level 1. The arrows cycle level 1 to
+  8, then Random, then round to 1; Back (or Esc) returns to the title. An empty board says how to set a time.
+- Phone: one job per screen. The title is two rows so each pill is 44 px or more tall at 14 mm type; the board is one
+  column of ten at 13 px, since two columns of five would leave too little room for a name, a step, a time and a date.
+  The sheet lies over the foot of the board without moving the camera. Back, the arrows, Save and Skip are all in the
+  lower half, under the thumb (tests/e2e/scores.spec.ts at 375 x 812).
+- XR: every target is on the one button row, so each sits inside the panel zone, edge to edge, above every level
+  (tests/unit/ui.test.ts). The tallest panel is 0.22 m (the board), words only above the row.
+- Test hooks: `__chrono.scores` (the boards as saved), `__chrono.initials` (the card up: board, rank, letters, cursor).
 
 Progress (best times) is saved in localStorage; the title board is the first unsolved level, so Continue picks up there.
 The daily is a seeded "tinker" puzzle generated from the local date and played after the eight levels, as a ninth.
@@ -234,7 +270,7 @@ edges and the note keeps only "Mixed reality needs a Quest browser." in two bala
 Phone cards (under 500 px wide and taller than 1.4x the width, outside XR): not a shrunk desktop card but a bottom sheet,
 one job per screen with the primary pill under the thumb. Every card is 0.30 m of panel space drawn 16 px in from the
 sides and 16 px over the bottom edge (343 px wide at 375, so about 1.14 px per mm), held in front of the camera whatever
-the orbit. The same screens and buttons in one phone width: title Start 150 mm, Levels 106 mm; pause and complete a
+the orbit. The same screens and buttons in one phone width: the title in two rows (see Screens); pause and complete a
 100 mm primary and 72 mm secondaries; the HUD as wide as the others. Level select is a 5-column grid of 44 x 60 mm cells
 in two rows: Back (chevron over the word, tile corners) top left where a phone keeps it, then 1-8 and Daily, and under them
 the Random tile as a full-width bar (a third row, 46 mm tall, "Random" in serif with the muted "Step 3" beside it; see Random mode). Buttons and
