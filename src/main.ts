@@ -21,15 +21,15 @@ import { faultKind, faultOf, faultText, shakeSpin, shakeTilt, SHAKE_MS, type Fau
 import { C } from './palette';
 import type { GearSpin } from './train';
 import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
-import { createSound, loadSoundOn, saveSoundOn, ticksBetween } from './sound';
+import { createSound, loadSoundOn, saveSoundOn, tickGain, ticksBetween } from './sound';
 import { loadMusicOn, saveMusicOn } from './music';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
-import { carried, clearedWords, loadRun, nextIndex, resultOf, saveRun, solvedLevel, startRun, type Run } from './run';
+import { carried, loadRun, nextIndex, reached, saveRun, solvedLevel, startRun, won, type Run } from './run';
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
 import { tinkerLevel } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
 import { fetchGlobal, submitGlobal } from './global';
-import { BOARDS, addEntry, backInitial, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
+import { BOARDS, RUN_STEP, addEntry, backInitial, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
 import { CAMPAIGN, DIFFICULTIES, DIFFICULTY_LEVEL, freshSeed, kindOfDifficulty, puzzleFor, randomLevel, type Difficulty } from './random';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
@@ -42,13 +42,14 @@ if (!container) throw new Error('#app container missing');
 
 document.title = `${APP_TITLE} MR`;
 const heading = document.getElementById('title');
-if (heading) heading.textContent = APP_TITLE;
 
 const enterButton = document.getElementById('enter-mr') as HTMLButtonElement | null;
 const enterNote = document.getElementById('enter-note');
 if (!enterButton || !enterNote) throw new Error('Enter MR controls missing');
 
 const world = await World.create(container, createWorldOptions());
+// The menus are drawn in the canvas, so their face (Josefin Sans, self-hosted) must be loaded before the first card is drawn.
+await Promise.race([Promise.all(['300', '400', '600'].map((w) => document.fonts.load(`${w} 16px "Josefin Sans"`))), new Promise((done) => setTimeout(done, 3000))]).catch(() => undefined);
 
 // ?seed=CODE: a shared puzzle, the exact one the code was made from. It takes the extra slot after the 20 campaign levels and is
 // the board the title opens on; its best time is saved under its own id (t<seed>), so the campaign's saved times are never touched.
@@ -101,7 +102,7 @@ let levels: readonly Level[] = [...Array.from({ length: CAMPAIGN }, (_, i) => ca
 let levelIds = levels.map((l) => l.id);
 /** The slot after the campaign: always the last one. */
 const randomSlot = () => levels.length - 1;
-/** The run in progress (or saved): a campaign run from New Game, or a Random level run. A score is entered once per run, when it ends. */
+/** The campaign run in progress (or saved), from New Game. Only a completed run is scored, with a name entered once, when it ends. Random levels are practice: no run. */
 let run: Run | null = sharedSeed === null ? loadRun(storage) : null;
 // High score boards (src/scores.ts): a top ten per campaign level and one per Random level difficulty, kept on this device.
 let scores: Scores = loadScores(storage);
@@ -114,6 +115,7 @@ type Overlay =
   | { kind: 'board'; board: string; tab: 'local' | 'global' }
   | { kind: 'options'; confirm: boolean }
   | { kind: 'picker' }
+  | { kind: 'result'; level: number; ms: number }
   | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; letters: string; cursor: number };
 let overlay: Overlay | null = null;
 // The global top tens (src/global.ts): the last good board per id, kept so a tab switch does not ask again, and how this
@@ -130,14 +132,13 @@ function loadGlobal(board: string): void {
   });
 }
 /** The board of the level last started: the board the Best times card opens on. */
-let lastBoard = BOARDS[0]!; // the campaign
 /** Relaxed: no timer. Default off (timer on), saved across visits. */
 let relaxed = loadRelaxed(storage);
 /** The time limit of the level on the board, and whether the solve on the complete card beat it (null while playing, and in Relaxed). */
 let par = 0;
 let outcome: Outcome | null = null;
 /** The title board is the level Continue plays: the first one not yet solved. */
-const continueAt = () => (run?.kind === 'campaign' ? nextIndex(run) : 0);
+const continueAt = () => (run ? nextIndex(run) : 0);
 const resume = () => run !== null;
 
 let levelIndex = sharedSeed === null ? continueAt() : randomSlot();
@@ -486,53 +487,41 @@ function freshLevel(i: number): void {
 const isRandomLevel = (i: number) => i === randomSlot() && special === 'random';
 let randomScored = false;
 
-/** Random level at a difficulty, played at once; `fresh` starts a new run (the picker), else the run goes on (Next, Continue). */
-function playRandom(d: Difficulty, fresh = false): void {
+/** Random level at a difficulty, played at once: practice, no run and no score. */
+function playRandom(d: Difficulty): void {
   randomDiff = d;
   special = 'random';
-  if (fresh) {
-    run = startRun(`random-${d}`);
-    saveRun(storage, run);
-  }
   send({ type: 'play', level: randomSlot() });
 }
 
-/** If the run's score makes its board's top ten, the initials card comes up over the title, with the run's result. */
-function askInitials(result: { board: string; cleared: number; ms: number }): void {
-  const entry = { ms: result.ms, date: todayISO(), cleared: result.cleared };
-  const q = qualifies(scores, result.board, { ...entry, name: scores.initials });
-  if (q.ok) overlay = { kind: 'initials', board: result.board, rank: q.rank, entry, letters: scores.initials, cursor: 0 };
-}
-
-/** A line over the title for a moment (reuses the seed note's pill): a run that ended with nothing to score. */
-function say(text: string): void {
-  if (!seedNote) return;
-  seedNote.textContent = text;
-  seedNote.hidden = false;
-  setTimeout(() => (seedNote.hidden = true), 8000);
+/** The name entry for a completed run, over the title: the total time large, then three letters. */
+function askInitials(ms: number): void {
+  const entry = { ms, date: todayISO() };
+  const q = qualifies(scores, 'campaign', { ...entry, name: scores.initials });
+  if (q.ok) overlay = { kind: 'initials', board: 'campaign', rank: q.rank, entry, letters: scores.initials, cursor: 0 };
 }
 
 /**
- * The run ends (the time ran out, Give up, or level 20 was solved): back to the title, and the result card asks for initials if the
- * run cleared anything. The time on the puzzle it ended on counts, unless the run was won.
+ * The run ends: back to the title. Level 20 solved asks for a name (the time on the board); Give up and the time running out
+ * show a short result card, "Level 7 reached", and score nothing. The time on the puzzle it ended on counts.
  */
 function endRun(why: 'timeout' | 'giveup' | 'won'): void {
   const r = run;
-  const result = r && resultOf(r, why === 'won' ? 0 : levelClock.seconds);
   run = null;
   saveRun(storage, run);
   send({ type: 'back', level: 0 });
-  if (result) askInitials(result);
-  else if (why === 'timeout') say('Time’s up. Nothing cleared this run.');
+  if (r && why === 'won') askInitials(r.ms);
+  else if (r) {
+    const end = reached(r, levelClock.seconds);
+    overlay = { kind: 'result', level: end.level, ms: end.ms };
+  }
   showPanel();
   fitView(true);
 }
 
-/** The best times card's board: its name, its rows and what it says while empty. */
+/** The best times card: the campaign board, completed runs only. */
 function boardCard(id: string, tab: 'local' | 'global'): NonNullable<PanelCtx['board']> {
-  const random = id.startsWith('random-');
-  const name = random ? `Random · ${id.slice('random-'.length).replace(/^./, (c) => c.toUpperCase())}` : 'Campaign';
-  const local = { label: name, tab, kind: (random ? 'puzzle' : 'level') as 'puzzle' | 'level', entries: scores.boards[id]!, empty: `No runs yet. ${random ? `Finish a ${name} run` : 'Play the campaign'} to set one.` };
+  const local = { label: 'Campaign', tab, entries: scores.boards[id]!, empty: 'No finished runs yet. Complete all 20 levels to set one.' };
   if (tab === 'local') return local;
   // Global: the last good rows; with none, "Loading" while asking and the local rows with a quiet note once it failed.
   const rows = globalRows.get(id);
@@ -577,21 +566,29 @@ function pressOverlay(id: string): void {
     } else return;
   } else if (o.kind === 'picker') {
     overlay = null;
-    if (id !== 'back' && (DIFFICULTIES as readonly string[]).includes(id)) return playRandom(id as Difficulty, true);
+    if (id !== 'back' && (DIFFICULTIES as readonly string[]).includes(id)) return playRandom(id as Difficulty);
   } else if (o.kind === 'board') {
     if (id === 'back') overlay = null;
-    else if (id === 'board-prev' || id === 'board-next') overlay = { ...o, board: BOARDS[(BOARDS.indexOf(o.board) + (id === 'board-next' ? 1 : BOARDS.length - 1)) % BOARDS.length]! };
     else if (id === 'tab-local' || id === 'tab-global') overlay = { ...o, tab: id === 'tab-global' ? 'global' : 'local' };
     else return;
     const now = overlay as Overlay | null;
     if (now?.kind === 'board' && now.tab === 'global') loadGlobal(now.board);
+  } else if (o.kind === 'result') {
+    overlay = null;
+    if (id === 'start') {
+      run = startRun();
+      saveRun(storage, run);
+      return send({ type: 'play', level: 0 });
+    }
   } else {
+    const slot = /^slot-([0-2])$/.exec(id);
+    if (slot) return void (overlay = { ...o, cursor: Number(slot[1]) }, showPanel());
     const arrow = /^(up|down)-([0-2])$/.exec(id);
     if (arrow) overlay = { ...o, ...stepInitial(o, Number(arrow[2]), arrow[1] === 'up' ? 1 : -1) };
     else if (id === 'save') {
       scores = addEntry(scores, o.board, { ...o.entry, name: o.letters });
       saveScores(storage, scores);
-      if (o.entry.cleared > 0) void submitGlobal(o.board, scores.initials, o.entry.ms, o.entry.cleared); // fire and forget: the card never waits on it
+      void submitGlobal(o.board, scores.initials, o.entry.ms, RUN_STEP); // fire and forget: the card never waits on it
       overlay = null;
     } else if (id === 'skip') overlay = null;
     else return;
@@ -605,7 +602,6 @@ function send(e: FlowEvent): void {
   if (next === flow) return;
   // A card laid over the flow goes when the flow leaves the title: the board, the options, the picker and the run's result all sit over it.
   if (overlay && next.name !== 'title') overlay = null;
-  if (next.name === 'playing') lastBoard = run?.kind ?? lastBoard;
   if (next.name === 'paused') {
     putBack();
     letGoKnob();
@@ -632,7 +628,7 @@ function send(e: FlowEvent): void {
     letGoKnob();
     outcome = relaxed ? null : outcomeOf(levelClock.seconds, par);
     // A level cleared counts towards the run (a shared puzzle is no part of one); the score waits for the run to end.
-    if (run && !(levelIndex === randomSlot() && special === 'shared')) {
+    if (run && levelIndex < CAMPAIGN) {
       run = solvedLevel(run, levelClock.seconds);
       saveRun(storage, run);
     }
@@ -662,7 +658,7 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   if (overlay) return pressOverlay(id);
   if ((id === 'scores' || id === 'options') && flow.name === 'title') {
     globalAsk.clear();
-    overlay = id === 'scores' ? { kind: 'board', board: lastBoard, tab: 'local' } : { kind: 'options', confirm: false };
+    overlay = id === 'scores' ? { kind: 'board', board: BOARDS[0]!, tab: 'local' } : { kind: 'options', confirm: false };
     showPanel();
     return fitView(true);
   }
@@ -673,12 +669,11 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   }
   if (flow.name === 'title' && id === 'start') {
     // New Game: a fresh campaign run from level 1.
-    run = startRun('campaign');
+    run = startRun();
     saveRun(storage, run);
     return send({ type: 'play', level: 0 });
   }
-  if (flow.name === 'title' && id === 'continue' && run && run.kind !== 'campaign') return playRandom(run.kind.slice('random-'.length) as Difficulty);
-  if (id === 'giveup') return endRun('giveup');
+  if (id === 'giveup') return isRandomLevel(levelIndex) ? send({ type: 'back', level: continueAt() }) : endRun('giveup');
   if (id === 'menu') {
     // The Main menu leaves the run saved, with the time spent on this puzzle carried into it.
     if (run && flow.name === 'paused') {
@@ -688,12 +683,12 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
     return send({ type: 'back', level: continueAt() });
   }
   if (id === 'next' && flow.name === 'complete' && levelIndex >= CAMPAIGN - 1) {
-    // After level 20 the run is won and its result comes up; after a Random level it is another puzzle at the same difficulty.
+    // After level 20 the run is won and the name entry comes up; after a Random level it is another puzzle at the same difficulty.
     if (isRandomLevel(levelIndex)) playRandom(randomDiff);
     else endRun('won');
     return;
   }
-  if (id === 'restart' && run && (levelIndex < CAMPAIGN || isRandomLevel(levelIndex))) {
+  if (id === 'restart' && run && levelIndex < CAMPAIGN) {
     // Restart is a new puzzle at the same level; the run's clock keeps counting what was spent on this one.
     run = carried(run, levelClock.seconds);
     saveRun(storage, run);
@@ -1138,8 +1133,8 @@ world.scene.onBeforeRender = () => {
   lastFrame = now;
   stepGrabs();
   levelClock.tick(now, flow.name === 'playing');
-  // A run is lost when the level's time limit runs out (not with No timer).
-  if (flow.name === 'playing' && !relaxed && run && levelClock.seconds >= par) endRun('timeout');
+  // A campaign run is lost when the level's time limit runs out (not with No timer).
+  if (flow.name === 'playing' && !relaxed && run && levelIndex < CAMPAIGN && levelClock.seconds >= par) endRun('timeout');
   for (const [id, t] of tweens) {
     const { pos, done } = tweenAt(t.from, t.to, now - t.start);
     built.loose.get(id)?.position.set(...pos);
@@ -1196,7 +1191,9 @@ world.scene.onBeforeRender = () => {
     owed = Math.floor(soundPhase);
     soundPhase -= owed;
   }
-  for (let i = 0; i < Math.min(owed, 2); i++) sound.tick();
+  // After a solve the ticks fade out by 3 s (the bird keeps flapping on screen, silently).
+  const hush = flow.name === 'complete' ? tickGain((now - calibratedAt) / 1000) : 1;
+  for (let i = 0; i < Math.min(owed, 2); i++) sound.tick(hush);
   const knobLit = turning !== null || (flow.name === 'calibrate' && (mouseKnob || (['left', 'right'] as const).some((h) => handPoints[h] && nearKnob(handPoints[h]!))));
   escapement.update({ setting: regulator.setting, target: regulator.target, phase: regulator.phase, ticking, hold: regulator.hold, inBand: regulator.inBand, calibrated: regulator.calibrated, lit: knobLit });
   automaton.update(now / 1000, regulator.phase, regulator.calibrated, built.tray.rotation.x);
@@ -1255,7 +1252,8 @@ world.scene.onBeforeRender = () => {
 function showPanel(now = performance.now()): void {
   const waiting = flow.name === 'complete' && now - calibratedAt < COMPLETE_DELAY_MS;
   panels.show(waiting ? null : (overlay?.kind ?? screenOf(flow)), {
-    initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, label: clearedWords(overlay.board, overlay.entry.cleared), ms: overlay.entry.ms } : undefined,
+    initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms } : undefined,
+    result: overlay?.kind === 'result' ? { level: overlay.level, ms: overlay.ms } : undefined,
     board: overlay?.kind === 'board' ? boardCard(overlay.board, overlay.tab) : undefined,
     level: levelIndex,
     levels: levels.length,

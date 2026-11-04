@@ -117,8 +117,8 @@ interface ChronoHook {
   readonly levelIndex: number;
   /** Live: seconds played on this level; runs only while playing. */
   readonly levelTime: number;
-  /** Live: the run in progress or saved (board kind, levels or puzzles cleared, total time so far in ms), null when none. */
-  readonly run: { readonly kind: string; readonly cleared: number; readonly ms: number } | null;
+  /** Live: the campaign run in progress or saved (levels cleared, total time so far in ms), null when none. */
+  readonly run: { readonly cleared: number; readonly ms: number } | null;
   /**
    * Live: the level timer. `relaxed`: the Relaxed (no timer) setting; `par`: this level's time limit in seconds; `left`,
    * `over`: whole seconds left (0 once out) and past par; `fraction`: share of par left, 0..1; `ring`: the HUD up now carries the countdown ring.
@@ -137,7 +137,7 @@ interface ChronoHook {
   /** Live: the black layer behind the menus: `full` over a flat view, `backing` panel behind the card in XR, null in play. */
   readonly scrim: { readonly mode: 'full' | 'backing' | null; readonly opacity: number; readonly backingOpacity: number };
   /** Live: the card now up (its screen and panel-space size in metres), null when none is shown. */
-  readonly card: { readonly screen: 'title' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options'; readonly width: number; readonly height: number } | null;
+  readonly card: { readonly screen: 'title' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options' | 'result'; readonly width: number; readonly height: number } | null;
   /** The words on the card now up: text, font size in panel metres, and that size in page pixels as seen now. */
   labels(): { text: string; size: number; height: number; y: number; left: number; right: number }[];
   /** Live: the puzzle code of the loaded level (a tinker level), null for a hand-made one. */
@@ -148,8 +148,8 @@ interface ChronoHook {
   jump(n: number): void;
   /** The solution of the level on the board, gear id to axle id. */
   readonly solution: Record<string, string>;
-  /** Live: the saved high score boards (a copy): the last initials used, and per board id (campaign, random-easy .. random-expert) its top ten runs, best first; `cleared` is the levels or puzzles the run cleared. */
-  readonly scores: { readonly initials: string; readonly boards: Readonly<Record<string, readonly { readonly name: string; readonly ms: number; readonly date: string; readonly cleared: number }[]>> };
+  /** Live: the saved high score boards (a copy): the last initials used, and per board id (campaign) its top ten completed runs, fastest first. */
+  readonly scores: { readonly initials: string; readonly boards: Readonly<Record<string, readonly { readonly name: string; readonly ms: number; readonly date: string }[]>> };
   /** Live: whether sound is on (Options; saved as chronogrip.sound.v1). */
   readonly soundOn: boolean;
   /** Live: whether the background music is on (Options; saved as chronogrip.music.v1). */

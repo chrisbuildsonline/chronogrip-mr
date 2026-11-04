@@ -1,5 +1,5 @@
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace } from 'three';
-import { MENU_SCREENS, SCRIM_OPACITY, boardGrid, clock, clockTenths, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
+import { MENU_SCREENS, ROW_H, SCRIM_OPACITY, boardGrid, clock, clockTenths, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
 import { formatDate, type Entry } from './scores';
 import { C } from './palette';
 import { rpmLabel, type Goal } from './goal';
@@ -11,6 +11,8 @@ const PX = 3000; // canvas pixels per metre: 3 px per mm
 const MARGIN = 48; // room for the soft shadow
 export const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 const SERIF = 'Georgia, "Times New Roman", serif';
+/** The menus' face (self-hosted, public/fonts): light for the big words, regular for the rows, semibold for the small amber eyebrow. */
+const JOSEFIN = '"Josefin Sans", system-ui, sans-serif';
 const mm = (v: number) => v * 3;
 /** Type scale in panel millimetres (design/DESIGN.md). */
 const WIDE = { display: 36, title: 46, xl: 24, heading: 18, button: 12.5, body: 13.5, eyebrow: 8.5 };
@@ -53,10 +55,12 @@ export type PanelCtx = {
   outcome?: Outcome | null;
   par?: number | null;
   /** The initials card: the rank this solve would take, the three letters, and the slot typing fills next (3: all in). */
-  initials?: { rank: number; letters: string; cursor: number; label: string; ms: number };
+  initials?: { rank: number; letters: string; cursor: number; ms: number };
+  /** The result card of a run that did not finish: the level it reached and its total time in ms. */
+  result?: { level: number; ms: number };
   /** The best times card: the board's name, its rows, and the muted line shown while it is empty. */
   /** `tab` is the board shown; `note` is a quiet line over the rows (the global board is offline). */
-  board?: { label: string; kind: 'level' | 'puzzle'; entries: readonly Entry[]; empty: string; tab: 'local' | 'global'; note?: string };
+  board?: { label: string; entries: readonly Entry[]; empty: string; tab: 'local' | 'global'; note?: string };
 };
 
 /** The HUD's countdown ring: its centre from the card's left edge, and its radius with the stroke, metres. */
@@ -284,7 +288,7 @@ function backLabel(g: Draw, label: string, x: number, y: number, stacked: boolea
 }
 
 /** The arrow on a round arrow button: a chevron pointing up, down, left or right as the button's id says. */
-function arrowGlyph(g: Draw, id: string, x: number, y: number) {
+function arrowGlyph(g: Draw, id: string, x: number, y: number, color: string = C.ink) {
   const [dx, dy] = id.startsWith('up') ? [0, -1] : id.startsWith('down') ? [0, 1] : id === 'board-prev' ? [-1, 0] : [1, 0];
   const [px, py] = [-dy, dx]; // across the arrow
   const [s, tip, tail] = [mm(5), mm(2.6), mm(2.2)];
@@ -294,14 +298,15 @@ function arrowGlyph(g: Draw, id: string, x: number, y: number) {
   g.lineTo(x - dx * tail - px * s * 0.9, y - dy * tail - py * s * 0.9);
   g.lineWidth = mm(1.8);
   g.lineCap = g.lineJoin = 'round';
-  g.strokeStyle = C.ink;
+  g.strokeStyle = color;
   g.stroke();
 }
 
-function button(g: Draw, b: Button, at: (x: number, y: number) => [number, number], ctx: PanelCtx) {
+function button(g: Draw, b: Button, at: (x: number, y: number) => [number, number], ctx: PanelCtx, menu = false) {
   const [x, y] = at(b.x, b.y);
   const [w, h] = [b.w * PX, b.h * PX];
   const hover = ctx.hover === b.id;
+  if (menu) return menuButton(g, b, x, y, w, h, hover, ctx);
   if (b.kind === 'tab') {
     // The selected tab is the amber tint pill (as the status pills); the other is muted words with no fill.
     const picked = ctx.board?.tab === (b.id === 'tab-global' ? 'global' : 'local');
@@ -341,20 +346,158 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
   else text(g, b.label, x, y + 1, font(600, T.button * (b.h >= 0.05 ? 1.1 : 1)), b.kind === 'primary' ? C.cream : C.ink); // the start panel's big buttons carry bigger words
 }
 
+/** A menu word in the light, spaced, upper-case face; `weight` 300 for the big words, 400 for rows, 600 for the amber eyebrow. */
+const jfont = (weight: number, sizeMm: number) => font(weight, sizeMm, JOSEFIN);
+
+/** The gradient behind a selected or hovered row: amber fading to nothing, with the amber bar at its left edge. */
+function selectedRow(g: Draw, x: number, y: number, w: number, h: number) {
+  const left = x - w / 2;
+  const grad = g.createLinearGradient(left, 0, left + w, 0);
+  grad.addColorStop(0, 'rgba(217,154,43,0.22)');
+  grad.addColorStop(0.85, 'rgba(217,154,43,0)');
+  g.fillStyle = grad;
+  g.fillRect(left, y - h / 2, w, h);
+  g.fillStyle = C.amber;
+  g.fillRect(left, y - h / 2, mm(3.5), h);
+}
+
+/** A menu button: an upper-case row (a switch shows On or Off at its right), or an arrow, a letter slot, a tab. The selected, primary or hovered row has the amber bar, gradient and ›. */
+function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: number, hover: boolean, ctx: PanelCtx) {
+  const left = x - w / 2;
+  if (b.kind === 'tab') {
+    const picked = ctx.board?.tab === (b.id === 'tab-global' ? 'global' : 'local');
+    text(g, b.label.toUpperCase(), x, y + 1, jfont(picked ? 600 : 400, T.button * 0.9), picked ? C.amber : C.menuInk, 'center', 3);
+    if (picked) {
+      g.fillStyle = C.amber;
+      g.fillRect(x - w * 0.34, y + h / 2 - mm(1.5), w * 0.68, mm(1));
+    }
+    if (hover && !picked) text(g, b.label.toUpperCase(), x, y + 1, jfont(400, T.button * 0.9), C.menuHi, 'center', 3);
+    return;
+  }
+  if (b.kind === 'arrow') {
+    if (hover) selectedRow(g, x, y, w, h);
+    arrowGlyph(g, b.id, x, y, C.amber);
+    return;
+  }
+  if (b.kind === 'slot') {
+    const k = Number(b.id.slice(-1));
+    const on = ctx.initials?.cursor === k;
+    if (on) {
+      g.lineWidth = mm(1.2);
+      g.strokeStyle = C.amber;
+      g.strokeRect(x - w / 2 + mm(1), y - h / 2 + mm(1), w - mm(2), h - mm(2));
+    }
+    text(g, ctx.initials?.letters[k] ?? '', x, y + mm(1), jfont(300, 24), on ? C.menuHi : C.logo);
+    return;
+  }
+  const lit = hover || b.kind === 'primary';
+  if (lit) selectedRow(g, x, y, w, h);
+  const word = b.label.toUpperCase();
+  const color = lit ? C.menuHi : C.menuInk;
+  text(g, word, left + mm(11), y + 1, jfont(400, T.button * 1.1), color, 'left', 4.2);
+  if (b.kind === 'toggle') {
+    const on = !!(b.id === 'sound' ? ctx.sound : b.id === 'music' ? ctx.music : ctx.relaxed);
+    text(g, on ? 'ON' : 'OFF', left + w - mm(8), y + 1, jfont(600, T.button * 0.8), on ? C.amber : C.menuMuted, 'right', 3);
+  } else if (lit) text(g, '›', left + w - mm(8), y, jfont(300, 22), C.amber, 'right');
+}
+
+/** The words of a menu: the amber eyebrow and the big light heading at the left, and the high scores' rows. */
+function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: number, y: number) => [number, number]) {
+  const left = at(-l.width / 2 + 0.024, 0)[0];
+  const y = (v: number) => at(0, v)[1];
+  const W = l.width * PX;
+  /** The eyebrow, then the big heading shrunk to fit the card. */
+  const head = (eyebrow: string, big: string, bigSize = 34, top = l.height - 0.02) => {
+    text(g, eyebrow, left, y(top), jfont(600, 8.5), C.amber, 'left', 6);
+    g.font = jfont(300, bigSize);
+    g.letterSpacing = '4px';
+    const size = bigSize * Math.min(1, (W - mm(2 * 24)) / g.measureText(big).width);
+    g.letterSpacing = '0px';
+    text(g, big, left, y(top - 0.04), jfont(300, size), C.logo, 'left', 4);
+  };
+  switch (screen) {
+    case 'title':
+      head('A CLOCKWORK PUZZLE', 'CHRONOGRIP');
+      break;
+    case 'options':
+      head(ctx.confirm ? 'ARE YOU SURE' : 'SETTINGS', ctx.confirm ? 'RESET?' : 'OPTIONS');
+      if (ctx.confirm) text(g, 'Clears the saved run. Best times stay.', left, y(l.height - 0.092), jfont(400, 9.5), C.menuMuted, 'left', 1);
+      break;
+    case 'picker':
+      head('PRACTICE', 'RANDOM LEVEL');
+      text(g, 'A new puzzle each time. How hard?', left, y(l.height - 0.092), jfont(400, 9.5), C.menuMuted, 'left', 1);
+      break;
+    case 'paused':
+      head('PAUSED', ctx.level >= ctx.levels - 1 ? (ctx.random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : 'SHARED PUZZLE') : `LEVEL ${ctx.level + 1}`);
+      text(g, clock(ctx.time), left, y(l.height - 0.092), jfont(400, 11), C.menuMuted, 'left', 2);
+      break;
+    case 'result': {
+      const r = ctx.result!;
+      head('RUN OVER', `LEVEL ${r.level} REACHED`, 22);
+      text(g, clock(r.ms / 1000), left, y(l.height - 0.106), jfont(300, 24), C.logo, 'left', 3);
+      break;
+    }
+    case 'initials': {
+      const ini = ctx.initials!;
+      text(g, `RUN COMPLETE · #${ini.rank}`, left, y(l.height - 0.02), jfont(600, 8.5), C.amber, 'left', 6);
+      text(g, clock(ini.ms / 1000), left, y(l.height - 0.062), jfont(300, 30), C.logo, 'left', 3);
+      text(g, 'YOUR NAME', left, y(l.height - 0.1), jfont(400, 9), C.menuMuted, 'left', 4);
+      break;
+    }
+    case 'board': {
+      const b = ctx.board!;
+      const grid = boardGrid(!!ctx.narrow);
+      head('CAMPAIGN · FASTEST RUNS', 'HIGH SCORES', 30, grid.headY + 0.02);
+      const lowered = !!b.note;
+      if (b.note) {
+        const [nx, ny] = at(-l.width / 2 + 0.024, grid.y0);
+        text(g, b.note, nx, ny + 1, jfont(400, ctx.narrow ? 9.5 : 10.5), C.menuMuted, 'left', 1);
+      }
+      if (!b.entries.length) {
+        g.font = jfont(400, T.body * 0.8);
+        const [ex, ey] = at(-l.width / 2 + 0.024, grid.y0 - ((grid.rows - 1) / 2) * grid.pitch);
+        text(g, b.empty, ex, ey, jfont(400, T.body * 0.8 * Math.min(1, mm((l.width - 0.048) * 1000) / g.measureText(b.empty).width)), C.menuMuted, 'left');
+        break;
+      }
+      const [size, small] = ctx.narrow ? [11.5, 10.5] : [12.5, 11.5];
+      const cols = ctx.narrow ? { name: 0.026, time: 0.2 } : { name: 0.028, time: 0.2 };
+      (lowered ? b.entries.slice(0, grid.rows - 1) : b.entries).forEach((e, n) => {
+        const i = n + (lowered ? 1 : 0);
+        const rowY = grid.y0 - (i % grid.rows) * grid.pitch;
+        const x0 = -l.width / 2 + 0.024;
+        const put = (s: string, dx: number, f: string, color: string, align: CanvasTextAlign) => {
+          const [px, py] = at(x0 + dx, rowY);
+          text(g, s, px, py + 1, f, color, align);
+        };
+        put(String(n + 1), 0, jfont(400, small), C.menuMuted, 'left');
+        put(e.name, cols.name, jfont(600, size), C.menuHi, 'left');
+        put(clockTenths(e.ms / 1000), cols.time, jfont(400, size), C.menuInk, 'right');
+        put(formatDate(e.date), cols.time + 0.012, jfont(400, small), C.menuMuted, 'left'); // right after the time
+      });
+      break;
+    }
+  }
+}
+
+
 function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   T = ctx.narrow ? NARROW : WIDE;
   const at = (x: number, y: number): [number, number] => [MARGIN + (x + l.width / 2) * PX, MARGIN + (l.height - y) * PX];
   const [W, H] = [l.width * PX, l.height * PX];
   g.clearRect(0, 0, g.canvas.width, g.canvas.height);
-  g.save();
-  g.shadowColor = C.shadow;
-  g.shadowBlur = 30;
-  g.shadowOffsetY = 10;
-  g.beginPath();
-  g.roundRect(MARGIN, MARGIN, W, H, mm(18));
-  g.fillStyle = C.cream;
-  g.fill();
-  g.restore();
+  const menu = MENU_SCREENS.includes(screen);
+  if (!menu) {
+    // The game's cards are cream; a menu has no card: its words float on the dark layer (a flat view) or the dark backing panel (XR).
+    g.save();
+    g.shadowColor = C.shadow;
+    g.shadowBlur = 30;
+    g.shadowOffsetY = 10;
+    g.beginPath();
+    g.roundRect(MARGIN, MARGIN, W, H, mm(18));
+    g.fillStyle = C.cream;
+    g.fill();
+    g.restore();
+  }
 
   const left = (x: number) => at(-l.width / 2 + x, 0)[0];
   const right = (x: number) => at(l.width / 2 - x, 0)[0];
@@ -365,104 +508,8 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   const shared = special && !!ctx.shared;
   const random = special && !!ctx.random;
   const name = random ? `Random · ${ctx.difficulty ?? ''}` : shared ? 'Shared puzzle' : `Level ${level}`;
+  if (menu) drawMenu(g, screen, l, ctx, at);
   switch (screen) {
-    case 'title': {
-      // The words hang from the card's top, over the stacked buttons.
-      const [eyebrowAt, titleAt, taglineAt] = [l.height - 0.018, l.height - 0.052, l.height - 0.088];
-      // The eyebrow with a short amber rule at each side, the big serif title, one line of tagline over the buttons.
-      const eyeY = y(eyebrowAt);
-      text(g, 'A CLOCKWORK PUZZLE', cx, eyeY, font(700, T.eyebrow), C.muted, 'center', 3);
-      g.font = font(700, T.eyebrow);
-      g.letterSpacing = '3px';
-      const half = g.measureText('A CLOCKWORK PUZZLE').width / 2;
-      g.letterSpacing = '0px';
-      g.fillStyle = C.amber;
-      for (const s of [-1, 1]) g.fillRect(s < 0 ? cx - half - mm(17) : cx + half + mm(5), eyeY - mm(0.6), mm(12), mm(1.2));
-      g.font = font(600, T.title, SERIF);
-      const titleSize = T.title * Math.min(1, (W - mm(2 * 16)) / g.measureText('ChronoGrip').width);
-      text(g, 'ChronoGrip', cx, y(titleAt), font(600, titleSize, SERIF), C.ink);
-      text(g, 'Mesh the gears. Wake the bird.', cx, y(taglineAt), font(500, T.body), C.muted);
-      break;
-    }
-    case 'options': {
-      const sure = !!ctx.confirm;
-      const line = sure ? 'Clears solved levels. Best times stay.' : ctx.xr ? 'Grab a gear: pinch it, carry it, let go.' : ctx.narrow ? 'Grab a gear: touch and drag it.' : 'Grab a gear: click and drag it.';
-      text(g, sure ? 'Reset progress?' : 'Options', cx, y(l.height - 0.028), font(600, T.heading, SERIF), C.ink);
-      g.font = font(500, T.body);
-      text(g, line, cx, y(l.height - 0.056), font(500, T.body * Math.min(1, (W - mm(2 * 16)) / g.measureText(line).width)), C.muted);
-      break;
-    }
-    case 'initials': {
-      const ini = ctx.initials!;
-      status(g, `RUN OVER · #${ini.rank} BEST`, left(0.016), y(l.height - 0.022), 'left', T.body * 0.8);
-      const time = clock(ini.ms / 1000);
-      g.font = font(700, T.xl);
-      const timeW = g.measureText(time).width;
-      g.font = font(600, T.heading, SERIF);
-      const size = T.heading * Math.min(1, (right(0.016) - left(0.016) - timeW - mm(10)) / g.measureText(ini.label).width);
-      text(g, ini.label, left(0.016), y(l.height - 0.055), font(600, size, SERIF), C.ink, 'left');
-      text(g, time, right(0.016), y(l.height - 0.055), font(700, T.xl), C.ink, 'right');
-      // Each letter is Number XL in a cream-deep slot with its arrows against it (wide: left and right; phone: over and under); the slot typing fills next has the amber ring.
-      l.slots!.forEach((slot, k) => {
-        const [sx, sy] = at(slot.x, slot.y);
-        pill(g, sx, sy, slot.w * PX, slot.h * PX, mm(10));
-        g.fillStyle = C.deep;
-        g.fill();
-        if (ini.cursor === k) {
-          g.lineWidth = mm(3);
-          g.strokeStyle = C.amber;
-          g.stroke();
-        }
-        text(g, ini.letters[k]!, sx, sy + 1, font(700, T.xl), C.ink);
-      });
-      break;
-    }
-    case 'board': {
-      const b = ctx.board!;
-      const grid = boardGrid(!!ctx.narrow);
-      text(g, 'High scores', cx, y(grid.headY), font(600, T.heading, SERIF), C.ink);
-      // A quiet note says when the global board is not there: it takes the first row's place, centred, and the tenth waits.
-      const lowered = !!b.note;
-      if (b.note) {
-        const [nx, ny] = at(0, grid.y0);
-        text(g, b.note, nx, ny + 1, font(500, ctx.narrow ? 10.5 : 11.5), C.muted);
-      }
-      // The level switcher's name, between its arrows, shrunk to fit.
-      const [prev, next] = ['board-prev', 'board-next'].map((id) => l.buttons.find((x) => x.id === id)!) as [Button, Button];
-      g.font = font(600, T.heading, SERIF);
-      const [sx, sy] = at((prev.x + next.x) / 2, prev.y);
-      text(g, b.label, sx, sy, font(600, T.heading * Math.min(1, mm(grid.labelW * 1000) / g.measureText(b.label).width), SERIF), C.ink);
-      if (!b.entries.length) {
-        g.font = font(600, T.body);
-        const [ex, ey] = at(0, grid.y0 - ((grid.rows - 1) / 2) * grid.pitch);
-        text(g, b.empty, ex, ey, font(600, T.body * Math.min(1, mm((l.width - 0.032) * 1000) / g.measureText(b.empty).width)), C.muted);
-        break;
-      }
-      // Rank muted, initials bold, the time as m:ss.t right-aligned so the digits stack, the date muted just after it.
-      const phone = !!ctx.narrow;
-      const [size, small] = phone ? [11.5, 11] : [12.5, 12];
-      // Offsets from a column's left edge, wide enough for a wide system font (DejaVu) too.
-      const cols = phone ? { name: 0.021, cleared: 0.056, time: 0.17 } : { name: 0.024, cleared: 0.058, time: 0.166 };
-      (lowered ? b.entries.slice(0, grid.rows - 1) : b.entries).forEach((e, n) => {
-        const i = n + (lowered ? 1 : 0);
-        const rowY = grid.y0 - (i % grid.rows) * grid.pitch;
-        const x0 = -l.width / 2 + 0.016;
-        const put = (s: string, dx: number, f: string, color: string, align: CanvasTextAlign) => {
-          const [px, py] = at(x0 + dx, rowY);
-          text(g, s, px, py + 1, f, color, align);
-        };
-        put(String(n + 1), 0, font(600, small), C.muted, 'left');
-        put(e.name, cols.name, font(700, size), C.ink, 'left');
-        put(b.kind === 'puzzle' ? `${e.cleared} solved` : `${e.cleared} / 20`, cols.cleared, font(600, size), C.ink, 'left');
-        put(clockTenths(e.ms / 1000), cols.time, font(600, size), C.ink, 'right');
-        put(formatDate(e.date), cols.time + 0.012, font(500, small), C.muted, 'left'); // right after the time
-      });
-      break;
-    }
-    case 'picker':
-      text(g, 'Random level', cx, y(l.height - 0.028), font(600, T.heading, SERIF), C.ink);
-      text(g, 'A new puzzle each time. How hard?', cx, y(l.height - 0.056), font(500, T.body * Math.min(1, (W - mm(2 * 16)) / (g.font = font(500, T.body), g.measureText('A new puzzle each time. How hard?').width))), C.muted);
-      break;
     case 'hud':
       // A shared puzzle reads "SHARED" over "Puzzle", and the time moves over to make room.
       // Random has no column split: one eyebrow line, "RANDOM · HARD", with the time under it at the left, so the difficulty is
@@ -504,10 +551,6 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       }
       break;
     }
-    case 'paused':
-      text(g, 'Paused', cx, y(l.height - 0.028), font(600, T.heading, SERIF), C.ink);
-      text(g, `${name}  ·  ${clock(ctx.time)}`, cx, y(l.height - 0.056), font(500, T.body), C.muted);
-      break;
   }
   if (l.track) {
     const [kx, ky] = at(l.track.x, l.track.y);
@@ -515,7 +558,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
     g.fillStyle = C.deep;
     g.fill();
   }
-  for (const b of l.buttons) button(g, b, at, ctx);
+  for (const b of l.buttons) button(g, b, at, ctx, menu);
   T = WIDE;
 }
 

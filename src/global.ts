@@ -1,8 +1,8 @@
-import { BOARDS, MAX_CLEARED, formatDate, sanitiseName, TOP, type Entry } from './scores';
+import { BOARDS, RUN_STEP, formatDate, sanitiseName, TOP, type Entry } from './scores';
 
 /**
- * The global high scores: a public Supabase table anyone can read and add to. Only a board (campaign or random-<band>), three
- * initials, the levels or puzzles cleared (the step) and the total time go up. The key below is the publishable one, safe in a frontend by design; the table's own checks and
+ * The global high scores: a public Supabase table anyone can read and add to. Only a board (campaign), three
+ * initials, the 20 levels cleared (the step) and the total time go up. The key below is the publishable one, safe in a frontend by design; the table's own checks and
  * policies are what guard it. Everything that comes back is untrusted and is re-checked here before it is drawn.
  */
 export const GLOBAL_BASE = 'https://xsidhlyprisxfnverwdk.supabase.co/rest/v1/chronogrip_scores';
@@ -14,7 +14,7 @@ const MAX_SECONDS = 86400;
 type Fetch = typeof fetch;
 export type Payload = { level: string; initials: string; seconds: number; step: number };
 
-const isStep = (s: unknown): s is number => typeof s === 'number' && Number.isInteger(s) && s >= 1 && s <= MAX_CLEARED;
+const isStep = (s: unknown): s is number => typeof s === 'number' && Number.isInteger(s) && s >= 1 && s <= 1000;
 const isSeconds = (s: unknown): s is number => typeof s === 'number' && Number.isFinite(s) && s > 0 && s < MAX_SECONDS;
 
 /** The body to post for a score, or null when anything about it is off (then nothing is sent). */
@@ -26,9 +26,9 @@ export function scorePayload(level: string, initials: string, seconds: number, s
   return isStep(step) ? { level, initials, seconds: s, step } : null;
 }
 
-/** The query for a board's top ten: most cleared (the step), then least time. */
+/** The query for a board's top ten: completed runs (step 20), fastest first. */
 export const boardUrl = (board: string): string =>
-  `${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.${board}&order=step.desc,seconds.asc&limit=${TOP}`;
+  `${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.${board}&step=eq.20&order=seconds.asc&limit=${TOP}`;
 
 /** Rows off the wire as entries; every row that is not fit for the board is dropped. */
 export function parseRows(body: unknown, board: string): Entry[] {
@@ -41,8 +41,8 @@ export function parseRows(body: unknown, board: string): Entry[] {
     const secs = typeof seconds === 'string' && seconds.trim() !== '' ? Number(seconds) : seconds;
     const date = typeof created_at === 'string' ? created_at.slice(0, 10) : '';
     if (typeof initials !== 'string' || !/^[A-Z]{3}$/.test(initials) || !isSeconds(secs) || !formatDate(date)) continue;
-    if (!isStep(step) || (board === 'campaign' && step > 20)) continue;
-    out.push({ name: sanitiseName(initials), ms: Math.round(secs * 1000), date, cleared: step });
+    if (step !== RUN_STEP) continue; // only completed runs are on the board
+    out.push({ name: sanitiseName(initials), ms: Math.round(secs * 1000), date });
   }
   return out;
 }

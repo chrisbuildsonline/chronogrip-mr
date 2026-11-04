@@ -9,10 +9,18 @@
       #app { position: fixed; inset: 0; }
       #app canvas { display: block; width: 100%; height: 100%; }
       /* Palette and type: design/DESIGN.md (src/palette.ts) */
+      /* Josefin Sans, self-hosted (public/fonts): the logo here and the menus drawn in the canvas. */
+      @font-face { font-family: "Josefin Sans"; font-weight: 300; font-display: swap; src: url("./fonts/josefin-sans-latin-300-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Josefin Sans"; font-weight: 400; font-display: swap; src: url("./fonts/josefin-sans-latin-400-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Josefin Sans"; font-weight: 600; font-display: swap; src: url("./fonts/josefin-sans-latin-600-normal.woff2") format("woff2"); }
+      /* The logo: CHRONOGRIP in light spaced capitals, both Os small amber gears, an amber rule under it. */
       h1 {
         position: fixed; top: 18px; left: 24px; margin: 0; z-index: 1;
-        font: 600 1.35rem/1 Georgia, serif; color: #f6efe2; pointer-events: none;
+        font: 300 1.5rem/1 "Josefin Sans", system-ui, sans-serif; letter-spacing: 0.32em; color: #f1e8d8; pointer-events: none;
+        display: flex; align-items: center;
       }
+      h1 svg { width: 1.3rem; height: 1.3rem; margin: 0 0.1em 0 -0.12em; fill: #d99a2b; fill-rule: evenodd; }
+      h1::after { content: ""; position: absolute; left: 0; right: 0.32em; bottom: -9px; height: 2px; background: linear-gradient(90deg, #d99a2b, transparent); }
       /* Top right, opposite the wordmark, so it never covers the board in the desktop view. */
       #xr-entry {
         position: fixed; top: 14px; right: 24px; z-index: 1; max-width: 220px; text-align: right;
@@ -117,7 +125,7 @@
         <p class="cg-detail" id="loading-detail"></p>
       </div>
     </div>
-    <h1 id="title">ChronoGrip</h1>
+    <h1 id="title" aria-label="ChronoGrip">CHR<svg viewBox="-1.05 -1.05 2.1 2.1" aria-hidden="true"><path d="M0.740 0.000 L0.994 0.113 L0.980 0.200 L0.704 0.229 L0.599 0.435 L0.738 0.675 L0.675 0.738 L0.435 0.599 L0.229 0.704 L0.200 0.980 L0.113 0.994 L0.000 0.740 L-0.229 0.704 L-0.414 0.910 L-0.493 0.870 L-0.435 0.599 L-0.599 0.435 L-0.870 0.493 L-0.910 0.414 L-0.704 0.229 L-0.740 0.000 L-0.994 -0.113 L-0.980 -0.200 L-0.704 -0.229 L-0.599 -0.435 L-0.738 -0.675 L-0.675 -0.738 L-0.435 -0.599 L-0.229 -0.704 L-0.200 -0.980 L-0.113 -0.994 L-0.000 -0.740 L0.229 -0.704 L0.414 -0.910 L0.493 -0.870 L0.435 -0.599 L0.599 -0.435 L0.870 -0.493 L0.910 -0.414 L0.704 -0.229Z M0.34 0 A0.34 0.34 0 1 0 -0.34 0 A0.34 0.34 0 1 0 0.34 0Z"/></svg>N<svg viewBox="-1.05 -1.05 2.1 2.1" aria-hidden="true"><path d="M0.740 0.000 L0.994 0.113 L0.980 0.200 L0.704 0.229 L0.599 0.435 L0.738 0.675 L0.675 0.738 L0.435 0.599 L0.229 0.704 L0.200 0.980 L0.113 0.994 L0.000 0.740 L-0.229 0.704 L-0.414 0.910 L-0.493 0.870 L-0.435 0.599 L-0.599 0.435 L-0.870 0.493 L-0.910 0.414 L-0.704 0.229 L-0.740 0.000 L-0.994 -0.113 L-0.980 -0.200 L-0.704 -0.229 L-0.599 -0.435 L-0.738 -0.675 L-0.675 -0.738 L-0.435 -0.599 L-0.229 -0.704 L-0.200 -0.980 L-0.113 -0.994 L-0.000 -0.740 L0.229 -0.704 L0.414 -0.910 L0.493 -0.870 L0.435 -0.599 L0.599 -0.435 L0.870 -0.493 L0.910 -0.414 L0.704 -0.229Z M0.34 0 A0.34 0.34 0 1 0 -0.34 0 A0.34 0.34 0 1 0 0.34 0Z"/></svg>GRIP</h1>
     <div id="xr-entry">
       <button id="enter-mr" type="button" disabled>Enter MR</button>
       <span id="enter-note">Mixed reality needs a Quest browser.<span class="cg-more"> Drag to look around the tray.</span></span>

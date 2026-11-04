@@ -33,9 +33,9 @@ describe('panel layouts', () => {
     expect(layout('paused', { level: 0, levels: 21 }).buttons.map((b) => b.label)).toEqual(['Resume', 'Restart', 'Give up', 'Main menu', 'No timer']);
   });
 
-  it('a level cleared offers Next, and nothing else: no Retry, no Copy link, no code', () => {
+  it('a level cleared offers Next, and nothing else: no Retry, no Copy link, no code; a Random level (practice) offers Play again and Main menu', () => {
     expect(layout('complete', { level: 0, levels: 21 }).buttons.map((b) => [b.id, b.label, b.kind])).toEqual([['next', 'Next', 'primary']]);
-    expect(layout('complete', { level: 20, levels: 21, random: true }).buttons.map((b) => [b.id, b.label])).toEqual([['next', 'Next']]);
+    expect(layout('complete', { level: 20, levels: 21, random: true }).buttons.map((b) => [b.id, b.label])).toEqual([['next', 'Play again'], ['menu', 'Main menu']]);
     expect(layout('complete', { level: 0, levels: 21, narrow: true }).buttons.map((b) => b.id)).toEqual(['next']);
   });
 
@@ -80,7 +80,7 @@ describe('phone layouts (narrow, outside XR)', () => {
     expect(narrow('complete', { level: 19 }).buttons.map((b) => b.id)).toEqual(['next']);
   });
 
-  it('every target is at least 4 cm, 12 mm apart and inside the padding', () => {
+  it('every target is at least 4 cm, clear of the others and inside the padding', () => {
     for (const s of SCREENS) {
       const l = layout(s, { ...ctx, narrow: true });
       for (const b of l.buttons) {
@@ -91,7 +91,7 @@ describe('phone layouts (narrow, outside XR)', () => {
       }
       for (const a of l.buttons) for (const b of l.buttons) {
         if (a === b) continue;
-        const apart = Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= 0.012 - 1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= 0.012 - 1e-9;
+        const apart = Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= -1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= -1e-9; // the menu rows nearly touch (4 mm), the letter arrows touch their slot
         expect(apart, `${s} ${a.id} ${b.id}`).toBe(true);
       }
     }
@@ -229,9 +229,9 @@ describe('best times and initials cards', () => {
 
   it('has the buttons each card needs, in the same order on a phone', () => {
     for (const narrow of [false, true]) {
-      expect(layout('initials', { ...ctx, narrow }).buttons.map((b) => b.id)).toEqual(['up-0', 'down-0', 'up-1', 'down-1', 'up-2', 'down-2', 'save', 'skip']);
+      expect(layout('initials', { ...ctx, narrow }).buttons.map((b) => b.id)).toEqual(['up-0', 'slot-0', 'down-0', 'up-1', 'slot-1', 'down-1', 'up-2', 'slot-2', 'down-2', 'save', 'skip']);
       const board = layout('board', { ...ctx, narrow });
-      expect(board.buttons.map((b) => b.id)).toEqual(['back', 'tab-local', 'tab-global', 'board-prev', 'board-next']);
+      expect(board.buttons.map((b) => b.id)).toEqual(['back', 'tab-local', 'tab-global']);
       expect(layout('initials', { ...ctx, narrow }).buttons.filter((b) => b.kind === 'primary').map((b) => b.id), 'one primary').toEqual(['save']);
     }
     expect(OVERLAY_SCREENS).toEqual(['initials', 'board', 'options', 'picker']);
@@ -246,30 +246,32 @@ describe('best times and initials cards', () => {
     expect(clockTenths(754.3)).toBe('12:34.3');
   });
 
-  it('each initials letter sits in a slot with its up and down arrows touching it: left and right in the zone, over and under on a phone', () => {
+  it('the name entry has three big letter slots, each with an arrow over it and one under it, all touching and centred on one column, then OK and Skip', () => {
     for (const narrow of [false, true]) {
       const l = layout('initials', { ...ctx, narrow });
       expect(l.slots, `slots ${narrow}`).toHaveLength(3);
       for (let k = 0; k < 3; k++) {
         const s = l.slots![k]!;
-        const [up, down] = [`up-${k}`, `down-${k}`].map((id) => l.buttons.find((b) => b.id === id)!) as [Button, Button];
-        expect(s.w, 'slot wide enough for a 24 mm letter').toBeGreaterThanOrEqual(0.03);
-        expect(s.h, 'slot tall enough for a 24 mm letter').toBeGreaterThanOrEqual(0.036);
-        if (narrow) {
-          near(up.y - up.h / 2 - (s.y + s.h / 2), 'up pill just over the slot');
-          near(s.y - s.h / 2 - (down.y + down.h / 2), 'down pill just under the slot');
-          expect([up.x, down.x]).toEqual([s.x, s.x]);
-        } else {
-          expect(down.x + down.w / 2, 'down left of the slot').toBeLessThanOrEqual(s.x - s.w / 2 + 1e-9);
-          expect(s.x - s.w / 2 - (down.x + down.w / 2), 'down touches the slot').toBeLessThanOrEqual(0.006);
-          near(up.x - up.w / 2 - (s.x + s.w / 2), 'up touches the slot');
-          expect([up.y, down.y]).toEqual([s.y, s.y]);
-        }
+        const by = (id: string) => l.buttons.find((b) => b.id === id)!;
+        const [up, slot, down] = [by(`up-${k}`), by(`slot-${k}`), by(`down-${k}`)];
+        expect(slot.kind, 'a slot is tappable').toBe('slot');
+        expect([up.x, slot.x, down.x]).toEqual([s.x, s.x, s.x]);
+        expect(s.w, 'slot wide enough for a 24 mm letter').toBeGreaterThanOrEqual(0.05);
+        expect(s.h, 'slot tall enough for a 24 mm letter').toBeGreaterThanOrEqual(0.05);
+        near(up.y - up.h / 2 - (s.y + s.h / 2), 'the up arrow sits on the slot');
+        near(s.y - s.h / 2 - (down.y + down.h / 2), 'the down arrow sits under the slot');
+        expect(up.h, 'arrows are 50 mm tall: pinchable in XR').toBeGreaterThanOrEqual(0.05);
       }
+      const xs = l.slots!.map((s) => s.x);
+      expect(xs[0]! + xs[2]!, 'the three slots are centred').toBeCloseTo(0, 9);
+      const [ok, skip] = ['save', 'skip'].map((id) => l.buttons.find((b) => b.id === id)!) as [Button, Button];
+      expect([ok.label, skip.label]).toEqual(['OK', 'Skip']);
+      expect(ok.kind).toBe('primary');
+      expect(ok.y).toBeGreaterThan(skip.y);
     }
   });
 
-  it('every target is 4 cm or more, 12 mm apart and inside its card, wide and on a phone', () => {
+  it('every target is 4 cm or more, clear of its neighbours and inside its card, wide and on a phone', () => {
     for (const s of OVERLAY_SCREENS) {
       for (const narrow of [false, true]) {
         const l = layout(s, { ...ctx, narrow });
@@ -281,7 +283,7 @@ describe('best times and initials cards', () => {
         }
         for (const a of l.buttons) for (const b of l.buttons) {
           if (a === b || (a.kind === 'tab' && b.kind === 'tab')) continue; // the two segments of one control touch
-          const apart = Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= 0.012 - 1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= 0.012 - 1e-9;
+          const apart = Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= -1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= -1e-9; // the menu rows nearly touch (4 mm), the letter arrows touch their slot
           expect(apart, `${s} ${narrow} ${a.id} ${b.id}`).toBe(true);
         }
       }

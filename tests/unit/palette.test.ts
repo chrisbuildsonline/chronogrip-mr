@@ -35,6 +35,11 @@ const TEXT: [string, string, string][] = [
   ['the cream "!" on the red fault disc', C.cream, C.jamInk],
   ['the cream wordmark on the lightest vignette', C.cream, C.vignette],
   ['the Enter MR note on the lightest vignette', C.note, C.vignette],
+  ['the logo and the big menu words on the dark layer', C.logo, C.menuBed],
+  ['the menu rows on the dark layer', C.menuInk, C.menuBed],
+  ['the selected menu row on the dark layer', C.menuHi, C.menuBed],
+  ['the muted menu lines on the dark layer', C.menuMuted, C.menuBed],
+  ['the amber eyebrow, arrows and On on the dark layer', C.amber, C.menuBed],
 ];
 
 describe('palette contrast (WCAG AA)', () => {

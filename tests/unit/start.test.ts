@@ -54,7 +54,7 @@ describe('start panel layout', () => {
     }
   });
 
-  it('every button is 50 mm tall (44 px or more at the phone sheet scale), inside the card, 12 mm apart', () => {
+  it('every button is 50 mm tall (44 px or more at the phone sheet scale), inside the card, rows 4 mm apart', () => {
     const l = layout('title', { ...ctx, narrow: true });
     for (const w of [360, 375, 390, 430]) {
       for (const b of l.buttons) expect(b.h * phonePx(w), `${w} ${b.id}`).toBeGreaterThanOrEqual(44);
@@ -65,7 +65,7 @@ describe('start panel layout', () => {
       expect(b.y - b.h / 2).toBeGreaterThanOrEqual(0.016 - 1e-9);
       expect(b.y + b.h / 2).toBeLessThanOrEqual(l.height);
     }
-    for (const a of l.buttons) for (const b of l.buttons) if (a !== b) expect(Math.abs(a.y - b.y) - (a.h + b.h) / 2).toBeGreaterThanOrEqual(0.012 - 1e-9);
+    for (const a of l.buttons) for (const b of l.buttons) if (a !== b) expect(Math.abs(a.y - b.y) - (a.h + b.h) / 2).toBeGreaterThanOrEqual(0.004 - 1e-9);
   });
 
   it('in XR the menu card hangs low enough that every button, edge to edge, is in the panel zone and 60 cm reach, above every level', () => {
@@ -122,7 +122,7 @@ describe('options panel layout', () => {
     }
   });
 
-  it('every button is 44 px or more tall at the phone sheet scale, inside the card, 12 mm apart', () => {
+  it('every button is 44 px or more tall at the phone sheet scale, inside the card, rows 4 mm apart', () => {
     for (const confirm of [false, true]) {
       const l = layout('options', { ...ctx, narrow: true, confirm });
       expect(l.width).toBe(NARROW_W);
@@ -132,34 +132,34 @@ describe('options panel layout', () => {
         expect(b.y - b.h / 2).toBeGreaterThanOrEqual(0.008 - 1e-9);
         expect(b.y + b.h / 2).toBeLessThanOrEqual(l.height);
       }
-      for (const a of l.buttons) for (const b of l.buttons) if (a !== b) expect(Math.abs(a.y - b.y) - (a.h + b.h) / 2, `${a.id} ${b.id}`).toBeGreaterThanOrEqual(0.012 - 1e-9);
+      for (const a of l.buttons) for (const b of l.buttons) if (a !== b) expect(Math.abs(a.y - b.y) - (a.h + b.h) / 2, `${a.id} ${b.id}`).toBeGreaterThanOrEqual(0.004 - 1e-9);
     }
   });
 });
 
 describe('high scores board', () => {
-  it('stacks, top to bottom: the Local / Global control, the ten rows, the level switcher, Back; all centred', () => {
+  it('stacks, top to bottom: the Local / Global control, the ten rows, Back; centred, with no level switcher', () => {
     for (const narrow of [false, true]) {
       const g = boardGrid(narrow);
-      const l = layout('board', { level: 0, levels: 10, random: true, narrow });
+      const l = layout('board', { level: 0, levels: 21, random: true, narrow });
       const by = (id: string) => l.buttons.find((b) => b.id === id)!;
-      const [back, a, b, prev, next] = [by('back'), by('tab-local'), by('tab-global'), by('board-prev'), by('board-next')];
+      const [back, a, b] = [by('back'), by('tab-local'), by('tab-global')];
+      expect(l.buttons.map((x) => x.id)).toEqual(['back', 'tab-local', 'tab-global']);
       expect(l.width).toBe(NARROW_W);
       expect(g).toMatchObject({ cols: 1, rows: 10 });
       expect(back.x).toBe(0);
+      expect(back.h, 'Back is a 50 mm row').toBeGreaterThanOrEqual(0.05);
       expect(l.track!.x).toBe(0);
       expect(a.x + b.x, 'the two segments are centred').toBeCloseTo(0, 9);
-      expect(prev.x + next.x, 'the arrows are centred').toBeCloseTo(0, 9);
       const rowsTop = g.y0 + g.pitch / 2;
       const rowsFoot = g.y0 - (g.rows - 1) * g.pitch - g.pitch / 2;
       expect(l.track!.y - l.track!.h / 2, 'the control is over the rows').toBeGreaterThanOrEqual(rowsTop + 0.012 - 1e-9);
-      expect(prev.y + prev.h / 2, 'the switcher is under the rows').toBeLessThanOrEqual(rowsFoot - 0.012 + 1e-9);
-      expect(back.y + back.h / 2, 'Back is the lowest').toBeLessThanOrEqual(prev.y - prev.h / 2 - 0.012 + 1e-9);
+      expect(back.y + back.h / 2, 'Back is under the rows').toBeLessThanOrEqual(rowsFoot - 0.012 + 1e-9);
     }
   });
 
   it('has pill segments 44 px or more tall at the phone sheet scale, inside their track', () => {
-    const l = layout('board', { level: 0, levels: 10, random: true, narrow: true });
+    const l = layout('board', { level: 0, levels: 21, random: true, narrow: true });
     for (const s of l.buttons.filter((x) => x.kind === 'tab')) {
       expect(s.w, 'a pill, not a circle').toBeGreaterThan(s.h);
       expect(s.h * phonePx(375)).toBeGreaterThanOrEqual(44);

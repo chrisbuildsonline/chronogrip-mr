@@ -7,6 +7,12 @@ export const tickInterval = (rate: number) => (rate > 0 && Number.isFinite(rate)
 /** Ticks to emit as the escapement phase (one whole step per tick) moves from one frame to the next. */
 export const ticksBetween = (from: number, to: number) => (to > from ? Math.floor(to) - Math.floor(from) : 0);
 
+/**
+ * How loud the escapement's ticks (the bird's flapping, heard once a level is solved) are `seconds` after the solve: full
+ * until 2 s, then a linear fade to silence at 3 s, and none after. The bird can keep flapping on screen; it is silent.
+ */
+export const tickGain = (seconds: number): number => (seconds <= 2 ? 1 : seconds >= 3 ? 0 : 3 - seconds);
+
 export type SoundState = 'none' | 'suspended' | 'running' | 'closed';
 export type SoundCounts = { ticks: number; clicks: number; grinds: number; chimes: number; notes: number };
 
@@ -189,14 +195,14 @@ export function createSound() {
       }
     },
     /** One tick of the escapement, from where it sits in the room. */
-    tick(): void {
+    tick(level = 1): void {
       const c = live();
-      if (!c) return;
+      if (!c || level <= 0) return;
       counts.ticks++;
       const o = c.createOscillator();
       o.type = 'square';
       o.frequency.value = 1800 + 200 * (counts.ticks % 2);
-      voice(c, o, 0.5, 0.03, panner, [filter(c, 'bandpass', 2400, 2)]);
+      voice(c, o, 0.5 * Math.min(1, level), 0.03, panner, [filter(c, 'bandpass', 2400, 2)]);
     },
     /** A gear snaps onto an axle: a short metallic click. */
     click(): void {

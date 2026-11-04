@@ -3,40 +3,28 @@ import { BOARDS, DEFAULT_INITIALS, TOP, addEntry, backInitial, emptyScores, form
 
 const KEY = 'chronogrip.scores.v1';
 const store = (raw: string | null) => ({ getItem: (k: string) => (k === KEY ? raw : null) });
-const lvl = (ms: number, date = '2026-11-04', name = 'ABC', cleared = 5): Entry => ({ name, ms, date, cleared });
+const lvl = (ms: number, date = '2026-11-04', name = 'ABC'): Entry => ({ name, ms, date });
 
 describe('boards', () => {
-  it('has the campaign board and one per Random level difficulty, and none per level or for a shared puzzle', () => {
-    expect(BOARDS).toEqual(['campaign', 'random-easy', 'random-medium', 'random-hard', 'random-expert']);
-    expect(qualifies(emptyScores(), 'l1', lvl(1000)).ok).toBe(false);
-    expect(qualifies(emptyScores(), 't123456', lvl(1000)).ok).toBe(false);
-    expect(qualifies(emptyScores(), 'constructor', lvl(1000)).ok).toBe(false);
+  it('has just the campaign board: no per-level boards, no Random level boards, none for a shared puzzle', () => {
+    expect(BOARDS).toEqual(['campaign']);
+    for (const id of ['l1', 'random', 'random-hard', 't123456', 'constructor']) expect(qualifies(emptyScores(), id, lvl(1000)).ok, id).toBe(false);
   });
 });
 
-describe('ranking a run', () => {
-  it('ranks by most cleared first, then least time, then the earlier date', () => {
+describe('ranking a completed run', () => {
+  it('ranks by total time, fastest first, then the earlier date', () => {
     let s = emptyScores();
-    s = addEntry(s, 'campaign', lvl(90000, '2026-11-04', 'SLO', 7));
-    s = addEntry(s, 'campaign', lvl(50000, '2026-11-04', 'FAS', 7));
-    s = addEntry(s, 'campaign', lvl(20000, '2026-11-04', 'FEW', 3));
-    s = addEntry(s, 'campaign', lvl(99000, '2026-11-04', 'ALL', 20));
-    s = addEntry(s, 'campaign', lvl(50000, '2026-11-01', 'OLD', 7));
-    expect(s.boards.campaign!.map((e) => e.name)).toEqual(['ALL', 'OLD', 'FAS', 'SLO', 'FEW']);
+    s = addEntry(s, 'campaign', lvl(900_000, '2026-11-04', 'SLO'));
+    s = addEntry(s, 'campaign', lvl(500_000, '2026-11-04', 'FAS'));
+    s = addEntry(s, 'campaign', lvl(500_000, '2026-11-01', 'OLD'));
+    expect(s.boards.campaign!.map((e) => e.name)).toEqual(['OLD', 'FAS', 'SLO']);
   });
-  it('holds an entry to a whole number cleared (20 at most in the campaign), and a time under a day', () => {
+  it('holds an entry to a positive time under a day, and a real date', () => {
     const s = emptyScores();
-    for (const cleared of [0, -1, 1.5, NaN, 21]) expect(qualifies(s, 'campaign', lvl(1000, '2026-11-04', 'ABC', cleared)).ok, `${cleared}`).toBe(false);
-    expect(qualifies(s, 'random-hard', lvl(1000, '2026-11-04', 'ABC', 21)).ok).toBe(true);
-    expect(qualifies(s, 'random-hard', lvl(1000, '2026-11-04', 'ABC', 1001)).ok).toBe(false);
-    expect(qualifies(s, 'campaign', lvl(86_400_000)).ok).toBe(false);
+    for (const ms of [0, -1, NaN, Infinity, 86_400_000]) expect(qualifies(s, 'campaign', lvl(ms)).ok, `${ms}`).toBe(false);
     expect(qualifies(s, 'campaign', lvl(86_399_000)).ok).toBe(true);
-  });
-  it('each Random level difficulty is its own board', () => {
-    let s = emptyScores();
-    s = addEntry(s, 'random-hard', lvl(30000, '2026-11-04', 'AAA', 4));
-    expect(s.boards['random-hard']).toHaveLength(1);
-    expect(s.boards['random-easy']).toEqual([]);
+    expect(qualifies(s, 'campaign', lvl(1000, 'yesterday')).ok).toBe(false);
   });
 });
 
@@ -106,7 +94,6 @@ describe('addEntry and qualifies on a level board', () => {
     s = addEntry(s, 'campaign', lvl(4000, '2026-11-04', 'KIM'));
     expect(s.initials).toBe('KIM');
     expect(s.boards.campaign).toHaveLength(1);
-    expect(s.boards['random-easy']).toHaveLength(0);
   });
 });
 
@@ -157,45 +144,44 @@ describe('saveScores and loadScores', () => {
 
   it('sanitises names and drops bad entries on load, keeping the good ones sorted and trimmed', () => {
     const entries = [
-      { name: 'abc', ms: 3000, date: '2026-11-04', cleared: 5 },
-      { name: 'x-y!z', ms: 2000, date: '2026-11-04', cleared: 5 },
-      { name: 'Q', ms: 1000, date: '2026-11-04', cleared: 5 },
-      { name: 42, ms: 4000, date: '2026-11-04', cleared: 5 },
-      { name: 'BAD', ms: -1, date: '2026-11-04', cleared: 5 },
-      { name: 'BAD', ms: 'x', date: '2026-11-04', cleared: 5 },
+      { name: 'abc', ms: 3000, date: '2026-11-04' },
+      { name: 'x-y!z', ms: 2000, date: '2026-11-04' },
+      { name: 'Q', ms: 1000, date: '2026-11-04' },
+      { name: 42, ms: 4000, date: '2026-11-04' },
+      { name: 'BAD', ms: -1, date: '2026-11-04' },
+      { name: 'BAD', ms: 'x', date: '2026-11-04' },
       { name: 'BAD', ms: 5000, date: 'soon' },
       null,
       'str',
       { name: 'ZZZ', ms: 6000 },
     ];
-    const raw = JSON.stringify({ version: 1, initials: 'k9', boards: { campaign: entries, 'random-easy': 'nope', constructor: [{ name: 'ABC', ms: 1, date: '2026-11-04', cleared: 5 }] } });
+    const raw = JSON.stringify({ version: 1, initials: 'k9', boards: { campaign: entries, constructor: [{ name: 'ABC', ms: 1, date: '2026-11-04' }] } });
     const s = loadScores(store(raw));
     expect(s.boards.campaign!.map((e) => [e.name, e.ms])).toEqual([['QAA', 1000], ['XYZ', 2000], ['ABC', 3000], ['AAA', 4000]]);
-    expect(s.boards['random-easy']).toEqual([]); // 'nope' is not a list
     expect(s.initials).toBe('KAA');
     expect(Object.keys(s.boards)).toEqual([...BOARDS]);
   });
 
   it('trims an oversized stored board to ten', () => {
-    const entries = Array.from({ length: 15 }, (_, i) => ({ name: 'ABC', ms: (15 - i) * 1000, date: '2026-11-04', cleared: 5 }));
+    const entries = Array.from({ length: 15 }, (_, i) => ({ name: 'ABC', ms: (15 - i) * 1000, date: '2026-11-04' }));
     const s = loadScores(store(JSON.stringify({ version: 1, initials: 'ABC', boards: { campaign: entries } })));
     expect(s.boards.campaign).toHaveLength(TOP);
     expect(s.boards.campaign![0]!.ms).toBe(1000);
   });
 
-  it('drops an old entry with no run count, and ignores the old single Random board and the per-level boards', () => {
+  it('ignores the old Random board and the per-level boards on load', () => {
     const raw = JSON.stringify({
       version: 1,
       boards: {
         random: [{ name: 'ABC', step: 3, ms: 1000, date: '2026-11-04' }],
+        'random-hard': [{ name: 'ABC', ms: 1000, date: '2026-11-04' }],
         l1: [{ name: 'ABC', ms: 1000, date: '2026-11-04' }],
-        campaign: [{ name: 'ABC', ms: 1000, date: '2026-11-04' }, { name: 'DEF', ms: 2000, date: '2026-11-04', cleared: 4 }],
+        campaign: [{ name: 'DEF', ms: 2000, date: '2026-11-04' }],
       },
     });
     const s = loadScores(store(raw));
-    expect(s.boards.random).toBeUndefined();
-    expect(s.boards.l1).toBeUndefined();
-    expect(s.boards.campaign).toEqual([{ name: 'DEF', ms: 2000, date: '2026-11-04', cleared: 4 }]);
+    expect(Object.keys(s.boards)).toEqual(['campaign']);
+    expect(s.boards.campaign).toEqual([{ name: 'DEF', ms: 2000, date: '2026-11-04' }]);
   });
 
   it('does not leak a __proto__ key', () => {

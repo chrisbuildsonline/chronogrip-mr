@@ -1,18 +1,16 @@
-import { CAMPAIGN, DIFFICULTIES } from './random';
 
 /**
- * High score boards: one for the campaign and one per Random level difficulty (random-easy .. random-expert). A score is a
- * whole run: how many levels (or puzzles) it cleared and the total time. Ranked by most cleared, then least time; the earlier
- * date wins a tie, and each board keeps its top ten. Everything here is pure.
+ * High score boards: just the campaign. Only a completed run (all 20 levels) is scored: its total time, with three initials.
+ * Ranked fastest first; the earlier date wins a tie, and the board keeps its top ten. Everything here is pure.
  */
-export const BOARDS: readonly string[] = ['campaign', ...DIFFICULTIES.map((d) => `random-${d}`)];
+export const BOARDS: readonly string[] = ['campaign'];
 export const TOP = 10;
 export const DEFAULT_INITIALS = 'AAA';
 
-/** `cleared`: levels (campaign) or puzzles (Random level) the run cleared; `ms`: the run's total time; `date`: the local day, YYYY-MM-DD. */
-export type Entry = { name: string; ms: number; date: string; cleared: number };
-/** The most a run can clear: 20 in the campaign, and an endless Random run is held to what the global board takes. */
-export const MAX_CLEARED = 1000;
+/** `ms`: the completed run's total time; `date`: the local day, YYYY-MM-DD. */
+export type Entry = { name: string; ms: number; date: string };
+/** A scored run has cleared all 20 levels: the global board's step. */
+export const RUN_STEP = 20;
 export type Scores = { initials: string; boards: Record<string, Entry[]> };
 
 export const emptyScores = (): Scores => ({ initials: DEFAULT_INITIALS, boards: Object.fromEntries(BOARDS.map((id) => [id, []])) });
@@ -35,15 +33,14 @@ export function formatDate(date: string): string {
   return validDate(date) ? `${Number(date.slice(8))} ${MONTHS[Number(date.slice(5, 7)) - 1]}` : '';
 }
 
-/** Whether an entry is fit for a board: a whole number cleared (at most 20 in the campaign), a positive finite time under a day, and a day. */
+/** Whether an entry is fit for a board: a positive finite time under a day, and a day. */
 function valid(board: string, e: Entry): boolean {
-  if (!BOARDS.includes(board) || !Number.isFinite(e.ms) || e.ms <= 0 || e.ms >= 86_400_000 || !validDate(e.date)) return false;
-  return Number.isInteger(e.cleared) && e.cleared >= 1 && e.cleared <= (board === 'campaign' ? CAMPAIGN : MAX_CLEARED);
+  return BOARDS.includes(board) && Number.isFinite(e.ms) && e.ms > 0 && e.ms < 86_400_000 && validDate(e.date);
 }
 
-/** Negative when `a` ranks above `b`: more cleared first, then less time; the earlier date breaks a tie. */
+/** Negative when `a` ranks above `b`: less time first; the earlier date breaks a tie. */
 function order(_board: string, a: Entry, b: Entry): number {
-  return b.cleared - a.cleared || a.ms - b.ms || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  return a.ms - b.ms || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
 }
 
 /** Whether an entry would make the board's top ten, and the rank it would take (a later tie ranks after the entry already there). */
@@ -56,7 +53,7 @@ export function qualifies(s: Scores, board: string, e: Entry): { ok: boolean; ra
 /** The scores with the entry in its place and the board trimmed to ten; the same object back if it does not qualify. The name is remembered as the last initials. */
 export function addEntry(s: Scores, board: string, e: Entry): Scores {
   if (!qualifies(s, board, e).ok) return s;
-  const entry: Entry = { name: sanitiseName(e.name), ms: e.ms, date: e.date, cleared: e.cleared };
+  const entry: Entry = { name: sanitiseName(e.name), ms: e.ms, date: e.date };
   const rows = [...s.boards[board]!, entry].sort((a, b) => order(board, a, b)).slice(0, TOP);
   return { initials: entry.name, boards: { ...s.boards, [board]: rows } };
 }
@@ -80,7 +77,7 @@ export function loadScores(storage: Pick<Storage, 'getItem'> | null | undefined)
       const kept: Entry[] = [];
       for (const r of rows) {
         if (!isObject(r)) continue;
-        const e: Entry = { name: sanitiseName(r.name), ms: r.ms as number, date: r.date as string, cleared: r.cleared as number };
+        const e: Entry = { name: sanitiseName(r.name), ms: r.ms as number, date: r.date as string };
         if (valid(board, e)) kept.push(e);
       }
       s.boards[board] = kept.sort((a, b) => order(board, a, b)).slice(0, TOP);

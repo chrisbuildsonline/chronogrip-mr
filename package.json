@@ -19,6 +19,7 @@
     "docker:stop": "docker stop chronogrip-mr"
   },
   "dependencies": {
+    "@fontsource/josefin-sans": "^5.3.0",
     "@iwsdk/core": "1.1.0-rc.2",
     "three": "0.186.1"
   },

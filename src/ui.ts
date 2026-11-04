@@ -2,18 +2,18 @@ import type { Level } from './levels';
 import { COMFORT, TRAY_POSE, inZone, layerLift, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
 
 /** Layouts and placement of the in-world panels (see design/DESIGN.md). Panel space: metres, origin at the bottom centre, +Y up, +Z towards the player. */
-export type Screen = 'title' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options';
+export type Screen = 'title' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options' | 'result';
 export const SCREENS: readonly Screen[] = ['title', 'hud', 'complete', 'paused'];
 /** Cards laid over the title or the complete card: the initials entry, the high scores board, the options and the difficulty picker. */
 /** How opaque the black layer behind the menus is. */
 export const SCRIM_OPACITY = 0.9;
 /** The menus: the game behind them is dimmed to 90% black (a full-view layer on a flat screen, a backing panel in AR). */
-export const MENU_SCREENS: readonly Screen[] = ['title', 'picker', 'board', 'options', 'paused'];
+export const MENU_SCREENS: readonly Screen[] = ['title', 'picker', 'board', 'options', 'paused', 'result', 'initials'];
 /** The cards the board is played with: the camera fits for these, the menus are centred over a black layer. */
 export const PLAY_SCREENS: readonly Screen[] = SCREENS.filter((s) => !MENU_SCREENS.includes(s));
-export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options', 'picker'];
+export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options', 'picker', 'result'];
 
-export type ButtonKind = 'primary' | 'secondary' | 'icon' | 'toggle' | 'arrow' | 'tab';
+export type ButtonKind = 'primary' | 'secondary' | 'icon' | 'toggle' | 'arrow' | 'tab' | 'slot';
 /** A button rectangle in panel space; x, y is its centre. */
 export type Button = { id: string; label: string; kind: ButtonKind; x: number; y: number; w: number; h: number };
 /** A display slot (not a target) in panel space; x, y is its centre. */
@@ -60,15 +60,16 @@ export type LayoutCtx = { level: number; levels: number; shared?: boolean; rando
 /** Width of every card on a phone in portrait (outside XR), metres of panel space. */
 export const NARROW_W = 0.3;
 const BACK_W = 0.076;
-/** The menu cards (start, options, high scores, level select) are one column, one phone width wide, wide or narrow. */
-const MENU_GAP = 0.012;
-/** The start panel's big buttons: 50 mm tall in XR and everywhere else; three stacked, with the words over them. */
-const START_BH = 0.05;
-const START_BTN_W = 0.2;
-/** The start panel: up to five buttons stacked, then the tagline, title and eyebrow over them. */
-const startHeight = (buttons: number) => PAD + buttons * START_BH + (buttons - 1) * MENU_GAP + 0.106;
-/** Room over the options buttons for the heading and the static line. */
-const OPTIONS_HEAD = 0.078;
+/**
+ * The menu cards (start, options, high scores, pause, picker, result, name entry) are one column, one phone width wide: no card, text rows
+ * on the dark layer, left-aligned. A row is 50 mm tall (a hand's target in XR) and nearly the card's width; rows nearly touch.
+ */
+const MENU_GAP = 0.004;
+export const ROW_H = 0.05;
+export const ROW_W = 0.26;
+/** Room over the rows for the amber eyebrow and the big light heading. */
+const MENU_HEAD = 0.11;
+const startHeight = (rows: number) => PAD + rows * ROW_H + (rows - 1) * MENU_GAP + MENU_HEAD;
 /** Wide enough for "Turn the marked gear ↻ 37.5 rpm" in body type, and for the countdown ring and its time between the clock and the pause button. */
 const HUD_W = 0.3;
 
@@ -79,8 +80,7 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
   const [primaryW, secondaryW] = narrow ? [0.1, 0.072] : [0.11, 0.088];
   switch (screen) {
     case 'title': {
-      // One column, centred: Continue (only with progress), New Game, Random level, Options, High scores, top to bottom.
-      // Continue and New Game go straight into a level; the level list is Choose level on the pause card.
+      // One column: Continue (only with a saved run), New Game, Random level, Options, High scores, top to bottom.
       const items: Parameters<typeof stack>[1] = [
         ...(ctx.resume || ctx.shared ? [['continue', ctx.shared ? 'Shared puzzle' : 'Continue', 'primary'] as const] : []), // a ?seed= link opens its puzzle from here
         ['start', 'New Game', ctx.resume || ctx.shared ? 'secondary' : 'primary'],
@@ -88,19 +88,24 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
         ['options', 'Options', 'secondary'],
         ['scores', 'High scores', 'secondary'],
       ];
-      return { width: NARROW_W, height: startHeight(items.length), buttons: stack(PAD, items, START_BTN_W, START_BH) };
+      return { width: NARROW_W, height: startHeight(items.length), buttons: stack(PAD, items, ROW_W, ROW_H) };
     }
     case 'options': {
-      // One column: the three switches, Reset progress, then Back. Confirming swaps the first three for a choice.
+      // The three switches, Reset progress, then Back. Confirming swaps the first four for a choice.
       const items: Parameters<typeof stack>[1] = ctx.confirm
         ? [['reset-yes', 'Reset now', 'primary'], ['reset-cancel', 'Keep it', 'secondary'], ['back', 'Back', 'secondary']]
         : [['relaxed', 'No timer', 'toggle'], ['sound', 'Sound', 'toggle'], ['music', 'Music', 'toggle'], ['reset', 'Reset progress', 'secondary'], ['back', 'Back', 'secondary']];
-      return { width: NARROW_W, height: PAD + items.length * BH + (items.length - 1) * MENU_GAP + OPTIONS_HEAD, buttons: stack(PAD, items, START_BTN_W, BH) };
+      return { width: NARROW_W, height: startHeight(items.length), buttons: stack(PAD, items, ROW_W, ROW_H) };
     }
     case 'picker': {
-      // Random level: how hard, one column: Easy, Medium, Hard, Expert, then Back.
+      // Random level (practice): how hard. Easy, Medium, Hard, Expert, then Back.
       const items: Parameters<typeof stack>[1] = [['easy', 'Easy', 'secondary'], ['medium', 'Medium', 'secondary'], ['hard', 'Hard', 'secondary'], ['expert', 'Expert', 'secondary'], ['back', 'Back', 'secondary']];
-      return { width: NARROW_W, height: PAD + items.length * BH + (items.length - 1) * MENU_GAP + OPTIONS_HEAD, buttons: stack(PAD, items, START_BTN_W, BH) };
+      return { width: NARROW_W, height: startHeight(items.length), buttons: stack(PAD, items, ROW_W, ROW_H) };
+    }
+    case 'result': {
+      // A run that did not finish: "Level 7 reached" and the time; New Game or the Main menu. A line more of room for the words.
+      const items: Parameters<typeof stack>[1] = [['start', 'New Game', 'primary'], ['menu', 'Main menu', 'secondary']];
+      return { width: NARROW_W, height: startHeight(items.length) + 0.03, buttons: stack(PAD, items, ROW_W, ROW_H) };
     }
     case 'hud': {
       // The goal line runs across the top; under it the level, a time with tenths (0:04.7) and the pause button. The
@@ -109,75 +114,55 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       return { width, height: 0.096, buttons: [{ id: 'pause', label: 'Pause', kind: 'icon', x: width / 2 - 0.008 - BH / 2, y: 0.031, w: BH, h: BH }] };
     }
     case 'complete': {
-      // The last slot is a Random level or a shared puzzle; the one before it is level 20, after which Next is Finish (the run's result).
+      // The last slot is a Random level (practice) or a shared puzzle; the one before it is level 20, after which Next is Finish.
       const special = ctx.level >= ctx.levels - 1;
       const last = ctx.level === ctx.levels - 2;
-      // A level or a Random puzzle cleared: Next. A shared puzzle: Restart plays it again, Menu leaves.
-      const items: Parameters<typeof row>[1] = special && !ctx.random
-        ? [['restart', 'Restart', 'primary', primaryW], ['menu', 'Menu', 'secondary', secondaryW]]
+      // A level cleared: Next. A Random level: Play again, or the Main menu. A shared puzzle: Restart plays it again, Menu leaves.
+      const items: Parameters<typeof row>[1] = special
+        ? ctx.random
+          ? [['next', 'Play again', 'primary', primaryW], ['menu', 'Main menu', 'secondary', secondaryW + 0.02]]
+          : [['restart', 'Restart', 'primary', primaryW], ['menu', 'Menu', 'secondary', secondaryW]]
         : [['next', last ? 'Finish' : 'Next', 'primary', primaryW]];
       return { width: narrow ? NARROW_W : 0.35, height: 0.17, buttons: row(low, items) };
     }
     case 'paused': {
       // One column like the other menus: Resume, Restart (a new puzzle), Give up (ends the run), Main menu (the run stays saved), No timer.
       const items: Parameters<typeof stack>[1] = [['resume', 'Resume', 'primary'], ['restart', 'Restart', 'secondary'], ['giveup', 'Give up', 'secondary'], ['menu', 'Main menu', 'secondary'], ['relaxed', 'No timer', 'toggle']];
-      return { width: NARROW_W, height: PAD + items.length * BH + (items.length - 1) * MENU_GAP + OPTIONS_HEAD, buttons: stack(PAD, items, START_BTN_W, BH) };
+      return { width: NARROW_W, height: startHeight(items.length), buttons: stack(PAD, items, ROW_W, ROW_H) };
     }
     case 'initials': {
-      const letter = (k: number) => [`up-${k}`, `down-${k}`] as const;
-      const arrow = (id: string, label: string, x: number, y: number, w: number, h: number): Button => ({ id, label, kind: 'arrow', x, y, w, h });
-      const slots: Slot[] = [];
-      if (!narrow) {
-        // One row, low on the card (the panel zone's pitch rules out a second): each letter in its slot with a down arrow at its left and an up arrow at its right, then Save and Skip.
-        const [AW, SW, TIGHT] = [BUTTON_MIN_M, 0.03, 0.003];
-        const group = 2 * AW + SW + 2 * TIGHT;
-        const slotGap = GAP + 0.002;
-        const total = 3 * group + 2 * slotGap + 0.024 + 0.08 + GAP + 0.06;
-        let x = -total / 2;
-        const buttons: Button[] = [];
-        for (let k = 0; k < 3; k++) {
-          const [up, down] = letter(k);
-          buttons.push(arrow(up, 'Up', x + group - AW / 2, low, AW, BH), arrow(down, 'Down', x + AW / 2, low, AW, BH));
-          slots.push({ x: x + AW + TIGHT + SW / 2, y: low, w: SW, h: BH });
-          x += group + slotGap;
-        }
-        const at = x - slotGap + 0.024; // Save and Skip start a wider gap after the last letter's arrows
-        buttons.push(
-          { id: 'save', label: 'Save', kind: 'primary', x: at + 0.04, y: low, w: 0.08, h: BH },
-          { id: 'skip', label: 'Skip', kind: 'secondary', x: at + 0.08 + GAP + 0.03, y: low, w: 0.06, h: BH },
-        );
-        return { width: total + 2 * PAD, height: 0.14, buttons, slots };
-      }
-      // Phone: the zone does not apply, so each letter's slot has its up pill over it and its down pill under it, and Save and Skip sit under the thumb.
-      const col = (NARROW_W - 2 * PAD - 2 * GAP) / 3;
-      const AH = 0.044;
-      const SLOT_H = 0.04;
-      const downY = low + BH / 2 + GAP + AH / 2;
-      const slotY = downY + AH / 2 + 0.003 + SLOT_H / 2;
-      const upY = slotY + SLOT_H / 2 + 0.003 + AH / 2;
+      // The name entry, arcade style: the time large, then three big letter slots (tap one to move to it) with an arrow over and under each, then OK and Skip.
+      const col = (NARROW_W - 2 * PAD - 2 * MENU_GAP) / 3;
+      const [AH, SH] = [ROW_H, 0.06];
+      const okY = PAD + ROW_H + MENU_GAP + ROW_H / 2;
+      const downY = PAD + 2 * (ROW_H + MENU_GAP) + 0.008 + AH / 2;
+      const slotY = downY + AH / 2 + SH / 2;
+      const upY = slotY + SH / 2 + AH / 2;
       const buttons: Button[] = [];
+      const slots: Slot[] = [];
       for (let k = 0; k < 3; k++) {
-        const [up, down] = letter(k);
-        const cx = -NARROW_W / 2 + PAD + col / 2 + k * (col + GAP);
-        buttons.push(arrow(up, 'Up', cx, upY, col, AH), arrow(down, 'Down', cx, downY, col, AH));
-        slots.push({ x: cx, y: slotY, w: col, h: SLOT_H });
+        const cx = -NARROW_W / 2 + PAD + col / 2 + k * (col + MENU_GAP);
+        buttons.push(
+          { id: `up-${k}`, label: 'Up', kind: 'arrow', x: cx, y: upY, w: col, h: AH },
+          { id: `slot-${k}`, label: 'Letter', kind: 'slot', x: cx, y: slotY, w: col, h: SH },
+          { id: `down-${k}`, label: 'Down', kind: 'arrow', x: cx, y: downY, w: col, h: AH },
+        );
+        slots.push({ x: cx, y: slotY, w: col, h: SH });
       }
-      buttons.push(...row(low, [['save', 'Save', 'primary', 0.15], ['skip', 'Skip', 'secondary', 0.106]]));
-      return { width: NARROW_W, height: 0.29, buttons, slots };
+      buttons.push(...stack(PAD, [['save', 'OK', 'primary'], ['skip', 'Skip', 'secondary']], ROW_W, ROW_H));
+      return { width: NARROW_W, height: upY + AH / 2 + 0.15, buttons, slots };
     }
     case 'board': {
-      // One column, top to bottom: the heading, the Local / Global control, the ten rows, the level switcher, Back.
+      // One column, top to bottom: the heading, the Local / Global control, the ten rows, Back.
       const g = boardGrid(narrow);
       const trackW = 2 * WIDE_TAB + 0.006;
       return {
         width: g.width,
         height: g.height,
         buttons: [
-          { id: 'back', label: 'Back', kind: 'secondary', x: 0, y: g.backY, w: 0.1, h: BH },
+          ...stack(PAD, [['back', 'Back', 'secondary']], ROW_W, ROW_H),
           tabBtn('tab-local', 'Local', -WIDE_TAB / 2, g.tabsY, WIDE_TAB, g.tabH),
           tabBtn('tab-global', 'Global', WIDE_TAB / 2, g.tabsY, WIDE_TAB, g.tabH),
-          { id: 'board-prev', label: 'Previous', kind: 'arrow', x: -(g.labelW / 2 + GAP + BH / 2), y: g.switchY, w: BH, h: BH },
-          { id: 'board-next', label: 'Next', kind: 'arrow', x: g.labelW / 2 + GAP + BH / 2, y: g.switchY, w: BH, h: BH },
         ],
         track: { x: 0, y: g.tabsY, w: trackW, h: g.tabH + 0.006 },
       };
@@ -194,13 +179,11 @@ export function boardGrid(narrow: boolean) {
   const [cols, rows] = [1, 10];
   const pitch = narrow ? 0.0165 : 0.0185;
   const tabH = BH - 0.006;
-  const backY = PAD + BH / 2;
-  const switchY = PAD + BH + GAP + BH / 2;
-  const rowsFoot = PAD + 2 * BH + 2 * GAP;
+  const rowsFoot = PAD + ROW_H + 0.012;
   const y0 = rowsFoot + pitch / 2 + (rows - 1) * pitch;
   const tabsY = rowsFoot + rows * pitch + GAP + 0.003 + tabH / 2;
-  const headY = tabsY + tabH / 2 + 0.026;
-  return { width: NARROW_W, cols, rows, gap: 0, pitch, y0, headY, tabsY, tabH, backY, switchY, height: headY + 0.027, colW: NARROW_W - 2 * PAD, labelW: 0.09 };
+  const headY = tabsY + tabH / 2 + 0.04;
+  return { width: NARROW_W, cols, rows, gap: 0, pitch, y0, headY, tabsY, tabH, height: headY + 0.06, colW: NARROW_W - 2 * PAD };
 }
 
 /** The button under a panel-space point that is within touch depth of the face, else null. */

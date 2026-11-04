@@ -24,6 +24,13 @@ export const C = {
   /** Page only: the Enter MR note, and the lightest stop of the walnut vignette behind the page chrome. */
   note: '#c9bba6',
   vignette: '#3a2a1c',
+  /** Menus float on the 90% black layer (F38, "Escapement deco"): the logo and big words, the row words, the selected row's words, and the muted lines. */
+  logo: '#f1e8d8',
+  menuInk: '#cdbfa6',
+  menuHi: '#fff6e6',
+  menuMuted: '#a8977f',
+  /** The surface the menu words are checked on: walnut night, darker than the 90% layer over any wall. */
+  menuBed: '#15110d',
 } as const;
 
 /**

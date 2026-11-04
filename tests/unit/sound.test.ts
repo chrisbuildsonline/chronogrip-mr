@@ -44,3 +44,15 @@ describe('createSound before unlock', () => {
     expect(s.counts).toEqual({ ticks: 0, clicks: 0, grinds: 0, chimes: 0, notes: 0 });
   });
 });
+
+describe('the ticks after a solve fade out', () => {
+  it('are full to 2 s, fall linearly to nothing at 3 s, and stay silent after', async () => {
+    const { tickGain } = await import('../../src/sound');
+    expect([0, 1, 2].map(tickGain)).toEqual([1, 1, 1]);
+    expect(tickGain(2.5)).toBeCloseTo(0.5, 9);
+    expect(tickGain(2.25)).toBeCloseTo(0.75, 9);
+    expect(tickGain(3)).toBe(0);
+    expect(tickGain(10)).toBe(0);
+    for (let t = 0; t < 6; t += 0.1) expect(tickGain(t + 0.1)).toBeLessThanOrEqual(tickGain(t) + 1e-12);
+  });
+});

@@ -5,17 +5,17 @@ const ok = (body: unknown, status = 200) => vi.fn(async () => new Response(JSON.
 const hang = () => vi.fn((_u: string, init: RequestInit) => new Promise<Response>((_r, rej) => init.signal!.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')))));
 
 describe('scorePayload', () => {
-  it('builds the body for a run: the board, initials, total time rounded to 2 dp, and the number cleared as the step', () => {
-    expect(scorePayload('campaign', 'ABC', 12.3456, 7)).toEqual({ level: 'campaign', initials: 'ABC', seconds: 12.35, step: 7 });
-    for (const board of ['random-easy', 'random-medium', 'random-hard', 'random-expert']) expect(scorePayload(board, 'XYZ', 40, 3)).toEqual({ level: board, initials: 'XYZ', seconds: 40, step: 3 });
+  it('builds the body for a finished run: the campaign board, initials, total time rounded to 2 dp, and 20 levels as the step', () => {
+    expect(scorePayload('campaign', 'ABC', 612.3456, 20)).toEqual({ level: 'campaign', initials: 'ABC', seconds: 612.35, step: 20 });
   });
   it('takes a run of up to a day, and the step from 1 to 1000', () => {
     expect(scorePayload('campaign', 'ABC', 86399, 1)).not.toBeNull();
-    expect(scorePayload('random-hard', 'ABC', 5, 1000)).not.toBeNull();
+    expect(scorePayload('campaign', 'ABC', 5, 1000)).not.toBeNull();
   });
   it.each([
     ['the old per-level board', 'l1', 'ABC', 5, 1],
     ['the old random board', 'random', 'ABC', 5, 1],
+    ['a Random level board (practice: no scores)', 'random-hard', 'ABC', 5, 20],
     ['a shared puzzle id', 't123456', 'ABC', 5, 1],
     ['injection board', 'campaign&x=1', 'ABC', 5, 1],
     ['prototype board', 'constructor', 'ABC', 5, 1],
@@ -30,9 +30,9 @@ describe('scorePayload', () => {
     ['a day', 'campaign', 'ABC', 86400, 1],
     ['rounds to zero', 'campaign', 'ABC', 0.001, 1],
     ['step 0 (nothing cleared: nothing is sent)', 'campaign', 'ABC', 5, 0],
-    ['step 1001', 'random-hard', 'ABC', 5, 1001],
-    ['fractional step', 'random-hard', 'ABC', 5, 2.5],
-    ['NaN step', 'random-hard', 'ABC', 5, NaN],
+    ['step 1001', 'campaign', 'ABC', 5, 1001],
+    ['fractional step', 'campaign', 'ABC', 5, 2.5],
+    ['NaN step', 'campaign', 'ABC', 5, NaN],
   ])('rejects %s', (_n, level, initials, seconds, step) => {
     expect(scorePayload(level, initials, seconds, step)).toBeNull();
   });
@@ -46,9 +46,8 @@ describe('scorePayload', () => {
 });
 
 describe('boardUrl', () => {
-  it('asks a board by most cleared, then least time, ten rows', () => {
-    expect(boardUrl('campaign')).toBe(`${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.campaign&order=step.desc,seconds.asc&limit=10`);
-    expect(boardUrl('random-hard')).toBe(`${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.random-hard&order=step.desc,seconds.asc&limit=10`);
+  it('asks for the completed runs (step 20), fastest first, ten rows', () => {
+    expect(boardUrl('campaign')).toBe(`${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.campaign&step=eq.20&order=seconds.asc&limit=10`);
   });
   it('carries only the publishable key', () => {
     expect(GLOBAL_KEY).toMatch(/^sb_publishable_/);
@@ -56,14 +55,13 @@ describe('boardUrl', () => {
 });
 
 describe('parseRows', () => {
-  const row = { initials: 'ABC', seconds: 12.34, step: 5, created_at: '2026-11-04T10:11:12.000Z' };
-  const entry = { name: 'ABC', ms: 12340, date: '2026-11-04', cleared: 5 };
-  it('turns good rows into entries, the step being what the run cleared', () => {
+  const row = { initials: 'ABC', seconds: 612.34, step: 20, created_at: '2026-11-04T10:11:12.000Z' };
+  const entry = { name: 'ABC', ms: 612340, date: '2026-11-04' };
+  it('turns good rows into entries', () => {
     expect(parseRows([row], 'campaign')).toEqual([entry]);
-    expect(parseRows([row], 'random-hard')).toEqual([entry]);
   });
   it('accepts numeric strings from numeric columns', () => {
-    expect(parseRows([{ ...row, seconds: '12.34' }], 'campaign')[0]?.ms).toBe(12340);
+    expect(parseRows([{ ...row, seconds: '612.34' }], 'campaign')[0]?.ms).toBe(612340);
   });
   it('drops junk rows and keeps the good ones', () => {
     const junk: unknown[] = [
@@ -79,16 +77,18 @@ describe('parseRows', () => {
       { ...row, seconds: null },
       { ...row, step: null },
       { ...row, step: 0 },
+      { ...row, step: 19 },
       { ...row, step: 1001 },
       { ...row, step: 2.5 },
       { ...row, created_at: 'yesterday' },
       { ...row, created_at: 5 },
     ];
-    expect(parseRows([...junk, row], 'random-easy')).toEqual([entry]);
+    expect(parseRows([...junk, row], 'campaign')).toEqual([entry]);
   });
-  it('holds a campaign row to 20 levels, and gives nothing for a board that does not exist', () => {
+  it('shows only completed runs (step 20), and gives nothing for a board that does not exist', () => {
+    expect(parseRows([{ ...row, step: 7 }], 'campaign')).toEqual([]);
     expect(parseRows([{ ...row, step: 21 }], 'campaign')).toEqual([]);
-    expect(parseRows([{ ...row, step: 21 }], 'random-expert')).toHaveLength(1);
+    expect(parseRows([row], 'random-expert')).toEqual([]);
     expect(parseRows([row], 'l1')).toEqual([]);
     expect(parseRows([row], 'random')).toEqual([]);
   });
@@ -100,8 +100,8 @@ describe('parseRows', () => {
 
 describe('fetchGlobal', () => {
   it('sends the key and returns parsed rows', async () => {
-    const f = ok([{ initials: 'ZED', seconds: 9.5, step: 3, created_at: '2026-01-02T00:00:00Z' }]);
-    expect(await fetchGlobal('campaign', f)).toEqual([{ name: 'ZED', ms: 9500, date: '2026-01-02', cleared: 3 }]);
+    const f = ok([{ initials: 'ZED', seconds: 509.5, step: 20, created_at: '2026-01-02T00:00:00Z' }]);
+    expect(await fetchGlobal('campaign', f)).toEqual([{ name: 'ZED', ms: 509500, date: '2026-01-02' }]);
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(boardUrl('campaign'));
     expect((init.headers as Record<string, string>).apikey).toBe(GLOBAL_KEY);
@@ -122,12 +122,12 @@ describe('fetchGlobal', () => {
 describe('submitGlobal', () => {
   it('posts the JSON with the key and a minimal return', async () => {
     const f = vi.fn(async () => new Response(null, { status: 201 }));
-    expect(await submitGlobal('random-hard', 'ABC', 41234, 6, f)).toBe(true);
+    expect(await submitGlobal('campaign', 'ABC', 641234, 20, f)).toBe(true);
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(GLOBAL_BASE);
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({ apikey: GLOBAL_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' });
-    expect(JSON.parse(init.body as string)).toEqual({ level: 'random-hard', initials: 'ABC', seconds: 41.23, step: 6 });
+    expect(JSON.parse(init.body as string)).toEqual({ level: 'campaign', initials: 'ABC', seconds: 641.23, step: 20 });
   });
   it('sends nothing for an invalid score, or for a run that cleared nothing', async () => {
     const f = vi.fn(async () => new Response(null, { status: 201 }));

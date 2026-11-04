@@ -160,3 +160,20 @@ describe('the music bed', () => {
     }).not.toThrow();
   });
 });
+
+describe('the escapement tick after a solve', () => {
+  it('makes a voice that stops itself, scaled by the fade, and none once the fade has reached zero', async () => {
+    const s = createSound();
+    s.setMusic(false); // only the effects, so the count is the tick's
+    s.unlock();
+    await Promise.resolve();
+    const before = made.osc.length;
+    s.tick(1);
+    s.tick(0.4);
+    expect(made.osc.length - before).toBe(2);
+    expect(s.counts.ticks).toBe(2);
+    s.tick(0); // 3 s after the solve: silent, nothing started
+    expect(made.osc.length - before).toBe(2);
+    expect(s.counts.ticks).toBe(2);
+  });
+});
