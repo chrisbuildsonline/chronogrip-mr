@@ -69,6 +69,10 @@ export function createClock() {
       ms = 0;
       last = null;
     },
+    /** Test hook: moves the level time on by `s` seconds, as if that long had been played. */
+    advance(s: number) {
+      ms += s * 1000;
+    },
     get seconds() {
       return ms / 1000;
     },

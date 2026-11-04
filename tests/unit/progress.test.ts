@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstUnsolved, loadProgress, recordSolve, saveProgress } from '../../src/progress';
+import { firstUnsolved, loadProgress, recordOutcome, recordSolve, saveProgress } from '../../src/progress';
 
 const KEY = 'chronogrip.progress.v1';
 const store = (raw: string | null) => ({ getItem: (k: string) => (k === KEY ? raw : null) });
@@ -117,5 +117,38 @@ describe('firstUnsolved', () => {
 
   it('a best for an older daily does not count for today', () => {
     expect(firstUnsolved({ best: { l1: 1, l2: 2, l3: 3, l4: 4, l5: 5, t20261029: 6 } }, ids)).toBe(5);
+  });
+});
+
+describe('pass / over record', () => {
+  it('records the outcome per level; a pass is never undone by a later over', () => {
+    let p = recordOutcome({ best: { l1: 20 } }, 'l1', 'over');
+    expect(p.outcome).toEqual({ l1: 'over' });
+    p = recordOutcome(p, 'l1', 'pass');
+    expect(p.outcome).toEqual({ l1: 'pass' });
+    p = recordOutcome(p, 'l1', 'over');
+    expect(p.outcome).toEqual({ l1: 'pass' });
+    expect(p.best).toEqual({ l1: 20 });
+  });
+
+  it('a new best keeps the outcomes already saved', () => {
+    const p = recordSolve({ best: { l1: 20 }, outcome: { l1: 'pass' } }, 'l1', 10).progress;
+    expect(p).toEqual({ best: { l1: 10 }, outcome: { l1: 'pass' } });
+  });
+
+  it('round trips with the best times, and an old save without outcomes still loads as before', () => {
+    const data: Record<string, string> = {};
+    saveProgress({ setItem: (k, v) => void (data[k] = v) }, { best: { l1: 12.5 }, outcome: { l1: 'pass' } });
+    expect(loadProgress({ getItem: (k) => data[k] ?? null })).toEqual({ best: { l1: 12.5 }, outcome: { l1: 'pass' } });
+    const old = loadProgress(store('{"best":{"l1":9,"l2":30}}'));
+    expect(old).toEqual({ best: { l1: 9, l2: 30 } });
+    expect(old.outcome).toBeUndefined();
+  });
+
+  it('drops bad outcome entries and ignores a malformed outcome block', () => {
+    expect(loadProgress(store('{"best":{"l1":9},"outcome":{"l1":"over","l2":"win","__proto__":"pass","1x":"pass"}}')).outcome).toEqual({ l1: 'over' });
+    for (const raw of ['{"best":{"l1":9},"outcome":[1]}', '{"best":{"l1":9},"outcome":"x"}', '{"best":{"l1":9},"outcome":null}']) {
+      expect(loadProgress(store(raw))).toEqual({ best: { l1: 9 } });
+    }
   });
 });
