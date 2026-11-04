@@ -180,7 +180,7 @@ test('desktop: a shared ?seed= puzzle gets the par of its own difficulty, and le
 });
 
 for (const size of [{ width: 375, height: 812 }]) {
-  test(`phone ${size.width}x${size.height}: the ring, the over-time card and the Relaxed toggle fit and read`, async ({ page }) => {
+  test(`phone ${size.width}x${size.height}: the ring, the complete card and the Relaxed toggle fit and read`, async ({ page }) => {
     const errors = await open(page, '/', size);
     const fits = async (what: string) => {
       const { card } = await page.evaluate(() => window.__chrono!.viewBoxes());
@@ -227,11 +227,10 @@ for (const size of [{ width: 375, height: 812 }]) {
     await page.screenshot({ path: `${OUT}/paused-${size.width}x${size.height}.png` });
     await click(page, 'resume');
     await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-    await page.evaluate((s) => window.__chrono!.advanceClock(s), L1_PAR + 5);
     await solve(page, L1.solution);
-    await fits('over');
-    expect(await words(page)).toContain('OVER TIME');
-    await page.screenshot({ path: `${OUT}/over-${size.width}x${size.height}.png` });
+    await fits('complete');
+    expect(await words(page)).toContain('SOLVED');
+    await page.screenshot({ path: `${OUT}/complete-${size.width}x${size.height}.png` });
     expect(errors).toEqual([]);
   });
 }

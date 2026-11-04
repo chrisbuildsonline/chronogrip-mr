@@ -77,9 +77,7 @@ test('demo story (headset): seated, pinch the escapement gear in passthrough, tw
     expect(a.chimes).toBeGreaterThanOrEqual(1);
     expect(await flow(page)).toBe('complete');
     await pinch(page, 'right', 0);
-    // A first solve asks for initials first: poke Skip to reach the complete card.
-    await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'skip'), undefined, { timeout: 10_000 });
-    await poke(page, 'skip');
+    // No initials after a level: the complete card is up.
     await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'), undefined, { timeout: 10_000 });
     expect(await page.evaluate(() => window.__chrono!.levelTime)).toBeGreaterThan(0);
     await shot(page, '6-complete');

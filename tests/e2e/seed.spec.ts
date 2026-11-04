@@ -93,7 +93,7 @@ test('desktop: a hand-made level card has Next only, and no code', async ({ page
   await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'));
   await frames(page);
   expect((await words(page)).some((w) => w.startsWith('Puzzle code'))).toBe(false);
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['next', 'restart']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['next']);
   expect(errors).toEqual([]);
 });
 

@@ -115,7 +115,7 @@ test('desktop: a run that cleared a level asks for initials once, at its end (#1
   await click(page, 'up-0');
   await click(page, 'down-1');
   await click(page, 'down-1');
-  expect((await initials(page))!.letters).toBe('BZA');
+  expect((await initials(page))!.letters).toBe('BYA');
   await page.keyboard.type('kim');
   expect((await initials(page))!.cursor).toBe(3);
   await click(page, 'save');

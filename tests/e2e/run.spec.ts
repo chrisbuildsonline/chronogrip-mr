@@ -105,7 +105,7 @@ test('desktop: the pause card is a column with Give up; Give up shows the result
   expect(await page.evaluate(() => window.__chrono!.run), 'the run is over').toBeNull();
   const w = await words(page);
   expect(w).toContain('1 level');
-  expect(w.some((x) => /^\d+:\d\d$/.test(x)), 'the total time is on the card').toBe(true);
+  expect(w.some((x) => /^\d+:\d\d(\.\d)?$/.test(x)), 'the total time is on the card').toBe(true);
   expect(await page.evaluate(() => window.__chrono!.initials)).toMatchObject({ board: 'campaign', rank: 1 });
   await page.screenshot({ path: `${OUT}/result.png` });
   await page.keyboard.type('run');

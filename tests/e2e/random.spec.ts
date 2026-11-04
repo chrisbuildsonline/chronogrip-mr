@@ -101,7 +101,7 @@ test('desktop: each difficulty plays and the pause card has Main menu, not Choos
   await click(page, 'pause');
   await page.waitForFunction(() => window.__chrono!.flow === 'paused');
   const labels = await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label));
-  expect(labels).toEqual(['Resume', 'Restart', 'Main menu', 'No timer']);
+  expect(labels).toEqual(['Resume', 'Restart', 'Give up', 'Main menu', 'No timer']);
   expect(labels).not.toContain('Choose level');
   await click(page, 'menu');
   await page.waitForFunction(() => window.__chrono!.flow === 'title');

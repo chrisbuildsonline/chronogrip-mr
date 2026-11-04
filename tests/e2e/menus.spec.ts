@@ -127,14 +127,14 @@ for (const size of SIZES) {
     await click(page, 'back');
     await cardIs(page, 'title');
 
-    // New Game plays at once: the layer is gone; Pause shows no layer; Main menu brings the title, and the layer, back.
+    // New Game plays at once: the layer is gone; Pause is a menu on the layer; Main menu brings the title, and the layer, back.
     await click(page, 'start');
     await page.waitForFunction(() => window.__chrono!.flow === 'playing');
     await page.waitForFunction(() => !window.__chrono!.cameraMoving);
     expect((await scrim(page)).mode, 'no layer in play').toBeNull();
     await click(page, 'pause');
     await cardIs(page, 'paused');
-    expect((await scrim(page)).mode, 'no layer on the pause card').toBeNull();
+    expect((await scrim(page)).mode, 'the pause card is a menu: on the dark layer').toBe('full');
     await click(page, 'menu');
     await cardIs(page, 'title');
     await dark(page, 'title again');

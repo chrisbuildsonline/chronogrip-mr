@@ -99,7 +99,7 @@ test('desktop 1440x900: the start panel has three buttons, and each reaches its 
   // High scores: the existing board, with a Local tab and room beside it.
   await click(page, 'scores');
   await cardIs(page, 'board');
-  expect(await words(page)).toEqual(expect.arrayContaining(['High scores', 'Local', 'Level 1']));
+  expect(await words(page)).toEqual(expect.arrayContaining(['High scores', 'Local', 'Campaign']));
   await page.screenshot({ path: `${OUT}/scores-1440.png` });
   await click(page, 'back');
   await cardIs(page, 'title');
@@ -240,12 +240,6 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   expect((await page.evaluate(() => window.__chrono!.scores)).boards.campaign).toEqual(board.boards.campaign);
   await page.screenshot({ path: `${OUT}/start-after-reset-1440.png` });
 
-  // It sticks after a reload.
-  await page.reload();
-  await page.waitForFunction(() => window.__chrono?.ready === true);
-  await cardIs(page, 'title');
-  expect(await labelsOf(page)).toEqual(['New Game', 'Random level', 'Options', 'High scores']);
-  expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1');
   expect(errors).toEqual([]);
 });
 

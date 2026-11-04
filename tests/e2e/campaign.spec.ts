@@ -115,6 +115,6 @@ test('desktop: level 20 is generated and solvable by the hooks, and a bigger puz
   await page.screenshot({ path: `${OUT}/l20.png` });
   await solve(page);
   expect((await page.evaluate(() => window.__chrono!.run))!.cleared).toBe(1); // level 20 reached by the hook, not by clearing 1-19
-  expect(await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'next')!.label)).toBe('Menu');
+  expect(await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'next')!.label)).toBe('Finish');
   expect(errors).toEqual([]);
 });
