@@ -91,58 +91,31 @@ test('desktop: a countdown ring shows on the HUD while playing, inside the card,
   expect(errors).toEqual([]);
 });
 
-test('desktop: solved under par is a pass, saved, with the par on the card and Retry not offered', async ({ page }) => {
+test('desktop: solved under par is a pass, with the par on the card and only Next offered', async ({ page }) => {
   const errors = await open(page);
   await start(page);
   await solve(page, L1.solution);
   const w = await words(page);
   expect(w).toEqual(expect.arrayContaining(['SOLVED', 'Level 1 complete', `PAR ${clock(L1_PAR)}`]));
   expect(w).not.toContain('OVER TIME');
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['next', 'restart']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['next']);
   expect(await page.evaluate(() => window.__chrono!.outcome)).toBe('pass');
-  expect(await page.evaluate(() => window.__chrono!.outcomes)).toEqual({ l1: 'pass' });
-  expect(await page.evaluate(() => Object.keys(window.__chrono!.progress.best))).toEqual(['l1']);
+  expect((await page.evaluate(() => window.__chrono!.run))!.cleared).toBe(1);
   await page.screenshot({ path: `${OUT}/pass-1440x900.png` });
   expect(errors).toEqual([]);
 });
 
-test('desktop: running out the clock still wakes the bird; the card says over time and Retry restarts the level', async ({ page }) => {
+test('desktop: the ring runs down, and when the clock runs out the run ends (the title; the result card is in run.spec)', async ({ page }) => {
   const errors = await open(page);
   await start(page);
-  await page.evaluate((s) => window.__chrono!.advanceClock(s), L1_PAR + 7);
-  await page.waitForFunction(() => window.__chrono!.timer.over >= 7);
-  await frames(page);
-  const hud = await words(page); // real time keeps running on a slow machine, so the seconds over are 7 or a little more
-  expect(hud).toContain('OVER');
-  expect(hud.some((x) => /^\+0:\d\d$/.test(x))).toBe(true);
-  expect((await timer(page)).left).toBe(0);
-  expect(await words(page)).not.toContain('LEFT');
-  await page.screenshot({ path: `${OUT}/hud-over-1440x900.png` });
-
-  await solve(page, L1.solution);
-  expect(await page.evaluate(() => window.__chrono!.automatonRunning)).toBe(true); // the bird woke
-  const w = await words(page);
-  expect(w).toEqual(expect.arrayContaining(['OVER TIME', 'Level 1 complete', `PAR ${clock(L1_PAR)}`]));
-  expect(w).not.toContain('SOLVED');
-  const buttons = await page.evaluate(() => window.__chrono!.buttons().map((b) => [b.id, b.label]));
-  expect(buttons).toEqual([['restart', 'Retry'], ['next', 'Next']]);
-  expect(await page.evaluate(() => window.__chrono!.outcome)).toBe('over');
-  expect(await page.evaluate(() => window.__chrono!.outcomes)).toEqual({ l1: 'over' });
-  expect(await page.evaluate(() => Object.keys(window.__chrono!.progress.best))).toEqual(['l1']); // the best time is kept either way
-  await page.screenshot({ path: `${OUT}/over-1440x900.png` });
-
-  await click(page, 'restart');
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  expect(await page.evaluate(() => window.__chrono!.levelTime)).toBeLessThan(3);
-  expect(await page.evaluate(() => window.__chrono!.placements)).toEqual({});
-  expect(await timer(page)).toMatchObject({ ring: true, over: 0 });
-  expect((await timer(page)).left).toBeGreaterThan(L1_PAR - 5);
-  expect(await page.evaluate(() => window.__chrono!.outcome)).toBeNull();
-
-  // A quick second run passes, and the pass replaces the over.
-  await solve(page, L1.solution);
-  expect(await words(page)).toContain('SOLVED');
-  expect(await page.evaluate(() => window.__chrono!.outcomes)).toEqual({ l1: 'pass' });
+  await page.evaluate((s) => window.__chrono!.advanceClock(s), L1_PAR - 6);
+  await page.waitForFunction(() => window.__chrono!.timer.left <= 6);
+  expect(await page.evaluate(() => window.__chrono!.flow)).toBe('playing');
+  expect(await words(page)).toContain('LEFT');
+  await page.screenshot({ path: `${OUT}/hud-low-1440x900.png` });
+  await page.evaluate(() => window.__chrono!.advanceClock(20));
+  await page.waitForFunction(() => window.__chrono!.flow === 'title');
+  expect(await page.evaluate(() => window.__chrono!.run)).toBeNull(); // nothing cleared: no result card
   expect(errors).toEqual([]);
 });
 
@@ -169,17 +142,16 @@ test('desktop: Relaxed hides the ring, never says over time, persists across a r
   await page.evaluate(() => window.__chrono!.advanceClock(100_000));
   await frames(page);
   expect(await words(page)).not.toContain('OVER');
+  expect(await page.evaluate(() => window.__chrono!.flow), 'No timer: the clock never ends the run').toBe('playing');
   await solve(page, L1.solution);
   const w = await words(page);
   expect(w).toContain('SOLVED');
   expect(w.some((x) => /over time|^PAR/i.test(x))).toBe(false);
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['next', 'restart']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['next']);
   expect(await page.evaluate(() => window.__chrono!.outcome)).toBeNull();
-  expect(await page.evaluate(() => window.__chrono!.outcomes)).toEqual({}); // relaxed runs are not marked
-  expect(await page.evaluate(() => Object.keys(window.__chrono!.progress.best))).toEqual(['l1']);
 
   // Back on the pause card the toggle turns the timer on again, for the next level started.
-  await click(page, 'restart');
+  await click(page, 'next');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => window.__chrono!.paused);

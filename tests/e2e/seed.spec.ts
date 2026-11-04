@@ -55,7 +55,7 @@ async function solve(page: Page, solution: Record<string, string>) {
 
 const words = (page: Page) => page.evaluate(() => window.__chrono!.labels().map((l) => l.text));
 
-test('desktop: ?seed=CODE opens that exact puzzle; the complete card shows the code and Copy link copies the link', async ({ page, context }) => {
+test('desktop: ?seed=CODE opens that exact puzzle; the complete card shows no code or link', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const want = tinkerLevel(SEED);
   const errors = await open(page, `/?seed=${CODE.toLowerCase()}`);
@@ -70,48 +70,19 @@ test('desktop: ?seed=CODE opens that exact puzzle; the complete card shows the c
   expect(hud).toEqual(expect.arrayContaining(['SHARED', 'Puzzle']));
   expect(hud.some((w) => /^Level/.test(w))).toBe(false);
   await solve(page, want.solution);
-  expect(await words(page)).toContain(`Puzzle code ${CODE}`);
+  expect((await words(page)).some((w) => /code|link/i.test(w)), 'no puzzle code or link anywhere on the card').toBe(false);
   expect(await words(page)).toContain('Shared puzzle complete'); // a friend's puzzle is not a numbered level
   expect((await words(page)).some((w) => /^Level/.test(w))).toBe(false);
   const ids = await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id));
-  expect(ids).toEqual(['restart', 'menu', 'copy']);
-  // The extra slot is the seeded puzzle: its time is saved under its own id, nothing else is touched.
-  expect(await page.evaluate(() => Object.keys(window.__chrono!.progress.best))).toEqual([want.id]);
+  expect(ids).toEqual(['restart', 'menu']);
+  // A shared puzzle is no part of a run: nothing is saved for it.
+  expect(await page.evaluate(() => window.__chrono!.run)).toBeNull();
   await page.screenshot({ path: `${OUT}/complete-1440x900.png` });
 
-  expect(await page.evaluate(() => window.__chrono!.copy)).toEqual({ state: 'idle', link: null });
-  await click(page, 'copy');
-  await page.waitForFunction(() => window.__chrono!.copy.state === 'copied');
-  const link = await page.evaluate(() => `${location.origin}${location.pathname}?seed=`);
-  expect(await page.evaluate(() => window.__chrono!.copy.link)).toBe(`${link}${CODE}`);
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${link}${CODE}`);
-  await frames(page);
-  expect(await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'copy')!.label)).toBe('Copied');
-  await page.screenshot({ path: `${OUT}/copied-1440x900.png` });
-  await page.waitForFunction(() => window.__chrono!.buttons().find((b) => b.id === 'copy')!.label === 'Copy link', null, { timeout: 5000 });
   expect(errors).toEqual([]);
 });
 
-test('desktop: when the clipboard fails, Copy link shows the link text instead', async ({ page }) => {
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.reject(new Error('denied')) }, configurable: true });
-  });
-  const errors = await open(page, `/?seed=${CODE}`);
-  await solve(page, tinkerLevel(SEED).solution);
-  expect(await words(page)).toContain(`Puzzle code ${CODE}`);
-  await click(page, 'copy');
-  await page.waitForFunction(() => window.__chrono!.copy.state === 'failed');
-  await frames(page);
-  const link = await page.evaluate(() => window.__chrono!.copy.link);
-  expect(link).toBe(`http://localhost:4173/?seed=${CODE}`);
-  const labels = await page.evaluate(() => window.__chrono!.labels());
-  expect(labels.map((l) => l.text)).toContain(link);
-  for (const l of labels) expect(l.height, l.text).toBeGreaterThanOrEqual(9);
-  await page.screenshot({ path: `${OUT}/copy-failed-1440x900.png` });
-  expect(errors).toEqual([]);
-});
-
-test('desktop: a hand-made level has no puzzle code and no Copy link', async ({ page }) => {
+test('desktop: a hand-made level card has Next only, and no code', async ({ page }) => {
   const errors = await open(page, '/');
   await choose(page, (id) => click(page, id), 1);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
@@ -164,16 +135,14 @@ test('desktop: no ?seed= means no note', async ({ page }) => {
   expect(await page.evaluate(() => window.__chrono!.seedNote)).toBeNull();
 });
 
-test('phone 375x812: the code line and the Copy link pill fit the bottom sheet', async ({ page }) => {
+test('phone 375x812: the shared puzzle complete card fits the bottom sheet, with no code line', async ({ page }) => {
   const want = tinkerLevel(SEED);
   const errors = await open(page, `/?seed=${CODE}`, { width: 375, height: 812 });
   await solve(page, want.solution);
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
   await frames(page);
   const labels = await page.evaluate(() => window.__chrono!.labels());
-  const line = labels.find((l) => l.text === `Puzzle code ${CODE}`);
-  expect(line, 'the code line is on the sheet').toBeDefined();
-  expect(line!.height).toBeGreaterThanOrEqual(12);
+  expect(labels.some((l) => /code|link/i.test(l.text)), 'no code line').toBe(false);
   expect(labels.map((l) => l.text)).toContain('Shared puzzle complete');
   const corners = await page.evaluate(() => window.__chrono!.panelCorners());
   const [x0, x1] = [Math.min(...corners.map((c) => c[0])), Math.max(...corners.map((c) => c[0]))];
@@ -189,7 +158,7 @@ test('phone 375x812: the code line and the Copy link pill fit the bottom sheet',
     }
   }
   const buttons = await page.evaluate(() => window.__chrono!.buttons());
-  expect(buttons.map((b) => b.id)).toEqual(['restart', 'menu', 'copy']);
+  expect(buttons.map((b) => b.id)).toEqual(['restart', 'menu']);
   for (const b of buttons) {
     const text = labels.find((l) => l.text === b.label)!;
     expect(text.left, `${b.id} label inside its pill`).toBeGreaterThanOrEqual(b.rect[0]);

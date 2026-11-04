@@ -52,12 +52,12 @@ async function solve(page: Page) {
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   const solution = await page.evaluate(() => window.__chrono!.solution);
   for (const [gear, axle] of Object.entries(solution)) await place(page, gear, axle);
-  await calibrateByMouse(page, { keepInitials: true });
-  await page.waitForFunction(() => ['initials', 'complete'].includes(window.__chrono!.card?.screen ?? ''), undefined, { timeout: 15_000 });
+  await calibrateByMouse(page);
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'complete', undefined, { timeout: 15_000 });
   await frames(page);
 }
 
-test('desktop: Random level opens a picker (Easy, Medium, Hard, Expert), Hard plays a generated puzzle, and Play again is a new one at the same difficulty', async ({ page }) => {
+test('desktop: Random level opens a picker (Easy, Medium, Hard, Expert), Hard plays a generated puzzle, and Next is a new one at the same difficulty', async ({ page }) => {
   const errors = await open(page);
   await click(page, 'random');
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'picker');
@@ -77,18 +77,14 @@ test('desktop: Random level opens a picker (Easy, Medium, Hard, Expert), Hard pl
   await page.screenshot({ path: `${OUT}/hard-play.png` });
 
   await solve(page);
-  // A first solve makes the board: Skip the initials, then the card offers Play again and Menu.
-  if ((await page.evaluate(() => window.__chrono!.card!.screen)) === 'initials') {
-    expect((await page.evaluate(() => window.__chrono!.initials))!.board).toBe('random-hard');
-    await click(page, 'skip');
-  }
-  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'));
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(expect.arrayContaining(['Play again', 'Menu']));
+  // No initials after a puzzle: the run goes on with Next, another puzzle at the same difficulty.
+  expect(await page.evaluate(() => window.__chrono!.initials)).toBeNull();
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Next']);
   expect(await words(page)).toContain('Random · Hard complete');
   await click(page, 'next');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelTime >= 0);
   expect(await page.evaluate(() => window.__chrono!.random)).toMatchObject({ mode: true, difficulty: 'hard' });
-  expect(await layoutOf(page), 'Play again is a new puzzle').not.toBe(first);
+  expect(await layoutOf(page), 'Next is a new puzzle').not.toBe(first);
   expect(errors).toEqual([]);
 });
 
@@ -112,21 +108,6 @@ test('desktop: each difficulty plays and the pause card has Main menu, not Choos
   expect(errors).toEqual([]);
 });
 
-test('desktop: a Random level solve is saved on its own difficulty board; the old Random board is gone', async ({ page }) => {
-  const errors = await open(page);
-  await click(page, 'random');
-  await click(page, 'medium');
-  await solve(page);
-  await page.waitForFunction(() => window.__chrono!.card?.screen === 'initials');
-  expect(await page.evaluate(() => window.__chrono!.initials)).toMatchObject({ board: 'random-medium', rank: 1 });
-  await click(page, 'save');
-  const boards = (await page.evaluate(() => window.__chrono!.scores)).boards;
-  expect(boards['random-medium']).toHaveLength(1);
-  expect(boards['random-easy']).toHaveLength(0);
-  expect(boards['random']).toBeUndefined();
-  expect(errors).toEqual([]);
-});
-
 test('phone 375x812: the Random level picker and a Random level card fit', async ({ page }) => {
   const errors = await open(page, '/', { width: 375, height: 812 });
   await click(page, 'random');
@@ -140,7 +121,6 @@ test('phone 375x812: the Random level picker and a Random level card fit', async
   await page.screenshot({ path: `${OUT}/picker-375.png` });
   await click(page, 'easy');
   await solve(page);
-  if ((await page.evaluate(() => window.__chrono!.card!.screen)) === 'initials') await click(page, 'skip');
   await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'));
   await frames(page);
   const corners = await page.evaluate(() => window.__chrono!.panelCorners());

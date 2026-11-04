@@ -78,7 +78,7 @@ async function phoneCard(page: Page, w: number, h: number, name: Screen | 'calib
 
   const boxes = await page.evaluate(() => window.__chrono!.viewBoxes());
   const c = boxes.card!;
-  if (name === 'title' || name === 'picker') {
+  if (name === 'title' || name === 'picker' || name === 'paused') {
     // A menu: centred in the view over the black layer, clear of the header, no bottom sheet and no board to keep clear of.
     expect(c[0] >= 0 && c[1] >= 0 && c[2] <= w && c[3] <= h, `${at}: card on screen`).toBe(true);
     expect(Math.abs((c[0] + c[2]) / 2 - w / 2), `${at}: card centred across`).toBeLessThanOrEqual(2);
@@ -165,7 +165,7 @@ test('desktop 1440x900: the cards are the wide ones, placed and sized as before'
     const wide = layout(name, { level, levels: 21, random: true });
     const card = await page.evaluate(() => window.__chrono!.card);
     expect(card).toEqual({ screen: name, width: wide.width, height: wide.height });
-    if (name === 'title' || name === 'picker') {
+    if (name === 'title' || name === 'picker' || name === 'paused') {
       // A menu is centred in the view over the black layer, not anchored above the board.
       const c = (await page.evaluate(() => window.__chrono!.viewBoxes())).card!;
       expect(Math.abs((c[0] + c[2]) / 2 - 720), `${name} centred across`).toBeLessThanOrEqual(2);

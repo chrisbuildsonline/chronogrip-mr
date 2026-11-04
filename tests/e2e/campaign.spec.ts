@@ -62,12 +62,12 @@ test('desktop: New Game is level 1; a solve goes to level 2, a different puzzle;
   // Pause: Resume, Restart, Main menu, No timer; no Choose level.
   await click(page, 'pause');
   await page.waitForFunction(() => window.__chrono!.flow === 'paused');
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Resume', 'Restart', 'Main menu', 'No timer']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Resume', 'Restart', 'Give up', 'Main menu', 'No timer']);
   await click(page, 'resume');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
 
   await solve(page);
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Next', 'Retry', 'Copy link']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Next']);
   await click(page, 'next');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l2');
@@ -76,23 +76,15 @@ test('desktop: New Game is level 1; a solve goes to level 2, a different puzzle;
   expect(errors).toEqual([]);
 });
 
-test('desktop: Retry gives a new puzzle at the same difficulty; a restart from the pause card keeps the same one', async ({ page }) => {
+test('desktop: Restart from the pause card is a new puzzle at the same level', async ({ page }) => {
   const errors = await open(page);
   await click(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   const first = await layoutOf(page);
-  // Restart from the pause card puts the same puzzle back.
   await click(page, 'pause');
   await click(page, 'restart');
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  expect(await layoutOf(page)).toBe(first);
-  // Over par, then solved: Retry leads and deals a new puzzle of level 1.
-  await page.evaluate(() => window.__chrono!.advanceClock(1000));
-  await solve(page);
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => [b.id, b.label]))).toEqual([['restart', 'Retry'], ['next', 'Next'], ['copy', 'Copy link']]);
-  await click(page, 'restart');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 0);
-  expect(await layoutOf(page), 'Retry is a new puzzle').not.toBe(first);
+  expect(await layoutOf(page), 'a new puzzle').not.toBe(first);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1');
   expect(errors).toEqual([]);
 });
@@ -122,7 +114,7 @@ test('desktop: level 20 is generated and solvable by the hooks, and a bigger puz
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
   await page.screenshot({ path: `${OUT}/l20.png` });
   await solve(page);
-  expect(await page.evaluate(() => window.__chrono!.progress.best['l20'])).toBeGreaterThan(0);
+  expect((await page.evaluate(() => window.__chrono!.run))!.cleared).toBe(1); // level 20 reached by the hook, not by clearing 1-19
   expect(await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'next')!.label)).toBe('Menu');
   expect(errors).toEqual([]);
 });
