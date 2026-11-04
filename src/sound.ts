@@ -9,6 +9,25 @@ export const ticksBetween = (from: number, to: number) => (to > from ? Math.floo
 export type SoundState = 'none' | 'suspended' | 'running' | 'closed';
 export type SoundCounts = { ticks: number; clicks: number; grinds: number; chimes: number };
 
+const KEY = 'chronogrip.sound.v1';
+
+/** Whether sound is on: it is unless the saved value is exactly '0'. Never throws. */
+export function loadSoundOn(storage: Pick<Storage, 'getItem'> | null | undefined): boolean {
+  try {
+    return storage?.getItem(KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+export function saveSoundOn(storage: Pick<Storage, 'setItem'> | null | undefined, on: boolean): void {
+  try {
+    storage?.setItem(KEY, on ? '1' : '0');
+  } catch {
+    // quota or security error: the choice just will not persist
+  }
+}
+
 /** Everything is built from oscillators and noise: no audio files. Nothing plays, throws or logs until unlock(). */
 export function createSound() {
   let ctx: AudioContext | null = null;
@@ -36,10 +55,18 @@ export function createSound() {
     f.Q.value = q;
     return f;
   };
-  const live = () => (ctx && ctx.state !== 'closed' ? ctx : null);
+  let muted = false;
+  const live = () => (ctx && ctx.state !== 'closed' && !muted ? ctx : null);
 
   return {
     counts,
+    /** Options: sound off makes no voice at all (the context stays, so turning it on again needs no new gesture). */
+    get muted() {
+      return muted;
+    },
+    setMuted(m: boolean): void {
+      muted = m;
+    },
     state: (): SoundState => (ctx ? (ctx.state === 'interrupted' ? 'suspended' : ctx.state) : 'none'),
     /** Creates the context on the first call and resumes it; a user gesture must have started the call. */
     unlock(): void {

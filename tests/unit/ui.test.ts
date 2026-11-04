@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LEVELS } from '../../src/levels';
 import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { TRAY_POSE, inZone, ledgeFar, trayToWorld, type Vec3 } from '../../src/seat';
-import { BUTTON_MIN_M, NARROW_TITLE_EXTRA, NARROW_W, OVERLAY_SCREENS, PANEL_ZONE, SCREENS, type Button, boardGrid, buttonAt, clock, clockTenths, layout, panelAnchor, panelToWorld, pokeHit, worldToPanel } from '../../src/ui';
+import { BUTTON_MIN_M, NARROW_W, OVERLAY_SCREENS, PANEL_ZONE, SCREENS, type Button, boardGrid, buttonAt, clock, clockTenths, layout, panelAnchor, panelToWorld, pokeHit, worldToPanel } from '../../src/ui';
 
 const pitch = (p: Vec3) => (Math.atan2(p[1], Math.hypot(p[0], p[2])) * 180) / Math.PI;
 const yaw = (p: Vec3) => Math.atan2(p[0], -p[2]);
@@ -22,7 +22,7 @@ describe('panel layouts', () => {
 
   it('has the buttons each screen needs', () => {
     const ids = (s: (typeof SCREENS)[number], level = 0) => layout(s, { level, levels: 5 }).buttons.map((b) => b.id);
-    expect(ids('title')).toEqual(['start', 'levels', 'scores', 'relaxed']);
+    expect(ids('title')).toEqual(['start', 'options', 'scores']);
     expect(ids('select')).toEqual(['back', 'level-1', 'level-2', 'level-3', 'level-4', 'level-5']);
     expect(ids('hud')).toEqual(['pause']);
     expect(ids('complete')).toEqual(['next', 'restart', 'levels']);
@@ -38,17 +38,14 @@ describe('panel layouts', () => {
     expect(layout('complete', { level: 0, levels: 9, over: true, narrow: true }).buttons.map((b) => b.id)).toEqual(['restart', 'next', 'levels']);
   });
 
-  it('the Relaxed toggle is the last pill on the title and wide pause rows (in reach), and sits top right on the phone pause card, clear of the words', () => {
+  it('the Relaxed toggle is the last pill on the wide pause row and the options row (in reach), and sits top right on the phone pause card, clear of the words', () => {
     for (const narrow of [false, true]) {
-      const title = layout('title', { level: 0, levels: 9, narrow, resume: true });
-      const t = title.buttons.find((b) => b.id === 'relaxed')!;
+      const options = layout('options', { level: 0, levels: 9, narrow });
+      const t = options.buttons.find((b) => b.id === 'relaxed')!;
       expect(t.kind).toBe('toggle');
       expect(t.label).toBe('No timer'); // plain about what it does, to a first-time player
       expect(layout('paused', { level: 0, levels: 9, narrow }).buttons.find((b) => b.id === 'relaxed')!.label).toBe('No timer');
-      // Wide: the fourth pill on the one row. Phone: the second row, above the primary, right of Best times.
-      if (narrow) expect(t.y).toBeGreaterThan(title.buttons[0]!.y);
-      else expect(t.y).toBe(title.buttons[0]!.y);
-      expect(t.x).toBeGreaterThan(title.buttons[2]!.x);
+      expect(layout('title', { level: 0, levels: 9, narrow }).buttons.map((b) => b.id)).not.toContain('relaxed'); // the settings live in Options now
 
       const paused = layout('paused', { level: 0, levels: 9, narrow });
       const p = paused.buttons.find((b) => b.id === 'relaxed')!;
@@ -244,8 +241,8 @@ describe('HUD', () => {
 });
 
 describe('title', () => {
-  it('reads Start with nothing solved and Continue once a level is solved', () => {
-    expect(layout('title', { level: 0, levels: 6 }).buttons[0]!.label).toBe('Start');
+  it('reads Start game with nothing solved and Continue once a level is solved', () => {
+    expect(layout('title', { level: 0, levels: 6 }).buttons[0]!.label).toBe('Start game');
     expect(layout('title', { level: 1, levels: 6, resume: true }).buttons[0]).toMatchObject({ id: 'start', label: 'Continue', kind: 'primary' });
   });
 
@@ -348,7 +345,7 @@ describe('best times and initials cards', () => {
       expect(layout('board', { ...ctx, narrow }).buttons.map((b) => b.id)).toEqual(['back', 'board-prev', 'board-next']);
       expect(layout('initials', { ...ctx, narrow }).buttons.filter((b) => b.kind === 'primary').map((b) => b.id), 'one primary').toEqual(['save']);
     }
-    expect(OVERLAY_SCREENS).toEqual(['initials', 'board']);
+    expect(OVERLAY_SCREENS).toEqual(['initials', 'board', 'options']);
   });
 
   it('shows every best time as m:ss.t, tenths included from 10 s up', () => {
@@ -426,14 +423,14 @@ describe('best times and initials cards', () => {
     }
   });
 
-  it('the title is one row of four in the zone, and two rows on a phone, one pill row taller', () => {
+  it('the start panel is one row of three in the zone, and two rows on a phone with Start game lowest', () => {
     const wide = layout('title', { ...ctx, resume: true });
-    expect(wide.buttons.map((b) => b.label)).toEqual(['Continue', 'Levels', 'Best times', 'No timer']);
+    expect(wide.buttons.map((b) => b.label)).toEqual(['Continue', 'Options', 'High scores']);
     expect(new Set(wide.buttons.map((b) => b.y)).size).toBe(1);
     expect(wide.width).toBe(0.42);
     const phone = layout('title', { ...ctx, resume: true, narrow: true });
-    expect(phone.buttons.map((b) => b.id)).toEqual(['start', 'levels', 'scores', 'relaxed']);
-    expect(phone.height).toBeCloseTo(0.15 + NARROW_TITLE_EXTRA, 9);
+    expect(phone.buttons.map((b) => b.id)).toEqual(['start', 'options', 'scores']);
+    expect(new Set(phone.buttons.map((b) => b.y)).size).toBe(2);
     expect(phone.buttons[0]!.y, 'Start is the lowest').toBe(Math.min(...phone.buttons.map((b) => b.y)));
     for (const b of phone.buttons) expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(phone.width / 2 - 0.008 + 1e-9);
   });
