@@ -57,7 +57,7 @@ Times are m:ss; under 10 s they carry tenths (0:00.4, 0:07.2), truncated, so a q
 | Screen | Size (m) | Layout |
 |---|---|---|
 | Title | 0.34 x 0.15 | eyebrow "A clockwork puzzle"; Display "ChronoGrip"; row: Start (primary 11 cm; "Continue" once anything is solved), Levels, "No timer" toggle (see Time limit) |
-| Level select | 0.674 x 0.15 | Heading "Levels" with muted "N of 9 solved"; one row (the panel zone's pitch rules out two): Back pill, then nine 50 x 70 mm tiles (1-8, then "Daily" with an amber top edge); the outer tile sits at 34 degrees yaw, inside the 35 degree cone. A solved tile shows its best m:ss in muted text and a small amber check |
+| Level select | 0.684 x 0.15 | Heading "Levels" with muted "N of 9 solved" (Random is endless, so it is not counted); one row (the panel zone's pitch rules out two): Back pill, then nine 42 x 70 mm tiles (1-8, then "Daily" with an amber top edge, serif shrunk to fit) and the "Random" tile, 70 x 70 mm, last, after the daily or the shared puzzle: "Random" in serif, never smaller than "Daily", with the run's next step ("Step 3") under it in muted body type. The row is no wider than the nine 50 mm tiles were, so the outer tile still sits inside the 35 degree cone (tests/unit/ui.test.ts). A solved tile shows its best m:ss in muted text and a small amber check |
 | HUD (playing, calibrate) | 0.30 x 0.096 | top: the goal line (muted "Turn the marked gear", the drawn turn arrow, ink bold "60 rpm", an amber check once matched); below: eyebrow "Level" over Number XL level (or "Daily"); Number XL time; the countdown ring and its "Left" time (see Time limit); round pause button right, kept on the bottom row so it is no higher in view |
 | Level complete | 0.35 x 0.17 | amber "Solved" pill, then muted eyebrow "PAR m:ss"; Heading "Level N complete"; Number XL time right, an amber check just before it when under par, an amber "New best" pill under it when a saved time was beaten, else muted "Best m:ss"; row: Next (primary), Restart, Levels. On the daily: Levels (primary), Restart. Over par: see Time limit |
 | Pause | 0.42 x 0.15 | Heading "Paused"; muted "Level N - m:ss"; row: Resume (primary), Restart, Levels, "No timer" toggle. The card is wider than the others so the fourth pill stays on the bottom row, inside the panel zone (src/ui.ts) |
@@ -95,6 +95,26 @@ puzzle", the HUD eyebrow "Shared" over "Puzzle" (the time moves right), and its 
 page (the hint pills' look, ink 600 text), "That puzzle code didn't work. Pick any level to play.", for 8 s; the title
 board is level 1, so the words stay true.
 Tests: tests/e2e/seed.spec.ts (incl. 375 x 812).
+
+## Random mode (src/random.ts, tests/e2e/random.spec.ts)
+An endless run after the levels, opened from the "Random" tile on level select (the title row keeps its three pills).
+The player plays a generated puzzle of a step; step 1 is like level 1 (one idler, one decoy), each step up adds an axle to
+fill, a compound pair or a decoy, 12 steps in all, and past step 12 the puzzles stay as hard as that. Par (see Time limit)
+climbs with the step: 120, 120, 120, 130, 165, 175, 190, 200, 235, 245, 280, 290 s.
+- Adapt rule, on the first solve of a puzzle: solved within half of par, up two steps; at or under par, up one; over par,
+  hold, and over par twice in a row eases one step (never below 1). With No timer, one step up. Retry after going over does
+  not count again. The step is saved (localStorage `chronogrip.random.v1`, `{ step, slow }`); a Random solve is never a
+  level progress entry.
+- HUD: no column split. One eyebrow line "RANDOM · STEP 3" (eyebrow type, Muted, 12 px or more on a phone) with the time in
+  Number XL under it at the left and no "TIME" word. The countdown ring's centre sits at 183 mm, 4 mm from its words, which
+  shrink to stop 6 mm short of the pause button when "+10:23" runs long; a shared puzzle's time sits at 80 mm. Nothing on
+  the HUD overlaps at 375 x 812 and words on a line keep 10 px apart, "STEP 12" with "12:34" and "0:08.8" included, for
+  level 8, the daily and a shared puzzle too (tests/e2e/random.spec.ts). Complete card:
+  title "Random · Step 3 complete", the puzzle code line and Copy link as for any tinker puzzle; the row is Next puzzle
+  (primary), Restart, Copy link; over par Retry leads and Next puzzle follows. Pause card reads "Random · Step 3  ·  m:ss".
+  On a phone the row gives Next puzzle 104 mm, Restart or Retry 62 mm and Copy link 80 mm.
+- The puzzle code carries the step in its top 4 bits (28 random bits below), so `?seed=CODE` opens the very same puzzle
+  (as a "Shared puzzle"); a code with top bits 0 is a plain tinker puzzle, so the daily's and older shared codes are unchanged.
 
 Progress (best times) is saved in localStorage; the title board is the first unsolved level, so Continue picks up there.
 The daily is a seeded "tinker" puzzle generated from the local date and played after the eight levels, as a ninth.
@@ -216,7 +236,8 @@ one job per screen with the primary pill under the thumb. Every card is 0.30 m o
 sides and 16 px over the bottom edge (343 px wide at 375, so about 1.14 px per mm), held in front of the camera whatever
 the orbit. The same screens and buttons in one phone width: title Start 150 mm, Levels 106 mm; pause and complete a
 100 mm primary and 72 mm secondaries; the HUD as wide as the others. Level select is a 5-column grid of 44 x 60 mm cells
-in two rows: Back (chevron over the word, tile corners) top left where a phone keeps it, then 1-8 and Daily. Buttons and
+in two rows: Back (chevron over the word, tile corners) top left where a phone keeps it, then 1-8 and Daily, and under them
+the Random tile as a full-width bar (a third row, 46 mm tall, "Random" in serif with the muted "Step 3" beside it; see Random mode). Buttons and
 eyebrows grow to 14 mm and 11 mm, so every button is 44 px or more and every word 12 px or more on screen
 (tests/e2e/phone.spec.ts). The board fits the room between the header and the tallest card of its kind, and the view is
 raised (a camera view offset) to centre it there, so it holds still from title to HUD to complete.
