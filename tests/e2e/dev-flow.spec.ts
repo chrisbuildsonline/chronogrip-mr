@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { LEVELS } from '../../src/levels';
 import { twistRight, twistToTarget } from './calibrate';
 import { CLEAR, axleAt, carry, device, enterWithHands, flow, gearAt, movePinchTo, nudge, pinch, pinchAt, poke, type Device } from './hands';

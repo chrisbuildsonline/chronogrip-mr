@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import { RENDER_BUDGET } from '../../src/budget';
 import { LEVELS } from '../../src/levels';
 

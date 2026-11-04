@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 /** Phone: the Best times sheet lies over the foot of the board, so opening it and going back never moves the camera. */
 test('phone 375 x 812: the board keeps its view when Best times opens and closes', async ({ page }) => {

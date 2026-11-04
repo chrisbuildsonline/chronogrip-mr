@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import { TRAY_POSE } from '../../src/seat';
 import { device, nudge, pinch, type Device } from './hands';
 

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import { LEVELS } from '../../src/levels';
 import { rateOf, startSetting } from '../../src/escapement';
 import { calibrateByMouse } from './calibrate';

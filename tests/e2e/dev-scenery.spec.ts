@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import { device, type Device } from './hands';
 
 // Runs against the dev server (project "dev"), where the IWER emulator is injected. In immersive-ar the passthrough is

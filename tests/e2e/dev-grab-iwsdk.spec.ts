@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import { LEVELS } from '../../src/levels';
 import { CLEAR, axleAt, carry, device, enterWithHands, gearAt, movePinchTo, nudge, pinch, pinchAt, poke, type Device } from './hands';
 import { begin } from './start';

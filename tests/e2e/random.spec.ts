@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import { LEVELS } from '../../src/levels';
 import { decodeSeed, encodeSeed } from '../../src/seed';
 import { MAX_STEP, randomLevel, unpackSeed } from '../../src/random';

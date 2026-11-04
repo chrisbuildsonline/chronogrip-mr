@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 const flowOf = (page: Page) => page.evaluate(() => window.__chrono!.flow);
 const hasButton = (page: Page, id: string) => page.waitForFunction((b) => window.__chrono!.buttons().some((x) => x.id === b), id);

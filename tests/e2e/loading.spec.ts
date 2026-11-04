@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/polish';

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import { LEVELS } from '../../src/levels';
 import { DESKTOP_EYE, DESKTOP_TARGET, faceView } from '../../src/fit';
 import { TRAY_POSE, type Vec3 } from '../../src/seat';

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import { GHOST_TWIST_S } from '../../src/ghost';
 import { LEVELS } from '../../src/levels';
 import { begin } from './start';

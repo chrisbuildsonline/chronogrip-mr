@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('seated scene renders gears, shows Enter MR and a clean console', async ({ page }) => {
   const errors: string[] = [];

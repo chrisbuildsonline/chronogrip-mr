@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { PANEL_ZONE } from '../../src/ui';
 import { inZone } from '../../src/seat';
 import { enterWithHands, flow, pinch, poke } from './hands';
