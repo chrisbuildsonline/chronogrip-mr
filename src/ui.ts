@@ -10,7 +10,9 @@ export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board'];
 export type ButtonKind = 'primary' | 'secondary' | 'tile' | 'icon' | 'toggle' | 'arrow';
 /** A button rectangle in panel space; x, y is its centre. */
 export type Button = { id: string; label: string; kind: ButtonKind; x: number; y: number; w: number; h: number };
-export type Layout = { width: number; height: number; buttons: Button[] };
+/** A display slot (not a target) in panel space; x, y is its centre. */
+export type Slot = { x: number; y: number; w: number; h: number };
+export type Layout = { width: number; height: number; buttons: Button[]; slots?: Slot[] };
 
 /** Smallest side of any button: a fingertip target. */
 export const BUTTON_MIN_M = 0.04;
@@ -162,38 +164,44 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
     case 'initials': {
       const letter = (k: number) => [`up-${k}`, `down-${k}`] as const;
       const arrow = (id: string, label: string, x: number, y: number, w: number, h: number): Button => ({ id, label, kind: 'arrow', x, y, w, h });
+      const slots: Slot[] = [];
       if (!narrow) {
-        // One row, low on the card (the panel zone's pitch rules out a second): an up and a down arrow under each of the three letters, then Save and Skip.
-        const slot = 2 * BH + GAP;
-        const slotGap = 0.02;
-        const total = 3 * slot + 2 * slotGap + 0.03 + 0.088 + GAP + 0.066;
+        // One row, low on the card (the panel zone's pitch rules out a second): each letter in its slot with a down arrow at its left and an up arrow at its right, then Save and Skip.
+        const [AW, SW, TIGHT] = [BUTTON_MIN_M, 0.03, 0.003];
+        const group = 2 * AW + SW + 2 * TIGHT;
+        const slotGap = GAP + 0.002;
+        const total = 3 * group + 2 * slotGap + 0.024 + 0.08 + GAP + 0.06;
         let x = -total / 2;
         const buttons: Button[] = [];
         for (let k = 0; k < 3; k++) {
           const [up, down] = letter(k);
-          buttons.push(arrow(up, 'Up', x + BH / 2, low, BH, BH), arrow(down, 'Down', x + BH + GAP + BH / 2, low, BH, BH));
-          x += slot + slotGap;
+          buttons.push(arrow(up, 'Up', x + group - AW / 2, low, AW, BH), arrow(down, 'Down', x + AW / 2, low, AW, BH));
+          slots.push({ x: x + AW + TIGHT + SW / 2, y: low, w: SW, h: BH });
+          x += group + slotGap;
         }
-        const at = x - slotGap + 0.03; // Save and Skip start a wider gap after the last letter's arrows
+        const at = x - slotGap + 0.024; // Save and Skip start a wider gap after the last letter's arrows
         buttons.push(
-          { id: 'save', label: 'Save', kind: 'primary', x: at + 0.044, y: low, w: 0.088, h: BH },
-          { id: 'skip', label: 'Skip', kind: 'secondary', x: at + 0.088 + GAP + 0.033, y: low, w: 0.066, h: BH },
+          { id: 'save', label: 'Save', kind: 'primary', x: at + 0.04, y: low, w: 0.08, h: BH },
+          { id: 'skip', label: 'Skip', kind: 'secondary', x: at + 0.08 + GAP + 0.03, y: low, w: 0.06, h: BH },
         );
-        return { width: total + 2 * PAD, height: 0.18, buttons };
+        return { width: total + 2 * PAD, height: 0.14, buttons, slots };
       }
-      // Phone: the zone does not apply, so each letter gets its arrows over and under it, and Save and Skip sit under the thumb.
+      // Phone: the zone does not apply, so each letter's slot has its up pill over it and its down pill under it, and Save and Skip sit under the thumb.
       const col = (NARROW_W - 2 * PAD - 2 * GAP) / 3;
       const AH = 0.044;
+      const SLOT_H = 0.04;
       const downY = low + BH / 2 + GAP + AH / 2;
-      const upY = downY + AH + 0.042;
+      const slotY = downY + AH / 2 + 0.003 + SLOT_H / 2;
+      const upY = slotY + SLOT_H / 2 + 0.003 + AH / 2;
       const buttons: Button[] = [];
       for (let k = 0; k < 3; k++) {
         const [up, down] = letter(k);
         const cx = -NARROW_W / 2 + PAD + col / 2 + k * (col + GAP);
         buttons.push(arrow(up, 'Up', cx, upY, col, AH), arrow(down, 'Down', cx, downY, col, AH));
+        slots.push({ x: cx, y: slotY, w: col, h: SLOT_H });
       }
       buttons.push(...row(low, [['save', 'Save', 'primary', 0.15], ['skip', 'Skip', 'secondary', 0.106]]));
-      return { width: NARROW_W, height: 0.29, buttons };
+      return { width: NARROW_W, height: 0.29, buttons, slots };
     }
     case 'board': {
       const g = boardGrid(narrow);
@@ -284,3 +292,9 @@ export function worldToPanel(a: Anchor, p: Vec3): Vec3 {
 /** Seconds as m:ss, with tenths under 10 s (0:04.7) so a quick solve never reads 0:00. Truncated, never rounded up. */
 export const clock =(s: number) =>
   s < 10 ? `0:0${(Math.floor(s * 10 + 1e-6) / 10).toFixed(1)}` : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+/** Seconds as m:ss.t, tenths always (0:08.0, 1:01.5), truncated like `clock`: the best times board shows one format on every row. */
+export const clockTenths = (s: number) => {
+  const t = Math.floor(s * 10 + 1e-6);
+  return `${Math.floor(t / 600)}:${String(Math.floor((t % 600) / 10)).padStart(2, '0')}.${t % 10}`;
+};

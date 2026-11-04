@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LEVELS } from '../../src/levels';
 import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { TRAY_POSE, inZone, ledgeFar, trayToWorld, type Vec3 } from '../../src/seat';
-import { BUTTON_MIN_M, NARROW_TITLE_EXTRA, NARROW_W, OVERLAY_SCREENS, PANEL_ZONE, SCREENS, boardGrid, buttonAt, clock, layout, panelAnchor, panelToWorld, pokeHit, worldToPanel } from '../../src/ui';
+import { BUTTON_MIN_M, NARROW_TITLE_EXTRA, NARROW_W, OVERLAY_SCREENS, PANEL_ZONE, SCREENS, type Button, boardGrid, buttonAt, clock, clockTenths, layout, panelAnchor, panelToWorld, pokeHit, worldToPanel } from '../../src/ui';
 
 const pitch = (p: Vec3) => (Math.atan2(p[1], Math.hypot(p[0], p[2])) * 180) / Math.PI;
 const yaw = (p: Vec3) => Math.atan2(p[0], -p[2]);
@@ -334,6 +334,11 @@ describe('clock text', () => {
 });
 
 describe('best times and initials cards', () => {
+  /** A gap of 0 to 6 mm: close enough that the arrow and its slot read as one control. */
+  const near = (gap: number, what: string) => {
+    expect(gap, what).toBeGreaterThanOrEqual(-1e-9);
+    expect(gap, what).toBeLessThanOrEqual(0.006);
+  };
   const ctx = { level: 0, levels: LEVELS.length + 2, daily: true, random: true };
   const levels = [...LEVELS, tinkerLevel(dailySeed(new Date(2026, 10, 4))), tinkerLevel(dailySeed(new Date(2027, 0, 1)))];
 
@@ -344,6 +349,38 @@ describe('best times and initials cards', () => {
       expect(layout('initials', { ...ctx, narrow }).buttons.filter((b) => b.kind === 'primary').map((b) => b.id), 'one primary').toEqual(['save']);
     }
     expect(OVERLAY_SCREENS).toEqual(['initials', 'board']);
+  });
+
+  it('shows every best time as m:ss.t, tenths included from 10 s up', () => {
+    for (const s of [0, 0.4, 8, 9.97, 10, 59.99, 61.5, 600, 754.3]) expect(clockTenths(s), String(s)).toMatch(/^\d+:\d\d\.\d$/);
+    expect(clockTenths(8)).toBe('0:08.0');
+    expect(clockTenths(10)).toBe('0:10.0');
+    expect(clockTenths(9.97)).toBe('0:09.9'); // truncated like the clock
+    expect(clockTenths(61.5)).toBe('1:01.5');
+    expect(clockTenths(754.3)).toBe('12:34.3');
+  });
+
+  it('each initials letter sits in a slot with its up and down arrows touching it: left and right in the zone, over and under on a phone', () => {
+    for (const narrow of [false, true]) {
+      const l = layout('initials', { ...ctx, narrow });
+      expect(l.slots, `slots ${narrow}`).toHaveLength(3);
+      for (let k = 0; k < 3; k++) {
+        const s = l.slots![k]!;
+        const [up, down] = [`up-${k}`, `down-${k}`].map((id) => l.buttons.find((b) => b.id === id)!) as [Button, Button];
+        expect(s.w, 'slot wide enough for a 24 mm letter').toBeGreaterThanOrEqual(0.03);
+        expect(s.h, 'slot tall enough for a 24 mm letter').toBeGreaterThanOrEqual(0.036);
+        if (narrow) {
+          near(up.y - up.h / 2 - (s.y + s.h / 2), 'up pill just over the slot');
+          near(s.y - s.h / 2 - (down.y + down.h / 2), 'down pill just under the slot');
+          expect([up.x, down.x]).toEqual([s.x, s.x]);
+        } else {
+          expect(down.x + down.w / 2, 'down left of the slot').toBeLessThanOrEqual(s.x - s.w / 2 + 1e-9);
+          expect(s.x - s.w / 2 - (down.x + down.w / 2), 'down touches the slot').toBeLessThanOrEqual(0.006);
+          near(up.x - up.w / 2 - (s.x + s.w / 2), 'up touches the slot');
+          expect([up.y, down.y]).toEqual([s.y, s.y]);
+        }
+      }
+    }
   });
 
   it('every target is 4 cm or more, 12 mm apart and inside its card, wide and on a phone', () => {

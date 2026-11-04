@@ -1,5 +1,5 @@
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace } from 'three';
-import { boardGrid, clock, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
+import { boardGrid, clock, clockTenths, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
 import { formatDate, type Entry } from './scores';
 import { C } from './palette';
 import { rpmLabel, type Goal } from './goal';
@@ -423,16 +423,19 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       const size = T.heading * Math.min(1, (right(0.016) - left(0.016) - timeW - mm(10)) / g.measureText(name).width);
       text(g, name, left(0.016), y(l.height - 0.055), font(600, size, SERIF), C.ink, 'left');
       text(g, time, right(0.016), y(l.height - 0.055), font(700, T.xl), C.ink, 'right');
-      // Each letter sits over its arrows (wide: above the row; phone: between the up and down arrows), with a bar under it that is amber on the slot typing fills.
-      for (let k = 0; k < 3; k++) {
-        const [up, down] = [`up-${k}`, `down-${k}`].map((id) => l.buttons.find((b) => b.id === id)!) as [Button, Button];
-        const [lx, ly] = at((up.x + down.x) / 2, ctx.narrow ? (up.y + down.y) / 2 : 0.088);
-        const active = ini.cursor === k;
-        text(g, ini.letters[k]!, lx, ly + 1, font(700, T.xl), C.ink);
-        pill(g, lx, ly + mm(12), mm(14), mm(active ? 2.4 : 1.6));
-        g.fillStyle = active ? C.amber : C.deepHover;
+      // Each letter is Number XL in a cream-deep slot with its arrows against it (wide: left and right; phone: over and under); the slot typing fills next has the amber ring.
+      l.slots!.forEach((slot, k) => {
+        const [sx, sy] = at(slot.x, slot.y);
+        pill(g, sx, sy, slot.w * PX, slot.h * PX, mm(10));
+        g.fillStyle = C.deep;
         g.fill();
-      }
+        if (ini.cursor === k) {
+          g.lineWidth = mm(3);
+          g.strokeStyle = C.amber;
+          g.stroke();
+        }
+        text(g, ini.letters[k]!, sx, sy + 1, font(700, T.xl), C.ink);
+      });
       break;
     }
     case 'board': {
@@ -450,11 +453,11 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
         text(g, b.empty, ex, ey, font(600, T.body * Math.min(1, mm((l.width - 0.032) * 1000) / g.measureText(b.empty).width)), C.muted);
         break;
       }
-      // Rank muted, initials bold, the time in tabular figures, the date muted; Random rows show "Step 6" and the time.
+      // Rank muted, initials bold, the time as m:ss.t right-aligned so the digits stack, the date muted just after it; Random rows show "Step 6" and the time.
       const phone = !!ctx.narrow;
       const [size, small] = phone ? [11.5, 11] : [12.5, 12];
       // Offsets from a column's left edge, wide enough for a wide system font (DejaVu) too.
-      const cols = phone ? { name: 0.021, step: 0.058, level: 0.105, random: 0.152 } : { name: 0.024, step: 0.06, level: 0.114, random: 0.158 };
+      const cols = phone ? { name: 0.021, step: 0.058, level: 0.105, random: 0.17 } : { name: 0.024, step: 0.058, level: 0.11, random: 0.166 };
       b.entries.forEach((e, i) => {
         const rowY = grid.y0 - (i % grid.rows) * grid.pitch;
         const x0 = -l.width / 2 + 0.016 + Math.floor(i / grid.rows) * (grid.colW + grid.gap);
@@ -464,12 +467,12 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
         };
         put(String(i + 1), 0, font(600, small), C.muted, 'left');
         put(e.name, cols.name, font(700, size), C.ink, 'left');
-        if (e.step === undefined) put(clock(e.ms / 1000), cols.level, font(600, size), C.ink, 'right');
+        if (e.step === undefined) put(clockTenths(e.ms / 1000), cols.level, font(600, size), C.ink, 'right');
         else {
           put(`Step ${e.step}`, cols.step, font(600, size), C.ink, 'left');
-          put(clock(e.ms / 1000), cols.random, font(600, size), C.ink, 'right');
+          put(clockTenths(e.ms / 1000), cols.random, font(600, size), C.ink, 'right');
         }
-        put(formatDate(e.date), grid.colW, font(500, small), C.muted, 'right');
+        put(formatDate(e.date), (e.step === undefined ? cols.level : cols.random) + 0.012, font(500, small), C.muted, 'left'); // right after the time
       });
       break;
     }

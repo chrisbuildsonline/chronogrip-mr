@@ -3,7 +3,7 @@ import { LEVELS } from '../../src/levels';
 import { decodeSeed } from '../../src/seed';
 import { randomLevel, unpackSeed } from '../../src/random';
 import { formatDate } from '../../src/scores';
-import { clock } from '../../src/ui';
+import { clockTenths } from '../../src/ui';
 import { calibrateByMouse } from './calibrate';
 
 /** Screenshots land here for a look by eye (gitignored). */
@@ -154,7 +154,7 @@ test('desktop: a first solve asks for initials (#1), Save writes them, and Best 
   expect(shown).toContain('Best times');
   expect(shown).toContain('Level 1');
   expect(shown).toContain('KIX');
-  expect(shown).toContain(clock(row.ms / 1000));
+  expect(shown).toContain(clockTenths(row.ms / 1000));
   expect(shown).toContain(formatDate(row.date));
   expect(shown).not.toContain('No times yet. Solve level 1 to set one.');
   await wordsClear(page, 'board 1440', 9, 4);
@@ -299,7 +299,7 @@ test('desktop: a Random solve is saved with its step and shows as "Step N"', asy
   expect(shown).toContain('Random');
   expect(shown).toContain('RND');
   expect(shown).toContain('Step 1');
-  expect(shown).toContain(clock(saved[0]!.ms / 1000));
+  expect(shown).toContain(clockTenths(saved[0]!.ms / 1000));
   await wordsClear(page, 'random board 1440', 9, 4);
   await page.screenshot({ path: `${OUT}/board-random-1440.png` });
   expect(errors).toEqual([]);
@@ -320,6 +320,10 @@ test('desktop: a full board shows two columns of five, ranked, with the date', a
   expect(Math.abs(at('6').y - at('1').y)).toBeLessThan(2);
   for (let i = 1; i < 5; i++) expect(at(String(i + 1)).y).toBeGreaterThan(at(String(i)).y + 10);
   expect(labels.filter((l) => l.text === '1 Oct')).toHaveLength(10);
+  const times = labels.filter((l) => /^\d+:\d\d/.test(l.text));
+  expect(times).toHaveLength(10);
+  expect(times.every((l) => /^\d+:\d\d\.\d$/.test(l.text)), 'one time format on every row').toBe(true);
+  expect(new Set(times.map((l) => Math.round(l.right))).size, 'times right-aligned, one edge a column').toBe(2);
   await wordsClear(page, 'full board 1440', 9, 4);
   await page.screenshot({ path: `${OUT}/board-full-1440.png` });
   await click(page, 'board-prev');
