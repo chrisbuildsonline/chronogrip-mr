@@ -14,7 +14,8 @@ export const MENU_SCREENS: readonly Screen[] = ['title', 'stages', 'picker', 'bo
 export const PLAY_SCREENS: readonly Screen[] = SCREENS.filter((s) => !MENU_SCREENS.includes(s));
 export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options', 'stages', 'picker', 'result'];
 
-export type ButtonKind = 'primary' | 'secondary' | 'icon' | 'toggle' | 'arrow' | 'tab' | 'slot';
+/** `card`: a stage card, drawn by src/cards.ts (art, gradient and words) rather than in the panel's canvas. */
+export type ButtonKind = 'primary' | 'secondary' | 'icon' | 'toggle' | 'arrow' | 'tab' | 'slot' | 'card';
 /** A button rectangle in panel space; x, y is its centre. */
 export type Button = { id: string; label: string; kind: ButtonKind; x: number; y: number; w: number; h: number; /** A small line after a menu row's label. */ hint?: string };
 /** A display slot (not a target) in panel space; x, y is its centre. */
@@ -59,6 +60,8 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
  */
 export type LayoutCtx = { level: number; levels: number; shared?: boolean; random?: boolean; resume?: boolean; narrow?: boolean; confirm?: boolean };
 
+/** The stage picker's width with three cards side by side. */
+export const STAGE_W = 0.42;
 /** Width of every card on a phone in portrait (outside XR), metres of panel space. */
 export const NARROW_W = 0.3;
 const BACK_W = 0.076;
@@ -100,10 +103,20 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       return { width: NARROW_W, height: startHeight(items.length), buttons: stack(PAD, items, ROW_W, ROW_H) };
     }
     case 'stages': {
-      // New Game: which stage. Each row carries its one-line hint; all three are open.
-      const rows = stack(PAD + ROW_H + MENU_GAP, STAGES.map((st, i) => [`stage-${st.id}`, st.name, i === 0 ? 'primary' : 'secondary'] as const), ROW_W, ROW_H).map((b, i) => ({ ...b, hint: STAGES[i]!.hint }));
-      const items = stack(PAD, [['back', 'Back', 'secondary']], ROW_W, ROW_H);
-      return { width: NARROW_W, height: startHeight(STAGES.length + 1), buttons: [...rows, ...items] };
+      // New Game: which stage, as three cards (src/cards.ts) side by side, or stacked and shorter on a phone; Back is a row under them.
+      const width = narrow ? NARROW_W : STAGE_W;
+      const gap = narrow ? 0.008 : 0.01;
+      const [cw, ch] = narrow ? [width - 2 * PAD, 0.078] : [(width - 2 * PAD - 2 * gap) / 3, 0.17];
+      const foot = PAD + ROW_H + 0.014;
+      const cards = STAGES.map((st, i): Button => ({
+        id: `stage-${st.id}`, label: st.name, kind: 'card', hint: st.hint, w: cw, h: ch,
+        x: narrow ? 0 : (i - 1) * (cw + gap),
+        y: narrow ? foot + (STAGES.length - 1 - i) * (ch + gap) + ch / 2 : foot + ch / 2,
+      }));
+      const height = narrow ? foot + STAGES.length * ch + (STAGES.length - 1) * gap + 0.12 : foot + ch + 0.12;
+      // Back is a text row under the cards, its words about where the heading's start (16 mm in from the card's edge, then the row's own padding).
+      const back: Button = { id: 'back', label: 'Back', kind: 'secondary', x: -width / 2 + PAD + ROW_W / 2, y: PAD + ROW_H / 2, w: ROW_W, h: ROW_H };
+      return { width, height, buttons: [...cards, back] };
     }
     case 'picker': {
       // Random level (practice): how hard. Easy, Medium, Hard, Expert, then Back.

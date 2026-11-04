@@ -122,6 +122,12 @@ interface ChronoHook {
   /** Live: the stage being played (the one of the run, else the last picked) and the HUD's words for the level, "Hard · Level 3" (just "Level 3" outside the 20 stage levels). */
   readonly stage: 'easy' | 'medium' | 'hard';
   readonly hudLabel: string;
+  /** Live: the stage picker's cards (src/cards.ts): whether up, reduced motion, and per card its hint, float offset, hover mix, art brightness and uv offset. */
+  readonly stageCards: { readonly visible: boolean; readonly reduced: boolean; readonly cards: readonly { readonly id: string; readonly hint: string; readonly lift: number; readonly mix: number; readonly brightness: number; readonly hover: boolean; readonly offset: readonly [number, number] }[] };
+  /** Live: the menu button the keyboard has reached (null until an arrow or Tab). */
+  readonly kbdFocus: string | null;
+  /** Live: the button drawn selected (hovered by mouse or hand, or reached by the keys); null when nothing is. */
+  readonly highlighted: string | null;
   /** Live: the music theme playing: 'menu' (every menu), 'box' (Easy), 'marimba' (Medium) or 'clockwork' (Hard); `musicDucked`: the pause card has the music 6 dB down. */
   readonly musicTheme: 'menu' | 'box' | 'marimba' | 'clockwork';
   readonly musicDucked: boolean;

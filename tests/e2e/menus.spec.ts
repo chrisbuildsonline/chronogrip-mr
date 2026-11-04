@@ -132,7 +132,14 @@ for (const size of SIZES) {
     await click(page, 'start');
     await cardIs(page, 'stages');
     await dark(page, 'stages');
-    await column(page, ['stage-easy', 'stage-medium', 'stage-hard', 'back'], 'stages');
+    {
+      // Three cards side by side (stacked on a phone), Back under them, all about the card's middle.
+      const all = await rects(page);
+      const cardsAt = ['stage-easy', 'stage-medium', 'stage-hard'].map((id) => all.find((b) => b.id === id)!.rect);
+      if (size.width > size.height) cardsAt.forEach((r, i) => i && expect(centreX(r), `card ${i} right of card ${i - 1}`).toBeGreaterThan(centreX(cardsAt[i - 1]!)));
+      else cardsAt.forEach((r, i) => i && expect(centreY(r), `card ${i} below card ${i - 1}`).toBeGreaterThan(centreY(cardsAt[i - 1]!)));
+      expect(centreY(all.find((b) => b.id === 'back')!.rect), 'Back is under the cards').toBeGreaterThan(Math.max(...cardsAt.map(centreY)));
+    }
     await centred(page, size, 'stages');
     await page.screenshot({ path: `${OUT}/stages-${size.name}.png` });
     await click(page, 'back');

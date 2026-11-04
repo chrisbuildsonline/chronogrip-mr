@@ -2,6 +2,8 @@ import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColor
 import { MENU_SCREENS, ROW_H, SCRIM_OPACITY, boardGrid, clock, clockTenths, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
 import { formatDate, type Entry } from './scores';
 import { C } from './palette';
+import { createStageCards } from './cards';
+import type { StageId } from './stages';
 import { rpmLabel, type Goal } from './goal';
 import { FAULT_WORDS } from './fault';
 import type { Outcome } from './timer';
@@ -62,6 +64,8 @@ export type PanelCtx = {
   result?: { level: number; ms: number };
   /** The best times card: the board's name, its rows, and the muted line shown while it is empty. */
   /** `tab` is the board shown; `note` is a quiet line over the rows (the global board is offline). */
+  /** The stage picker: the player's best time on each stage, as m:ss. */
+  bests?: Partial<Record<StageId, string>>;
   board?: { label: string; stage: string; entries: readonly Entry[]; empty: string; tab: 'local' | 'global'; note?: string };
 };
 
@@ -392,12 +396,13 @@ function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: numb
     text(g, ctx.initials?.letters[k] ?? '', x, y + mm(1), jfont(300, 24), on ? C.menuHi : C.logo);
     return;
   }
-  const lit = hover || b.kind === 'primary';
+  if (b.kind === 'card') return; // a stage card is drawn by src/cards.ts
+  // Nothing is selected when a menu opens: a row lights (amber bar, gradient, ›) only while it is hovered or reached with the keys.
+  const lit = hover;
   if (lit) selectedRow(g, x, y, w, h);
   const word = b.label.toUpperCase();
   const color = lit ? C.menuHi : C.menuInk;
-  text(g, word, left + mm(11), b.hint ? y - mm(4.5) : y + 1, jfont(400, T.button * 1.1), color, 'left', 4.2);
-  if (b.hint) text(g, b.hint, left + mm(11), y + mm(7), jfont(400, T.body * 0.85), lit ? C.menuInk : C.menuMuted, 'left', 1);
+  text(g, word, left + mm(11), y + 1, jfont(400, T.button * 1.1), color, 'left', 4.2);
   if (b.kind === 'toggle') {
     const on = !!(b.id === 'sound' ? ctx.sound : b.id === 'music' ? ctx.music : ctx.relaxed);
     text(g, on ? 'ON' : 'OFF', left + w - mm(8), y + 1, jfont(600, T.button * 0.8), on ? C.amber : C.menuMuted, 'right', 3);
@@ -432,7 +437,6 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
       break;
     case 'stages':
       head('NEW GAME', 'CHOOSE A STAGE');
-      text(g, '20 levels each, made fresh every time.', left, y(l.height - 0.092), jfont(400, T.body * 0.85), C.menuMuted, 'left', 1);
       break;
     case 'picker':
       head('PRACTICE', 'RANDOM LEVEL');
@@ -636,7 +640,8 @@ export function createPanels() {
   const backing = canvasPlane();
   backing.mesh.renderOrder = 9;
   backing.mesh.position.z = -BACKING_Z;
-  root.add(backing.mesh, panel.mesh, hint.mesh, note.mesh);
+  const cards = createStageCards();
+  root.add(backing.mesh, panel.mesh, cards.group, hint.mesh, note.mesh);
   let key = '';
   let hasRing = false;
   let current: { screen: Screen; layout: Layout } | null = null;
@@ -699,6 +704,14 @@ export function createPanels() {
       // The phone card (scaled, just in front of the eye) draws over everything; in XR a real hand still hides the card.
       (panel.mesh.material as MeshBasicMaterial).depthTest = a.scale === undefined;
       (backing.mesh.material as MeshBasicMaterial).depthTest = a.scale === undefined;
+      cards.setDepth(a.scale === undefined);
+    },
+    /** One frame of the stage cards' float and pan (a no-op while they are not up). */
+    tick(now: number) {
+      cards.update(now);
+    },
+    get stageCards() {
+      return cards.state();
     },
     show(screen: Screen | null, ctx: PanelCtx) {
       const next = screen && JSON.stringify([screen, { ...ctx, time: clock(ctx.time) }]);
@@ -707,9 +720,11 @@ export function createPanels() {
       panel.mesh.visible = screen !== null;
       if (!screen) backing.mesh.visible = false;
       current = null;
+      if (!screen) cards.set([], { hover: null, bests: {}, narrow: false });
       if (!screen) return;
       const l = layout(screen, ctx);
       current = { screen, layout: l };
+      cards.set(screen === 'stages' ? l.buttons : [], { hover: ctx.hover, bests: ctx.bests ?? {}, narrow: !!ctx.narrow });
       resize(panel, l.width, l.height, l.height / 2);
       drawn = [];
       ringShown = false;

@@ -243,7 +243,7 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   expect(errors).toEqual([]);
 });
 
-test('desktop: Enter on the start panel opens the stage picker and Enter there plays Easy; Esc leaves Options and High scores', async ({ page }) => {
+test('desktop: arrow then Enter on the start panel opens the stage picker, and the first card plays Easy; Esc leaves Options and High scores', async ({ page }) => {
   const errors = await open(page);
   await cardIs(page, 'title');
   await click(page, 'options');
@@ -254,29 +254,36 @@ test('desktop: Enter on the start panel opens the stage picker and Enter there p
   await cardIs(page, 'board');
   await page.keyboard.press('Escape');
   await cardIs(page, 'title');
+  // Nothing is selected when the menu opens: Enter alone does nothing; the first arrow reaches the top row.
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => window.__chrono!.card!.screen)).toBe('title');
+  await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await cardIs(page, 'stages');
   await page.keyboard.press('Escape');
   await cardIs(page, 'title');
+  await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await cardIs(page, 'stages');
+  await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   expect(await page.evaluate(() => window.__chrono!.hudLabel)).toBe('Easy · Level 1');
   expect(errors).toEqual([]);
 });
 
-test('desktop 1440x900: New Game opens the stage picker, a vertical design C list with a hint on each row; Back returns', async ({ page }) => {
+test('desktop 1440x900: New Game opens the stage picker, three cards side by side with Back under them; Back returns', async ({ page }) => {
   const errors = await open(page);
   await click(page, 'start');
   await cardIs(page, 'stages');
   expect(await ids(page)).toEqual(['stage-easy', 'stage-medium', 'stage-hard', 'back']);
   expect(await labelsOf(page)).toEqual(['Easy', 'Medium', 'Hard', 'Back']);
-  expect(await words(page)).toEqual(expect.arrayContaining(['A gentle climb', 'Starts where Easy ends', 'For clockmakers', 'CHOOSE A STAGE']));
-  const xs = await page.evaluate(() => window.__chrono!.buttons().map((b) => Math.round(b.screen[0])));
-  expect(new Set(xs).size, 'one column').toBe(1);
-  const ys = await page.evaluate(() => window.__chrono!.buttons().map((b) => b.screen[1]));
-  ys.forEach((y, i) => i && expect(y).toBeGreaterThan(ys[i - 1]!));
+  expect(await words(page)).toEqual(expect.arrayContaining(['CHOOSE A STAGE', 'NEW GAME']));
+  expect((await page.evaluate(() => window.__chrono!.stageCards)).cards.map((c) => c.hint)).toEqual(['A gentle climb', 'Starts where Easy ends', 'For clockmakers']);
+  const pos = await page.evaluate(() => window.__chrono!.buttons().map((b) => b.screen));
+  expect(new Set(pos.slice(0, 3).map((p) => Math.round(p[1]))).size, 'the cards share a row').toBe(1);
+  pos.slice(0, 3).forEach((p, i) => i && expect(p[0]).toBeGreaterThan(pos[i - 1]![0]));
+  expect(pos[3]![1], 'Back is under them').toBeGreaterThan(pos[0]![1]);
   await page.screenshot({ path: `${OUT}/stages-1440.png` });
   await click(page, 'back');
   await cardIs(page, 'title');

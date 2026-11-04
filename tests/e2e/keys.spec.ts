@@ -26,16 +26,24 @@ test('desktop: the canvas is labelled, Enter is the card primary, Esc pauses and
   await page.keyboard.press('Escape');
   expect(await flowOf(page)).toBe('title');
 
-  // Enter on the start panel presses its primary (New Game: the stage picker, Esc goes back); Enter on the picker plays Easy.
+  // Nothing is selected when a menu opens, so Enter alone does nothing. The first arrow reaches New Game; Enter opens the stage
+  // picker (Esc goes back); an arrow and Enter there play the first card, Easy.
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(200);
+  expect(await flowOf(page)).toBe('title');
+  expect(await page.evaluate(() => window.__chrono!.card!.screen)).toBe('title');
+  await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await hasButton(page, 'stage-easy');
   await page.keyboard.press('Escape');
   await hasButton(page, 'start');
+  await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await hasButton(page, 'stage-easy');
+  await page.keyboard.press('Tab');
   await page.keyboard.press('Enter');
   await expect.poll(() => flowOf(page)).toBe('playing');
-  // Esc pauses, Esc again resumes, Enter on the pause card is Resume.
+  // Esc pauses, Esc again resumes, an arrow and Enter on the pause card is Resume.
   await page.keyboard.press('Escape');
   await expect.poll(() => flowOf(page)).toBe('paused');
   await page.keyboard.press('Escape');
@@ -43,6 +51,7 @@ test('desktop: the canvas is labelled, Enter is the card primary, Esc pauses and
   await page.keyboard.press('Escape');
   await expect.poll(() => flowOf(page)).toBe('paused');
   await hasButton(page, 'resume');
+  await page.keyboard.press('ArrowDown'); // nothing is selected on a menu until a key reaches it: Resume is the top row
   await page.keyboard.press('Enter');
   await expect.poll(() => flowOf(page)).toBe('playing');
 

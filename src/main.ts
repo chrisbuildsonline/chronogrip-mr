@@ -15,7 +15,7 @@ import { trackMr } from './mr';
 import { tuneForSoftwareGl } from './render';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
-import { MENU_SCREENS, PLAY_SCREENS, SCRIM_OPACITY, buttonAt, layout, menuAnchor, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
+import { MENU_SCREENS, PLAY_SCREENS, SCRIM_OPACITY, buttonAt, clockTenths, layout, menuAnchor, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
 import { createPanels, RING, SMALL_TABLE_TEXT, type PanelCtx } from './panels';
 import { createGhostHand, ghostAt, ghostTwistAt } from './ghost';
 import { TWEEN_MS, easeOut, tweenAt } from './tween';
@@ -897,7 +897,28 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const shown = shownButtons();
-  // Enter is the primary pill, Esc pauses, resumes or goes back one menu, P pauses and resumes (never on another menu).
+  // A menu: nothing is selected until a key reaches it. Arrows and Tab walk the buttons (top to bottom, left to right) from the
+  // top, Enter presses the one reached. The play cards keep Enter on their primary pill (Next).
+  if (menuUp() && overlay?.kind !== 'initials' && (e.key.startsWith('Arrow') || e.key === 'Tab' || e.key === 'Enter')) {
+    const order = [...shown].filter((b) => b.kind !== 'slot' && b.kind !== 'arrow').sort((a, b) => Math.round((b.y - a.y) * 1000) || a.x - b.x);
+    if (e.key === 'Enter') {
+      const at = kbdButton();
+      if (!at) return;
+      e.preventDefault();
+      sound.unlock();
+      kbd = null;
+      return press(at, 'key');
+    }
+    e.preventDefault();
+    const forward = e.key === 'ArrowDown' || e.key === 'ArrowRight' || (e.key === 'Tab' && !e.shiftKey);
+    const now = kbdButton();
+    const from = now ? order.findIndex((b) => b.id === now) : -1;
+    const next = from < 0 ? (forward ? 0 : order.length - 1) : (from + (forward ? 1 : -1) + order.length) % order.length;
+    if (order[next]) kbd = { id: order[next]!.id, card: cardKey() };
+    showPanel();
+    return;
+  }
+  // Esc pauses, resumes or goes back one menu, P pauses and resumes (never on another menu); Enter is the primary pill of a play card.
   const id =
     e.key === 'Enter' ? shown.find((b) => b.kind === 'primary')?.id
     : e.key === 'Escape' ? ['pause', 'resume', 'back', 'skip'].find((k) => shown.some((b) => b.id === k))
@@ -962,6 +983,16 @@ canvas.addEventListener(
 );
 let mouseRay: [Vec3, Vec3] | null = null;
 let mouseButton: string | null = null;
+/** The menu button the keys have reached: nothing is selected when a menu opens; the first arrow or Tab starts at the top. Cleared by the mouse and by a change of card. */
+let kbd: { id: string; card: string } | null = null;
+const cardKey = () => `${panels.current?.screen ?? ''}|${overlay?.kind ?? ''}`;
+/** The button drawn selected: the mouse's or a hand's, else the keys'; only one that is on the card now (a pointer left over a button of the last card lights nothing). */
+const highlight = (): string | null => {
+  const here = shownButtons();
+  const on = (id: string | null) => (id !== null && here.some((b) => b.id === id) ? id : null);
+  return on(mouseButton) ?? on(tipButton.left) ?? on(tipButton.right) ?? kbdButton();
+};
+const kbdButton = () => (kbd && kbd.card === cardKey() && shownButtons().some((b) => b.id === kbd!.id) ? kbd.id : null);
 let mouseKnob = false;
 canvas.addEventListener('pointermove', (e) => {
   const p = holder === 'mouse' && mouseOnTray(e);
@@ -971,6 +1002,7 @@ canvas.addEventListener('pointermove', (e) => {
     lastMouseX = e.clientX;
   }
   mouseRay = rayAt(e);
+  kbd = null; // the mouse takes over the highlight
   const hit = onPanel(mouseRay);
   mouseButton = hit && buttonAt(hit, shownButtons());
   const onTray = !mouseButton && flow.name === 'calibrate' && mouseOnTray(e);
@@ -1299,6 +1331,7 @@ world.scene.onBeforeRender = () => {
   }
 
   showPanel(now);
+  panels.tick(now);
 };
 
 /**
@@ -1352,7 +1385,8 @@ function showPanel(now = performance.now()): void {
     timer: relaxed || screenOf(flow) !== 'hud' ? null : { par, ...timerView(levelClock.seconds, par) }, // only the HUD carries it, so no other card redraws as it counts
     outcome,
     par: outcome ? par : null,
-    hover: mouseButton ?? tipButton.left ?? tipButton.right,
+    hover: highlight(),
+    bests: Object.fromEntries(STAGES.flatMap((st) => { const t = scores.boards[boardOf(st.id)]?.[0]; return t ? [[st.id, clockTenths(t.ms / 1000).replace(/\.\d$/, '')]] : []; })),
     goal: badge.root.visible ? goal() : null,
     fault: faultKind(fault),
     narrow: phone(),
@@ -1536,6 +1570,16 @@ window.__chrono = Object.freeze({
   },
   get stage() {
     return stage;
+  },
+  get stageCards() {
+    return panels.stageCards;
+  },
+  get kbdFocus() {
+    return kbdButton();
+  },
+  /** The menu button drawn selected now (mouse, hand or keys), null when none. */
+  get highlighted() {
+    return highlight();
   },
   get musicTheme() {
     return sound.theme;

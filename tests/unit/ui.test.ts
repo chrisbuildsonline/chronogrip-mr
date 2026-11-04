@@ -351,20 +351,40 @@ describe('the stage picker (New Game)', () => {
   const l = layout('stages', { level: 0, levels: 21 });
   const rows = l.buttons.filter((b) => b.id.startsWith('stage-'));
 
-  it('is a vertical column, left-aligned design C: Easy, Medium, Hard, each with its hint, then Back', () => {
-    expect(rows.map((b) => [b.id, b.label, b.hint])).toEqual([
-      ['stage-easy', 'Easy', 'A gentle climb'],
-      ['stage-medium', 'Medium', 'Starts where Easy ends'],
-      ['stage-hard', 'Hard', 'For clockmakers'],
+  it('is three cards side by side, Easy, Medium, Hard, each with its hint, and Back as a row under them', () => {
+    expect(rows.map((b) => [b.id, b.label, b.hint, b.kind])).toEqual([
+      ['stage-easy', 'Easy', 'A gentle climb', 'card'],
+      ['stage-medium', 'Medium', 'Starts where Easy ends', 'card'],
+      ['stage-hard', 'Hard', 'For clockmakers', 'card'],
     ]);
     expect(l.buttons.map((b) => b.id)).toEqual(['stage-easy', 'stage-medium', 'stage-hard', 'back']);
-    const all = l.buttons;
-    for (const b of all) {
-      expect(b.x, 'one column').toBe(0);
-      expect(b.h, 'a 50 mm row').toBeGreaterThanOrEqual(0.05);
+    expect(new Set(rows.map((b) => b.y)).size, 'one row of cards').toBe(1);
+    rows.forEach((b, i) => i && expect(b.x, `${b.id} right of ${rows[i - 1]!.id}`).toBeGreaterThan(rows[i - 1]!.x + rows[i - 1]!.w - 1e-9));
+    expect(rows[1]!.x, 'centred').toBeCloseTo(0, 9);
+    for (const b of rows) {
+      expect(b.h / b.w, 'portrait-ish, about 3:4').toBeGreaterThan(1.2);
+      expect(b.w, 'a pinchable target, 50 mm or more').toBeGreaterThanOrEqual(0.05);
+      expect(b.kind).not.toBe('primary'); // nothing is selected when the picker opens
     }
-    all.forEach((b, i) => i && expect(b.y, `${b.id} under ${all[i - 1]!.id}`).toBeLessThan(all[i - 1]!.y));
-    expect(rows.filter((b) => b.kind === 'primary').map((b) => b.id), 'Easy is the selected bar').toEqual(['stage-easy']);
+    const back = l.buttons.find((b) => b.id === 'back')!;
+    expect(back.y + back.h / 2).toBeLessThan(rows[0]!.y - rows[0]!.h / 2);
+    expect(back.h).toBeGreaterThanOrEqual(0.05);
+  });
+
+  it('on a phone the cards stack, shorter and landscape-shaped, top to bottom, with Back last', () => {
+    const p = layout('stages', { level: 0, levels: 21, narrow: true });
+    const cards = p.buttons.filter((b) => b.kind === 'card');
+    expect(p.width).toBe(NARROW_W);
+    cards.forEach((b, i) => {
+      expect(b.x).toBe(0);
+      expect(b.w / b.h, 'landscape').toBeGreaterThan(2.5);
+      expect(b.h * phonePx375, 'a 44 px target or more').toBeGreaterThanOrEqual(44);
+      if (i) expect(b.y).toBeLessThan(cards[i - 1]!.y);
+    });
+    expect(p.buttons.at(-1)!.id).toBe('back');
+    expect(p.buttons.at(-1)!.y).toBeLessThan(cards.at(-1)!.y);
+    expect(l.height).toBeLessThan(0.45);
+    expect(p.height).toBeLessThan(0.5);
   });
 
   it('is a menu laid over the title, and in XR hangs where every button is in reach', () => {
