@@ -56,11 +56,32 @@ Times are m:ss; under 10 s they carry tenths (0:00.4, 0:07.2), truncated, so a q
 ## Screens
 | Screen | Size (m) | Layout |
 |---|---|---|
-| Title | 0.34 x 0.15 | eyebrow "A clockwork puzzle"; Display "ChronoGrip"; row: Start (primary 13 cm; "Continue" once anything is solved), Levels |
+| Title | 0.34 x 0.15 | eyebrow "A clockwork puzzle"; Display "ChronoGrip"; row: Start (primary 11 cm; "Continue" once anything is solved), Levels, "No timer" toggle (see Time limit) |
 | Level select | 0.674 x 0.15 | Heading "Levels" with muted "N of 9 solved"; one row (the panel zone's pitch rules out two): Back pill, then nine 50 x 70 mm tiles (1-8, then "Daily" with an amber top edge); the outer tile sits at 34 degrees yaw, inside the 35 degree cone. A solved tile shows its best m:ss in muted text and a small amber check |
-| HUD (playing, calibrate) | 0.27 x 0.096 | top: the goal line (muted "Turn the marked gear", the drawn turn arrow, ink bold "60 rpm", an amber check once matched); below: eyebrow "Level" over Number XL level (or "Daily"); Number XL time; round pause button right, kept on the bottom row so it is no higher in view |
-| Level complete | 0.35 x 0.17 | amber "Solved" pill; Heading "Level N complete"; Number XL time right, an amber "New best" pill under it when a saved time was beaten, else muted "Best m:ss"; row: Next (primary), Restart, Levels. On the daily: Levels (primary), Restart |
-| Pause | 0.35 x 0.15 | Heading "Paused"; muted "Level N - m:ss"; row: Resume (primary), Restart, Levels |
+| HUD (playing, calibrate) | 0.30 x 0.096 | top: the goal line (muted "Turn the marked gear", the drawn turn arrow, ink bold "60 rpm", an amber check once matched); below: eyebrow "Level" over Number XL level (or "Daily"); Number XL time; the countdown ring and its "Left" time (see Time limit); round pause button right, kept on the bottom row so it is no higher in view |
+| Level complete | 0.35 x 0.17 | amber "Solved" pill, then muted eyebrow "PAR m:ss"; Heading "Level N complete"; Number XL time right, an amber check just before it when under par, an amber "New best" pill under it when a saved time was beaten, else muted "Best m:ss"; row: Next (primary), Restart, Levels. On the daily: Levels (primary), Restart. Over par: see Time limit |
+| Pause | 0.42 x 0.15 | Heading "Paused"; muted "Level N - m:ss"; row: Resume (primary), Restart, Levels, "No timer" toggle. The card is wider than the others so the fourth pill stays on the bottom row, inside the panel zone (src/ui.ts) |
+
+## Time limit (src/timer.ts, tests/e2e/timer.spec.ts)
+Every level, the daily and a shared puzzle has a par time: 60 s plus 25 s per gear to place, 20 s per compound pair and
+10 s per decoy, never under 120 s, in steps of 5 s (levels 1-8: 120, 120, 150, 120, 175, 170, 210, 190). Solved at or
+under par is a pass; over it the bird still wakes but the card says over time.
+- Countdown ring (HUD, bottom row between the clock and the pause button): a 19 mm ring, 3 mm stroke, Cream deep track with
+  an Amber arc for the share of par left, sweeping down from twelve o'clock; beside it eyebrow "LEFT" over the whole
+  seconds left in body type 700, Ink. It stays inside the card at 1440 x 900 and 375 x 812. At zero the arc is gone and it
+  reads "OVER" over "+m:ss" counting up, still Ink and Muted: red is kept for faults, so running out is calm, not alarming.
+  The clock still stops when the train is solved, and in calibrate and pause.
+- Complete card, over par: the status pill reads "OVER TIME" (the same Amber tint pill as "Solved") with "PAR m:ss" beside it;
+  the row is Retry (the primary, restarts the level), Next, Levels. The best time is saved either way. Under par: "Solved",
+  "PAR m:ss" and the amber check before the time.
+- "No timer" toggle (accessibility, the Relaxed mode): a pill labelled "No timer" in button type, so a first-time player
+  knows what it does; the stored key and test hooks keep the name `relaxed`. Off: Cream deep with an empty
+  Muted circle before the words. On: Amber tint fill, Amber tint ink words and a small Amber check disc, so the state reads
+  without colour alone; hover is the usual Amber ring. It lives on the title row (third pill) and the pause card (fourth
+  pill; top right on a phone, where the row is full). Default is the timer on; the choice is saved (localStorage
+  `chronogrip.relaxed.v1`). While on: no ring, no par, no "over time", and the solve is not marked pass or over.
+- Pass or over is saved per level next to the best times (`outcome` in the progress save, a pass is never undone by a slower
+  run); old saves without it load as before.
 
 Puzzle code line and Copy link (tinker puzzles only, never on levels 1-8): under the heading, left aligned on the row of the
 "New best" pill / "Best" line, a muted line "Puzzle code CY9J" in body type (600, Muted), not a box or pill. The row gets a
