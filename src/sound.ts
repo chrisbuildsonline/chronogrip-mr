@@ -1,5 +1,6 @@
 import type { Vec3 } from './seat';
-import { BEATS_PER_BAR, BEAT_S, DUCK, FADE_S, LOWPASS_HZ, MUSIC_GAIN, composer, midiToHz, type Bar } from './music';
+import { BEATS_PER_BAR, DUCK, FADE_S, LOWPASS_HZ, MUSIC_GAIN, beatOf, composer, midiToHz, type Bar } from './music';
+import type { ThemeId } from './stages';
 
 /** Seconds between ticks at a rate in ticks per second; no rate, no ticks. */
 export const tickInterval = (rate: number) => (rate > 0 && Number.isFinite(rate) ? 1 / rate : Infinity);
@@ -72,7 +73,33 @@ export function createSound() {
   let nextBar = 0;
   let pump: ReturnType<typeof setInterval> | null = null;
   let hiddenSuspend = false;
-  const composing = composer((Math.random() * 2 ** 32) >>> 0);
+  // One theme at a time (src/music.ts THEMES): each has its own gain into the music bed, so changing theme is a 2 s crossfade
+  // (the old one fades down while the notes already scheduled ring out, the new one fades up from its first bar).
+  let theme: ThemeId = 'box';
+  const seed = (Math.random() * 2 ** 32) >>> 0;
+  const composers = new Map<ThemeId, ReturnType<typeof composer>>();
+  const composing = (id: ThemeId) => composers.get(id) ?? composers.set(id, composer(seed, id)).get(id)!;
+  const themeGains = new Map<ThemeId, GainNode>();
+  const themeGain = (c: AudioContext, id: ThemeId, start: number) => {
+    let g = themeGains.get(id);
+    if (!g) {
+      g = c.createGain();
+      g.gain.value = start;
+      g.connect(musicGain!);
+      themeGains.set(id, g);
+    }
+    return g;
+  };
+  /** Fades every theme to its place: the current one up to 1, the rest down to 0, over the fade time. */
+  const crossfade = (c: AudioContext) => {
+    const t = c.currentTime;
+    themeGain(c, theme, 0);
+    for (const [id, g] of themeGains) {
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.linearRampToValueAtTime(id === theme ? 1 : 0, t + FADE_S);
+    }
+  };
   const musicWanted = () => musicOn && !muted;
   /** Fades the bed to its level, or to silence, over the fade time. */
   const musicLevel = () => {
@@ -84,16 +111,18 @@ export function createSound() {
     if (musicWanted()) nextBar = Math.max(nextBar, t + 0.3);
   };
   /** One note of the bed: a pluck (sine and a slightly detuned triangle, a fast attack, a long decay) or a pad (a slow swell). */
-  const note = (c: AudioContext, at: number, midi: number, beats: number, vel: number, pad: boolean) => {
+  const note = (c: AudioContext, at: number, midi: number, beats: number, vel: number, voice: 'pluck' | 'pad' | 'mallet' | 'pulse', id: ThemeId) => {
     if (!musicGain) return;
     counts.notes++;
-    const len = beats * BEAT_S * (pad ? 1 : 2.2);
+    const pad = voice === 'pad';
+    const beat = beatOf(id);
+    const len = beats * beat * (pad ? 1 : voice === 'pluck' ? 2.2 : voice === 'mallet' ? 1.6 : 0.9);
     const env = c.createGain();
     env.gain.setValueAtTime(0.0001, at);
-    env.gain.exponentialRampToValueAtTime(Math.max(0.0002, vel * (pad ? 0.35 : 0.6)), at + (pad ? 1.2 : 0.006));
+    env.gain.exponentialRampToValueAtTime(Math.max(0.0002, vel * (pad ? 0.35 : voice === 'pulse' ? 0.45 : 0.6)), at + (pad ? 1.2 : voice === 'pulse' ? 0.012 : 0.006));
     env.gain.exponentialRampToValueAtTime(0.0001, at + len);
-    env.connect(musicGain);
-    (pad ? ['sine'] : ['sine', 'triangle']).forEach((type, i) => {
+    env.connect(themeGain(c, id, id === theme ? 1 : 0));
+    (pad ? ['sine'] : voice === 'pulse' ? ['triangle'] : ['sine', 'triangle']).forEach((type, i) => {
       const o = c.createOscillator();
       o.type = type as OscillatorType;
       o.frequency.value = midiToHz(midi);
@@ -103,21 +132,25 @@ export function createSound() {
       o.stop(at + len + 0.05);
     });
   };
-  const scheduleBar = (c: AudioContext, at: number, bar: Bar) => {
-    for (const n of bar.melody) note(c, at + n.at * BEAT_S, n.midi, n.beats, n.vel, false);
-    for (const n of bar.pad) note(c, at, n.midi, n.beats, n.vel, true);
-    // A very quiet escapement tick on every beat.
-    for (let b = 0; b < BEATS_PER_BAR; b++) {
+  const scheduleBar = (c: AudioContext, at: number, bar: Bar, id: ThemeId) => {
+    const beat = beatOf(id);
+    for (const n of bar.melody) note(c, at + n.at * beat, n.midi, n.beats, n.vel, id === 'box' ? 'pluck' : id === 'marimba' ? 'mallet' : 'pluck', id);
+    for (const n of bar.counter) note(c, at + n.at * beat, n.midi, n.beats, n.vel, 'mallet', id);
+    for (const n of bar.ostinato) note(c, at + n.at * beat, n.midi, n.beats, n.vel, 'pulse', id);
+    for (const n of bar.pad) note(c, at, n.midi, n.beats, n.vel, 'pad', id);
+    // A very quiet escapement tick: every beat, or in eighths with an accent in the Hard theme.
+    for (const tick of bar.ticks) {
+      const when = at + tick.at * beat;
       const o = c.createOscillator();
       const env = c.createGain();
       o.type = 'triangle';
-      o.frequency.value = b % 2 ? 1700 : 1900;
-      env.gain.setValueAtTime(0.05, at + b * BEAT_S);
-      env.gain.exponentialRampToValueAtTime(0.0001, at + b * BEAT_S + 0.025);
+      o.frequency.value = tick.accent ? 1900 : 1700;
+      env.gain.setValueAtTime(id === 'clockwork' ? (tick.accent ? 0.06 : 0.035) : 0.05, when);
+      env.gain.exponentialRampToValueAtTime(0.0001, when + 0.025);
       o.connect(env);
-      env.connect(musicGain!);
-      o.start(at + b * BEAT_S);
-      o.stop(at + b * BEAT_S + 0.04);
+      env.connect(themeGain(c, id, id === theme ? 1 : 0));
+      o.start(when);
+      o.stop(when + 0.04);
     }
   };
   /** Keeps the bed scheduled about a second and a half ahead, while the context runs and the music is wanted. */
@@ -125,8 +158,8 @@ export function createSound() {
     const c = ctx;
     if (!c || c.state !== 'running' || !musicWanted()) return;
     while (nextBar < c.currentTime + 1.5) {
-      scheduleBar(c, nextBar, composing.next());
-      nextBar += BEATS_PER_BAR * BEAT_S;
+      scheduleBar(c, nextBar, composing(theme).next(), theme);
+      nextBar += BEATS_PER_BAR * beatOf(theme);
     }
   };
 
@@ -147,6 +180,18 @@ export function createSound() {
     setMusic(on: boolean): void {
       musicOn = on;
       musicLevel();
+    },
+    /** The theme playing (or about to, before the first gesture). */
+    get theme(): ThemeId {
+      return theme;
+    },
+    /** Moves the music to another theme: a 2 s crossfade, the new one starting on its own first bar. The same theme again changes nothing. */
+    setTheme(id: ThemeId): void {
+      if (id === theme) return;
+      theme = id;
+      if (!ctx || !musicGain) return;
+      crossfade(ctx);
+      nextBar = ctx.currentTime + 0.3;
     },
     state: (): SoundState => (ctx ? (ctx.state === 'interrupted' ? 'suspended' : ctx.state) : 'none'),
     /** Creates the context on the first call and resumes it; a user gesture must have started the call. */
@@ -172,6 +217,7 @@ export function createSound() {
           const soft = filter(c, 'lowpass', LOWPASS_HZ, 0.5);
           musicGain.connect(soft);
           soft.connect(c.destination);
+          themeGain(c, theme, 1);
           nextBar = c.currentTime + 0.3;
           pump = setInterval(feed, 250);
           musicLevel();

@@ -122,6 +122,8 @@ interface ChronoHook {
   /** Live: the stage being played (the one of the run, else the last picked) and the HUD's words for the level, "Hard · Level 3" (just "Level 3" outside the 20 stage levels). */
   readonly stage: 'easy' | 'medium' | 'hard';
   readonly hudLabel: string;
+  /** Live: the music theme playing: 'box' (Easy and the menus), 'marimba' (Medium) or 'clockwork' (Hard). */
+  readonly musicTheme: 'box' | 'marimba' | 'clockwork';
   /** Live: the page header's progress (src/main.ts updateProgress): its words, filled bar segments and whether the bar shows; null when hidden. */
   readonly progress: { readonly text: string; readonly filled: number; readonly bar: boolean } | null;
   /**

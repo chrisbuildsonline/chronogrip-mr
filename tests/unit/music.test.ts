@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BASS, BEATS_PER_BAR, BEAT_S, BPM, DUCK, FADE_S, LOWPASS_HZ, MUSIC_DB, MUSIC_GAIN, SCALE, composer, loadMusicOn, midiToHz, saveMusicOn } from '../../src/music';
+import { MENU_THEME, STAGES, type ThemeId } from '../../src/stages';
+import { THEMES, beatOf, pitchClassesOf, BASS, BEATS_PER_BAR, BEAT_S, BPM, DUCK, FADE_S, LOWPASS_HZ, MUSIC_DB, MUSIC_GAIN, SCALE, composer, loadMusicOn, midiToHz, saveMusicOn } from '../../src/music';
 
 const bars = (seed: number, n = 64) => {
   const c = composer(seed);
@@ -92,5 +93,69 @@ describe('the music settings', () => {
     const bad = { getItem: () => { throw new Error('no'); }, setItem: () => { throw new Error('no'); } };
     expect(loadMusicOn(bad)).toBe(true);
     expect(() => saveMusicOn(bad, false)).not.toThrow();
+  });
+});
+
+const IDS: ThemeId[] = ['box', 'marimba', 'clockwork'];
+const themeBars = (id: ThemeId, seed: number, n = 64) => {
+  const c = composer(seed, id);
+  return Array.from({ length: n }, () => c.next());
+};
+
+describe('a theme per stage', () => {
+  it('the stage table names them: Easy the music box, Medium the marimba, Hard the clockwork; the menus play Easy\'s', () => {
+    expect(STAGES.map((s) => s.theme)).toEqual(['box', 'marimba', 'clockwork']);
+    expect(MENU_THEME).toBe(STAGES[0]!.theme);
+  });
+
+  it('runs at about 72, 84 and 96 bpm', () => {
+    expect(THEMES.box.bpm).toBeGreaterThanOrEqual(70);
+    expect(THEMES.box.bpm).toBeLessThanOrEqual(76);
+    expect(THEMES.marimba.bpm).toBe(84);
+    expect(THEMES.clockwork.bpm).toBe(96);
+    for (const id of IDS) expect(beatOf(id)).toBeCloseTo(60 / THEMES[id].bpm, 9);
+    expect(beatOf('clockwork')).toBeLessThan(beatOf('marimba'));
+    expect(beatOf('marimba')).toBeLessThan(beatOf('box'));
+  });
+
+  it.each([
+    ['box', [9, 0, 2, 4, 7]], // A minor pentatonic: A C D E G
+    ['marimba', [2, 4, 5, 7, 9, 11, 0]], // D Dorian: D E F G A B C
+    ['clockwork', [4, 5, 7, 9, 11, 0, 2]], // E Phrygian: E F G A B C D
+  ] as const)('%s emits only notes of its own scale, in every voice', (id, pcs) => {
+    expect(pitchClassesOf(id)).toEqual(new Set(pcs));
+    const scale = new Set(pcs as readonly number[]);
+    for (const seed of [1, 7, 424242, 2 ** 31]) {
+      for (const bar of themeBars(id, seed)) {
+        for (const n of [...bar.melody, ...bar.pad, ...bar.counter, ...bar.ostinato]) {
+          expect(scale.has(n.midi % 12), `${id} seed ${seed} note ${n.midi}`).toBe(true);
+          expect(n.at).toBeGreaterThanOrEqual(0);
+          expect(n.at).toBeLessThan(BEATS_PER_BAR);
+          expect(n.vel).toBeGreaterThan(0);
+          expect(n.vel).toBeLessThanOrEqual(1);
+        }
+        expect(bar.melody.length, 'always something').toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('is different music: the marimba adds a counterline, the clockwork a low pulse and eighth ticks, the box neither', () => {
+    for (const bar of themeBars('box', 3, 8)) {
+      expect([bar.counter.length, bar.ostinato.length, bar.ticks.length]).toEqual([0, 0, 4]);
+    }
+    expect(themeBars('marimba', 3, 16).every((b) => b.counter.length > 0 && b.counter.every((n) => n.midi < 64))).toBe(true);
+    for (const bar of themeBars('clockwork', 3, 8)) {
+      expect(bar.ostinato).toHaveLength(8);
+      expect(Math.max(...bar.ostinato.map((n) => n.midi)), 'a low pulse').toBeLessThan(48);
+      expect(Math.min(...bar.melody.map((n) => n.midi)), 'sparse high notes').toBeGreaterThanOrEqual(76);
+      expect(bar.ticks).toHaveLength(8);
+      expect(bar.ticks.filter((t) => t.accent)).toHaveLength(4);
+    }
+    // Busier than the box: more melody notes a bar in the marimba than in the box.
+    const notes = (id: ThemeId) => themeBars(id, 5, 64).reduce((sum, b) => sum + b.melody.length, 0);
+    expect(notes('marimba')).toBeGreaterThan(notes('box'));
+    // The same seed plays the same theme, and a seed differs from another.
+    for (const id of IDS) expect(JSON.stringify(themeBars(id, 9, 8))).toBe(JSON.stringify(themeBars(id, 9, 8)));
+    expect(JSON.stringify(themeBars('marimba', 9, 8))).not.toBe(JSON.stringify(themeBars('marimba', 10, 8)));
   });
 });

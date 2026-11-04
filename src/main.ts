@@ -9,7 +9,7 @@ import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
 import { buildScene } from './scene';
 import { loadBackdrop, type BackdropId } from './backdrop';
-import { MENU_BACKDROP, RANDOM_PICK, STAGES, dOf, kindOf, parOf, stageOf, type StageId } from './stages';
+import { MENU_BACKDROP, MENU_THEME, RANDOM_PICK, STAGES, dOf, kindOf, parOf, stageOf, type StageId } from './stages';
 import { createScenery } from './scenery';
 import { trackMr } from './mr';
 import { tuneForSoftwareGl } from './render';
@@ -667,10 +667,14 @@ function send(e: FlowEvent): void {
   showPanel();
   fitView(true); // a new level or card may want the camera nearer or further
 }
-/** The title and its cards show the attic; a level on the board shows its stage's panorama (a Random level, its pick's stage). */
+/**
+ * The title and its cards show the attic and play the Easy music; a level on the board shows its stage's panorama and plays its
+ * theme (a Random level, its pick's stage). The music crossfades over 2 s (src/sound.ts).
+ */
 function syncBackdrop(): void {
   const on = flow.name === 'title' ? null : levelIndex < CAMPAIGN ? stage : isRandomLevel(levelIndex) ? RANDOM_PICK[randomDiff].stage : null;
   useBackdrop(on ? stageOf(on).backdrop : MENU_BACKDROP);
+  sound.setTheme(on ? stageOf(on).theme : MENU_THEME);
 }
 
 const PRESS: Record<string, FlowEvent> = {
@@ -1531,6 +1535,9 @@ window.__chrono = Object.freeze({
   },
   get stage() {
     return stage;
+  },
+  get musicTheme() {
+    return sound.theme;
   },
   get progress() {
     return progressBox && !progressBox.hidden ? { text: progressBox.querySelector<HTMLElement>('.full')!.innerText, filled: progressBar!.querySelectorAll('i.on').length, bar: !(progressBar as HTMLElement).hidden } : null;

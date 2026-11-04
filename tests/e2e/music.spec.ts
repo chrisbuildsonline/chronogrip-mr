@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures';
-import { beginByMouse } from './start';
+import { beginByMouse, newGame } from './start';
 
 /** A spy on WebAudio: counts the contexts the page makes, and the oscillators on them. */
 const spy = (page: Page) =>
@@ -105,5 +105,32 @@ test('Sound off silences the music too', async ({ page }) => {
   await page.waitForFunction(() => !window.__chrono!.soundOn);
   await page.waitForTimeout(4000);
   await silent(page);
+  expect(errors).toEqual([]);
+});
+
+test('each stage has its own music: Easy the box, Hard the clockwork, the menus back to the box; it keeps playing across the crossfade without errors', async ({ page }) => {
+  const errors = await open(page);
+  const theme = () => page.evaluate(() => window.__chrono!.musicTheme);
+  expect(await theme(), 'the menus play the Easy theme').toBe('box');
+  await newGame(page, (id) => click(page, id), 'easy');
+  await page.waitForFunction(() => window.__chrono!.audio.state === 'running');
+  await page.waitForFunction(() => window.__chrono!.audio.notes > 3, undefined, { timeout: 15_000 });
+  expect(await theme()).toBe('box');
+  // Give up, then New Game on Hard: the theme changes with the stage.
+  await click(page, 'pause');
+  await click(page, 'giveup');
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'result');
+  expect(await theme(), 'the result card is a menu').toBe('box');
+  await newGame(page, (id) => click(page, id), 'hard');
+  await page.waitForFunction(() => window.__chrono!.musicTheme === 'clockwork');
+  const heard = await notes(page);
+  await page.waitForFunction((n) => window.__chrono!.audio.notes > n + 8, heard, { timeout: 15_000 });
+  // Pause is a menu in the level: the stage's music keeps going; Main menu returns to the box.
+  await click(page, 'pause');
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'paused');
+  expect(await theme()).toBe('clockwork');
+  await click(page, 'menu');
+  await page.waitForFunction(() => window.__chrono!.musicTheme === 'box');
+  expect(await page.evaluate(() => window.__chrono!.musicOn)).toBe(true);
   expect(errors).toEqual([]);
 });

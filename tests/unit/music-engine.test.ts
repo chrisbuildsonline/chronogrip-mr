@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSound } from '../../src/sound';
-import { BEAT_S, MUSIC_GAIN, SCALE, BASS } from '../../src/music';
+import { BEAT_S, MUSIC_GAIN, SCALE, BASS, FADE_S, beatOf, pitchClassesOf } from '../../src/music';
 
 /** A stand-in for WebAudio: records every node made and lets the test move the clock. */
 class FakeParam {
@@ -177,3 +177,79 @@ describe('the escapement tick after a solve', () => {
     expect(s.counts.ticks).toBe(2);
   });
 });
+
+describe('the themes', () => {
+  const pc = (o: FakeNode) => Math.round(69 + 12 * Math.log2(hz(o) / 440)) % 12;
+  const isTick = (o: FakeNode) => hz(o) === 1700 || hz(o) === 1900;
+
+  it('starts on the menus\' theme, and a theme set before the first gesture is the one that plays', async () => {
+    const s = createSound();
+    expect(s.theme).toBe('box');
+    s.setTheme('clockwork');
+    expect(s.theme).toBe('clockwork');
+    s.unlock();
+    await Promise.resolve();
+    run(8);
+    const scale = pitchClassesOf('clockwork');
+    for (const o of made.osc.filter((x) => !isTick(x))) expect(scale.has(pc(o)), `${hz(o)} Hz`).toBe(true);
+    // A tick in eighths: a bar of the Hard theme holds eight.
+    const ticks = made.osc.filter(isTick).length;
+    const bars = Math.floor(8 / (4 * beatOf('clockwork')));
+    expect(ticks).toBeGreaterThanOrEqual(8 * bars);
+  });
+
+  it('crossfades over 2 s: the old theme\'s gain ramps down to 0 and the new one\'s up to 1, then only the new theme is composed', async () => {
+    const s = createSound();
+    s.unlock();
+    await Promise.resolve();
+    run(6);
+    const before = made.gains.length;
+    const t0 = now;
+    s.setTheme('marimba');
+    expect(s.theme).toBe('marimba');
+    run(0.5);
+    const ramps = made.gains.flatMap((g) => g.gain.calls.filter(([k, , t]) => k === 'ramp' && Math.abs((t ?? 0) - (t0 + FADE_S)) < 1e-6).map(([, v]) => v));
+    expect(ramps.sort(), 'one theme down, one up, both over the fade').toEqual([0, 1]);
+    // The new theme's gain was created at silence and only ever ramps up; the old one only down.
+    const up = made.gains.slice(before).filter((g) => g.gain.calls.some(([k, v]) => k === 'ramp' && v === 1));
+    expect(up).toHaveLength(1);
+    expect(up[0]!.gain.calls.find(([k]) => k === 'set')![1]).toBe(0);
+    run(8);
+    const scale = pitchClassesOf('marimba');
+    const fresh = made.osc.slice(made.osc.length - 40).filter((o) => !isTick(o));
+    for (const o of fresh) expect(scale.has(pc(o)), `${hz(o)} Hz`).toBe(true);
+    // The same theme again changes nothing; going back crossfades again.
+    const n = made.gains.length;
+    s.setTheme('marimba');
+    run(0.5);
+    expect(made.gains.length).toBe(n);
+    s.setTheme('box');
+    run(0.5);
+    expect(s.theme).toBe('box');
+  });
+
+  it('keeps the rules: Music off or Sound off silences every theme, the master level stays -24 dB, and a theme change makes no sound by itself', async () => {
+    const s = createSound();
+    s.setMusic(false);
+    s.setTheme('clockwork');
+    s.unlock();
+    await Promise.resolve();
+    run(6);
+    expect(s.counts.notes).toBe(0);
+    expect(s.theme).toBe('clockwork');
+    s.setMusic(true);
+    run(4);
+    expect(s.counts.notes).toBeGreaterThan(0);
+    s.setMuted(true);
+    run(2);
+    const after = s.counts.notes;
+    s.setTheme('marimba');
+    run(6);
+    expect(s.counts.notes, 'silent while Sound is off, whatever the theme').toBe(after);
+    const masters = made.gains.filter((g) => g.gain.calls.some(([k, v]) => k === 'ramp' && Math.abs(v - MUSIC_GAIN) < 1e-9));
+    expect(masters.length).toBe(1);
+    for (const g of made.gains) for (const [k, v] of g.gain.calls) if (k === 'ramp') expect(v).toBeLessThanOrEqual(1);
+    expect(MUSIC_GAIN).toBeLessThan(0.07);
+  });
+});
+

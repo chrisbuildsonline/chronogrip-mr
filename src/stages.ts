@@ -5,15 +5,17 @@
  */
 export type StageId = 'easy' | 'medium' | 'hard';
 export type BackdropOf = 'c1' | 'c2' | 'c3';
+/** The music themes (src/music.ts): the gentle music box, the mallet and plucks of the atelier, the clockwork ostinato. */
+export type ThemeId = 'box' | 'marimba' | 'clockwork';
 
 /** Levels in a stage. */
 export const LEVELS_PER_STAGE = 20;
 
 /** `curve`: [level, difficulty] breakpoints, linear between them (a jump between neighbouring levels is allowed). */
-export const STAGES: readonly { id: StageId; name: string; hint: string; backdrop: BackdropOf; curve: readonly (readonly [number, number])[] }[] = [
-  { id: 'easy', name: 'Easy', hint: 'A gentle climb', backdrop: 'c2', curve: [[1, 0.0], [20, 0.4]] },
-  { id: 'medium', name: 'Medium', hint: 'Starts where Easy ends', backdrop: 'c1', curve: [[1, 0.3], [20, 0.7]] },
-  { id: 'hard', name: 'Hard', hint: 'For clockmakers', backdrop: 'c3', curve: [[1, 0.6], [10, 0.8], [11, 0.85], [20, 1.0]] },
+export const STAGES: readonly { id: StageId; name: string; hint: string; backdrop: BackdropOf; theme: ThemeId; curve: readonly (readonly [number, number])[] }[] = [
+  { id: 'easy', name: 'Easy', hint: 'A gentle climb', backdrop: 'c2', theme: 'box', curve: [[1, 0.0], [20, 0.4]] },
+  { id: 'medium', name: 'Medium', hint: 'Starts where Easy ends', backdrop: 'c1', theme: 'marimba', curve: [[1, 0.3], [20, 0.7]] },
+  { id: 'hard', name: 'Hard', hint: 'For clockmakers', backdrop: 'c3', theme: 'clockwork', curve: [[1, 0.6], [10, 0.8], [11, 0.85], [20, 1.0]] },
 ];
 
 export const STAGE_IDS: readonly StageId[] = STAGES.map((s) => s.id);
@@ -21,6 +23,8 @@ export const stageOf = (id: StageId) => STAGES.find((s) => s.id === id) ?? STAGE
 export const stageIndex = (id: StageId) => Math.max(0, STAGE_IDS.indexOf(id));
 /** The backdrop the menus show. */
 export const MENU_BACKDROP: BackdropOf = 'c2';
+/** The music the menus play: Easy's. */
+export const MENU_THEME: ThemeId = 'box';
 
 /** The measured score the global scale spans: `scoreAt(0)` to `scoreAt(1)`, linear. */
 export const SCORE_MIN = 1.5;
