@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { beginByMouse } from './start';
 
 test('seated scene renders gears, shows Enter MR and a clean console', async ({ page }) => {
   const errors: string[] = [];
@@ -21,6 +22,7 @@ test('seated scene renders gears, shows Enter MR and a clean console', async ({ 
   await expect(button).toBeDisabled();
   await expect(page.getByText(/needs a Quest browser/i)).toBeVisible();
 
+  await beginByMouse(page); // the menu's dark layer covers the board: into level 1
   await page.waitForTimeout(1000);
   const shot = await page.screenshot({ path: 'test-results/f5-scene.png' });
 

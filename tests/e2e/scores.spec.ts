@@ -306,7 +306,7 @@ test('desktop: a Random solve is saved with its step and shows as "Step N"', asy
   expect(errors).toEqual([]);
 });
 
-test('desktop: a full board shows two columns of five, ranked, with the date', async ({ page }) => {
+test('desktop: a full board shows one column of ten, ranked, with the date', async ({ page }) => {
   await seed(page, { version: 1, initials: 'ZED', boards: { l1: full(8000), random: Array.from({ length: 10 }, (_, i) => ({ name: 'BOB', step: 12 - (i >> 1), ms: 61000 + i * 1000, date: '2026-11-04' })) } });
   const errors = await open(page);
   await click(page, 'scores');
@@ -315,16 +315,17 @@ test('desktop: a full board shows two columns of five, ranked, with the date', a
   expect(labels.filter((l) => l.text === 'AAA')).toHaveLength(10);
   const ranks = labels.filter((l) => /^(10|[1-9])$/.test(l.text));
   expect(ranks.map((l) => l.text).sort()).toEqual(['1', '10', '2', '3', '4', '5', '6', '7', '8', '9']);
-  // Two columns: rank 1 and 6 share a line height, 6 sits right of 1, and 1..5 run down.
+  // One column: the ranks share a left edge and run down, 1 to 10.
   const at = (r: string) => ranks.find((l) => l.text === r)!;
-  expect(at('6').left).toBeGreaterThan(at('1').right + 100);
-  expect(Math.abs(at('6').y - at('1').y)).toBeLessThan(2);
-  for (let i = 1; i < 5; i++) expect(at(String(i + 1)).y).toBeGreaterThan(at(String(i)).y + 10);
+  for (let i = 1; i < 10; i++) {
+    expect(at(String(i + 1)).y).toBeGreaterThan(at(String(i)).y + 10);
+    expect(Math.abs(at(String(i + 1)).left - at('1').left)).toBeLessThan(2);
+  }
   expect(labels.filter((l) => l.text === '1 Oct')).toHaveLength(10);
   const times = labels.filter((l) => /^\d+:\d\d/.test(l.text));
   expect(times).toHaveLength(10);
   expect(times.every((l) => /^\d+:\d\d\.\d$/.test(l.text)), 'one time format on every row').toBe(true);
-  expect(new Set(times.map((l) => Math.round(l.right))).size, 'times right-aligned, one edge a column').toBe(2);
+  expect(new Set(times.map((l) => Math.round(l.right))).size, 'times right-aligned, one edge').toBe(1);
   await wordsClear(page, 'full board 1440', 9, 4);
   await page.screenshot({ path: `${OUT}/board-full-1440.png` });
   await click(page, 'board-prev');

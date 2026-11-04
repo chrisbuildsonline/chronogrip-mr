@@ -34,3 +34,11 @@ export async function choose(page: Page, press: (id: string) => Promise<unknown>
   await page.waitForFunction(() => window.__chrono!.flow !== 'select');
   await settle(page);
 }
+
+/** `begin` with the mouse: for a spec that opens the page and wants a level on the board to drag at. */
+export const beginByMouse = (page: Page) =>
+  begin(page, async (id) => {
+    await page.waitForFunction((b) => !window.__chrono!.cameraMoving && window.__chrono!.buttons().some((x) => x.id === b), id);
+    const [x, y] = await page.evaluate((b) => window.__chrono!.buttons().find((x) => x.id === b)!.screen, id);
+    await page.mouse.click(x, y);
+  });

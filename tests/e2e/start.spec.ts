@@ -123,7 +123,7 @@ test('phone 375x812: the start panel is a centred column of 44 px buttons', asyn
   await page.screenshot({ path: `${OUT}/options-375.png` });
   await click(page, 'reset');
   await cardIs(page, 'options');
-  expect(await ids(page)).toEqual(['back', 'reset-cancel', 'reset-yes']);
+  expect(await ids(page)).toEqual(['reset-yes', 'reset-cancel', 'back']);
   await phoneFits(page, 'options confirm');
   await page.screenshot({ path: `${OUT}/options-confirm-375.png` });
   await click(page, 'reset-cancel');
@@ -202,8 +202,8 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   await click(page, 'reset');
   await cardIs(page, 'options');
   expect(await page.evaluate(() => window.__chrono!.options)).toMatchObject({ confirm: true });
-  expect(await ids(page)).toEqual(['back', 'reset-cancel', 'reset-yes']);
-  expect(await labelsOf(page)).toEqual(['Back', 'Keep it', 'Reset now']);
+  expect(await ids(page)).toEqual(['reset-yes', 'reset-cancel', 'back']);
+  expect(await labelsOf(page)).toEqual(['Reset now', 'Keep it', 'Back']);
   expect(await words(page)).toEqual(expect.arrayContaining(['Reset progress?', 'Clears levels and Random. Best times stay.']));
   // Nothing is gone yet.
   expect(await page.evaluate(() => window.__chrono!.progress.best)).toEqual({ l1: 30, l2: 55 });
@@ -262,6 +262,6 @@ test('desktop: Enter on the start panel plays the level it shows; Esc leaves Opt
   await page.keyboard.press('Escape');
   await cardIs(page, 'title');
   await page.keyboard.press('Enter');
-  await cardIs(page, 'select');
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   expect(errors).toEqual([]);
 });

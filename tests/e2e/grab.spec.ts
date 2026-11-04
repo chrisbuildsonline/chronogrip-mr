@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { beginByMouse } from './start';
 import { LEVELS } from '../../src/levels';
 
 const level = LEVELS[0]!;
@@ -28,6 +29,7 @@ async function drag(page: Page, from: readonly [number, number], to: readonly [n
 
 test('desktop: dragging the loose gear onto its axle snaps it and solves the level', async ({ page }) => {
   const errors = await open(page);
+  await beginByMouse(page); // the menus cover the board: into level 1 first
   const from = await screen(page, 'gears', gearId);
   const to = await screen(page, 'axles', axleId);
   await drag(page, from, to);
@@ -59,6 +61,7 @@ test('desktop: dragging the loose gear onto its axle snaps it and solves the lev
 
 test('desktop: dropping a gear in empty space sends it back to the strip; dragging empty space orbits', async ({ page }) => {
   const errors = await open(page);
+  await beginByMouse(page); // the menus cover the board: into level 1 first
   const from = await screen(page, 'gears', gearId);
   const home = await page.evaluate((id) => window.__chrono!.gears[id]!, gearId);
   await drag(page, from, [from[0] - 200, from[1] + 260]);

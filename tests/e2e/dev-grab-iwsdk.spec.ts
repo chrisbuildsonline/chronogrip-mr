@@ -21,6 +21,9 @@ for (const [query, mode] of [
     const errors = await enter(page, query);
     expect(await page.evaluate(() => window.__chrono!.grabMode)).toBe(mode);
     expect(await page.evaluate(() => window.__chrono!.grabVia)).toBeNull();
+    await begin(page, (id) => poke(page, id)); // the menu's backing covers the board: into level 1
+    await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
+    await pinch(page, 'right', 0);
 
     await pinchAt(page, await gearAt(page, gearId));
     await page.waitForFunction((g) => window.__chrono!.held === g, gearId, { timeout: 10_000 });

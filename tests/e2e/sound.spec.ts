@@ -1,3 +1,4 @@
+import { beginByMouse } from './start';
 import { expect, test, type Page } from './fixtures';
 import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
@@ -20,9 +21,8 @@ test('desktop: sound unlocks on the first click, a snap clicks, calibrating tick
   // Nothing is created before a gesture.
   expect(['none', 'suspended']).toContain((await audio(page)).state);
 
-  // A real click on the canvas unlocks it (empty corner of the view: no gear, no button).
-  const box = (await page.locator('canvas').boundingBox())!;
-  await page.mouse.click(box.x + 5, box.y + box.height - 5);
+  // A real click unlocks it: New Game's, which also puts level 1 on the board.
+  await beginByMouse(page);
   await page.waitForFunction(() => window.__chrono!.audio.state === 'running');
 
   // Snapping the gear onto its axle clicks, and a good placement does not grind.

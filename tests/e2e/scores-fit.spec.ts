@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 
-/** Phone: the Best times sheet lies over the foot of the board, so opening it and going back never moves the camera. */
+/** Phone: the Best times card is centred over the dark layer, so opening it and going back never moves the camera. */
 test('phone 375 x 812: the board keeps its view when Best times opens and closes', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/');
@@ -20,9 +20,9 @@ test('phone 375 x 812: the board keeps its view when Best times opens and closes
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'board');
   const board = await view();
   expect(board.cam).toEqual(title.cam);
-  // The sheet does not cover the board: the board's foot is above the sheet's top edge.
+  // The menu is centred over the dark layer, so the board's own view is not fitted for it.
   const card = (await page.evaluate(() => window.__chrono!.viewBoxes().card))!;
-  expect(board.board[3]).toBeLessThanOrEqual(card[1] + 2);
+  expect(Math.abs((card[0] + card[2]) / 2 - 187.5), 'the board card is centred').toBeLessThanOrEqual(2);
   await click('back');
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'title');
   expect((await view()).cam).toEqual(title.cam);

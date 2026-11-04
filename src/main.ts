@@ -665,8 +665,8 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   else if (id === 'back') send({ type: 'back', level: continueAt() });
   else send(PRESS[id]!);
 }
-/** Board parts move only on the title (touching a gear starts the level) and while playing. */
-const live = () => flow.name === 'title' || flow.name === 'playing';
+/** Board parts move only while playing: on the menus the board is under the dark layer (or the AR backing panel), so a touch there is a button's. */
+const live = () => flow.name === 'playing';
 /** The complete card waits while the automaton and the running train play the reward. */
 const COMPLETE_DELAY_MS = 2000;
 const shownButtons = (): Button[] => (panels.panelMesh.visible ? [...(panels.current?.layout.buttons ?? [])] : []);

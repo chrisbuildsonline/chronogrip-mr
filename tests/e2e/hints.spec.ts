@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { beginByMouse } from './start';
 import { GHOST_TWIST_S } from '../../src/ghost';
 import { LEVELS } from '../../src/levels';
 import { begin } from './start';
@@ -50,6 +51,7 @@ for (const [w, h] of [[1440, 900], [1280, 720], [375, 812]] as const) {
   test(`desktop ${w}x${h}: the calibrate ghost hand twists beside the dial, never over its face`, async ({ page }) => {
     await page.setViewportSize({ width: w, height: h });
     const errors = await open(page);
+    await beginByMouse(page); // the menus cover the board: into level 1 first
     const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
     await place(page, gear, axle);
     await page.waitForFunction(() => window.__chrono!.flow === 'calibrate' && window.__chrono!.ghostTwist && !window.__chrono!.cameraMoving);

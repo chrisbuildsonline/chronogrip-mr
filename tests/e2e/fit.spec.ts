@@ -101,10 +101,9 @@ for (const [w, h] of [[375, 812], [768, 1024], [1440, 900]] as const) {
     await page.waitForFunction(() => window.__chrono!.flow === 'select');
     await fits(page, w, h, 'select');
     await square(page, w, h);
-    // The wide level select card needs more room than the others: a phone-width window eases back for it.
+    // The menus are centred over the dark layer, so the camera holds still for them: no easing back for the select card.
     const select = dist(await page.evaluate(() => window.__chrono!.cameraAt));
-    if (w > h) expect(select).toBeCloseTo(dist(TUNED_EYE), 4);
-    else expect(select).toBeGreaterThan(dist(eye) * (w < 500 ? 1.05 : 1));
+    expect(select).toBeCloseTo(dist(eye), 4);
     await click(page, 'level-1');
     await page.waitForFunction(() => window.__chrono!.flow === 'playing');
     await fits(page, w, h, 'hud');

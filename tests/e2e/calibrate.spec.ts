@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { beginByMouse } from './start';
 import { LEVELS } from '../../src/levels';
 import { rateOf, startSetting } from '../../src/escapement';
 import { calibrateByMouse } from './calibrate';
@@ -34,6 +35,7 @@ const setVisibility = (page: Page, state: 'hidden' | 'visible') =>
 
 test('desktop: a solved train waits for the escapement; drag the regulator into the band, the bird runs, then the complete card', async ({ page }) => {
   const errors = await open(page);
+  await beginByMouse(page); // the menus cover the board: into level 1 first
   const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
   await place(page, gear, axle);
   await page.waitForFunction(() => window.__chrono!.flow === 'calibrate');

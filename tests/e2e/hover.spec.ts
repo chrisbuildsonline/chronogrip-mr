@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { beginByMouse } from './start';
 import { LEVELS } from '../../src/levels';
 
 const level = LEVELS[0]!;
@@ -21,6 +22,7 @@ const screen = (page: Page, kind: 'gears' | 'axles', id: string) =>
 
 test('desktop: hovering a gear marks it as the gaze target; dragging pulses the valid axles', async ({ page }) => {
   const errors = await open(page);
+  await beginByMouse(page); // the menus cover the board: into level 1 first
   expect(await page.evaluate(() => window.__chrono!.gazeTarget)).toBeNull();
   expect(await page.evaluate(() => window.__chrono!.validAxles)).toEqual([]);
 

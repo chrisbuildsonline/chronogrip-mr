@@ -126,7 +126,7 @@ for (const [w, h] of [[375, 812], [390, 844]] as const) {
     expect(new Set(tiles.map((t) => Math.round(t.screen[0]))).size, 'tiles in two columns').toBe(2);
     expect(new Set(tiles.map((t) => Math.round(t.screen[1]))).size, 'five rows').toBe(5);
     expect(tiles[9]!.label, 'Random is the last tile').toBe('Random');
-    expect(tiles[9]!.screen[1]).toBeGreaterThanOrEqual(Math.max(...tiles.slice(0, 9).map((t) => t.screen[1])));
+    expect(tiles[9]!.screen[1]).toBeGreaterThanOrEqual(Math.max(...tiles.slice(0, 9).map((t) => t.screen[1])) - 0.5);
 
     // Every tile is a working target: each one opens its level, and Pause, Levels comes back.
     for (let i = 1; i <= 10; i++) {

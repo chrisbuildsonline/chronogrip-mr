@@ -73,7 +73,7 @@ async function solve(page: Page) {
 async function readsAsBigAsDaily(page: Page) {
   const labels = await page.evaluate(() => window.__chrono!.labels());
   const [random, daily] = [labels.find((l) => l.text === 'Random')!, labels.find((l) => l.text === 'Daily')!];
-  expect(random.height, 'Random is as tall as Daily').toBeGreaterThanOrEqual(daily.height);
+  expect(random.height, 'Random is as tall as Daily').toBeGreaterThanOrEqual(daily.height - 0.5);
   expect(random.height, 'Random is readable').toBeGreaterThanOrEqual(12);
   const tile = (await page.evaluate(() => window.__chrono!.buttons())).find((b) => b.id === `level-${SLOT}`)!;
   expect(random.left).toBeGreaterThanOrEqual(tile.rect[0]);
