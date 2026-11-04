@@ -1,12 +1,9 @@
 import { expect, test, type Page } from './fixtures';
-import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
-import { begin } from './start';
 
 const OUT = 'test-results/global';
 const URL = '**/rest/v1/chronogrip_scores**';
-const L1 = LEVELS[0]!;
-const row = (initials: string, seconds: number, step = 3, created_at = '2026-11-03T09:00:00Z') => ({ initials, seconds, step, created_at });
+const row = (initials: string, seconds: number, step = 20, created_at = '2026-11-03T09:00:00Z') => ({ initials, seconds, step, created_at });
 const GOOD = [row('AAB', 8.5), row('BOB', 12.3), row('CAT', 61.5)];
 
 async function open(page: Page, size = { width: 1440, height: 900 }) {
@@ -46,8 +43,7 @@ async function noOverlap(page: Page, text: string) {
 /** Both tab labels are at least as big as Back's, and the segments are pills. */
 async function tabsReadable(page: Page) {
   const labels = await page.evaluate(() => window.__chrono!.labels());
-  const back = labels.find((l) => l.text === 'Back')!;
-  for (const w of ['Local', 'Global']) expect(labels.find((l) => l.text === w)!.size, w).toBeGreaterThanOrEqual(back.size - 1e-6);
+  for (const w of ['LOCAL', 'GLOBAL']) expect(labels.find((l) => l.text === w)!.height, w).toBeGreaterThanOrEqual(11);
   for (const b of (await page.evaluate(() => window.__chrono!.buttons())).filter((b) => b.id.startsWith('tab-'))) expect(b.rect[2] - b.rect[0], b.id).toBeGreaterThan(b.rect[3] - b.rect[1]);
 }
 
@@ -63,12 +59,12 @@ test('the GLOBAL tab shows the rows the backend sends', async ({ page }) => {
   await page.route(URL, (r) => r.fulfill({ json: GOOD }));
   const errors = await open(page);
   await openGlobal(page);
-  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['Local', 'Global', 'AAB', 'BOB', 'CAT', '0:08.5', '0:12.3', '1:01.5', '3 Nov', '3 / 20']));
+  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['LOCAL', 'GLOBAL', 'AAB', 'BOB', 'CAT', '0:08.5', '0:12.3', '1:01.5', '3 Nov']));
   await tabsReadable(page);
   await page.screenshot({ path: `${OUT}/desktop-global.png` });
   await page.setViewportSize({ width: 375, height: 812 });
   await frames(page);
-  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['Global', 'AAB']));
+  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['GLOBAL', 'AAB']));
   await page.screenshot({ path: `${OUT}/phone-global.png` });
   expect(errors).toEqual([]);
 });
@@ -81,26 +77,30 @@ test('the LOCAL tab goes back to this device', async ({ page }) => {
   await frames(page);
   const w = await words(page);
   expect(w).not.toContain('BOB');
-  expect(w.some((t) => t.startsWith('No runs yet'))).toBe(true);
+  expect(w.some((t) => t.startsWith('No finished runs'))).toBe(true);
 });
 
-test('a finished run is posted with its levels cleared and total time, and appears on the GLOBAL board', async ({ page }) => {
+test('a completed run is posted with its total time and step 20, and appears on the GLOBAL board', async ({ page }) => {
   const posts: Record<string, unknown>[] = [];
   const rows = [...GOOD];
   await page.route(URL, async (r) => {
     if (r.request().method() === 'POST') {
       const body = r.request().postDataJSON() as { initials: string; seconds: number };
       posts.push(body);
-      rows.push(row(body.initials, body.seconds, (body as unknown as { step: number }).step));
-      rows.sort((a, b) => b.step - a.step || a.seconds - b.seconds);
+      rows.push(row(body.initials, body.seconds));
+      rows.sort((a, b) => a.seconds - b.seconds);
       return r.fulfill({ status: 201, body: '' });
     }
     return r.fulfill({ json: rows });
   });
+  await page.addInitScript(([k, v]) => {
+    if (!localStorage.getItem(k!)) localStorage.setItem(k!, v!);
+  }, ['chronogrip.run.v1', JSON.stringify({ cleared: 19, ms: 400_000 })] as const);
   const errors = await open(page);
-  await begin(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  for (const [gear, axle] of Object.entries(L1.solution)) {
+  await click(page, 'continue');
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 19);
+  const solution = await page.evaluate(() => window.__chrono!.solution);
+  for (const [gear, axle] of Object.entries(solution)) {
     await page.waitForFunction(() => !window.__chrono!.cameraMoving);
     await frames(page);
     const from = await page.evaluate((g) => window.__chrono!.toScreen(window.__chrono!.gears[g]!), gear);
@@ -115,15 +115,13 @@ test('a finished run is posted with its levels cleared and total time, and appea
   await calibrateByMouse(page);
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'complete');
   expect(await page.evaluate(() => window.__chrono!.initials), 'no initials after a level').toBeNull();
-  await click(page, 'next');
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1);
-  await click(page, 'pause');
-  await click(page, 'giveup');
+  await click(page, 'next'); // Finish
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'initials');
   await click(page, 'save');
   await expect.poll(() => posts.length).toBe(1);
-  expect(posts[0]).toMatchObject({ level: 'campaign', initials: 'AAA', seconds: expect.any(Number), step: 1 });
+  expect(posts[0]).toMatchObject({ level: 'campaign', initials: 'AAA', seconds: expect.any(Number), step: 20 });
   expect(Object.keys(posts[0]!).sort()).toEqual(['initials', 'level', 'seconds', 'step']);
+  expect((posts[0] as { seconds: number }).seconds).toBeGreaterThan(400);
   // A fresh load opens on the title; the new row is on the GLOBAL board.
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);
@@ -137,12 +135,12 @@ test('a backend failure shows the local rows and one quiet line', async ({ page 
   await page.route(URL, (r) => r.fulfill({ status: 500, body: '{"message":"boom"}' }));
   const errors = await open(page);
   await page.evaluate(() =>
-    localStorage.setItem('chronogrip.scores.v1', JSON.stringify({ version: 1, initials: 'ZZZ', boards: { campaign: [{ name: 'ZED', ms: 9000, date: '2026-11-01', cleared: 2 }] } })),
+    localStorage.setItem('chronogrip.scores.v1', JSON.stringify({ version: 1, initials: 'ZZZ', boards: { campaign: [{ name: 'ZED', ms: 509000, date: '2026-11-01' }] } })),
   );
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);
   await openGlobal(page);
-  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['ZED', '0:09.0', 'Global scores offline · your runs']));
+  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['ZED', '8:29.0', 'Global scores offline · your runs']));
   expect(await words(page)).not.toContain('Loading global scores');
   await noOverlap(page, 'Global scores offline · your runs');
   await page.screenshot({ path: `${OUT}/desktop-offline.png` });

@@ -398,7 +398,7 @@ function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: numb
   if (b.kind === 'toggle') {
     const on = !!(b.id === 'sound' ? ctx.sound : b.id === 'music' ? ctx.music : ctx.relaxed);
     text(g, on ? 'ON' : 'OFF', left + w - mm(8), y + 1, jfont(600, T.button * 0.8), on ? C.amber : C.menuMuted, 'right', 3);
-  } else if (lit) text(g, '›', left + w - mm(8), y, jfont(300, 22), C.amber, 'right');
+  } else if (lit) text(g, '›', left + w - mm(8), y, jfont(300, 28), C.amber, 'right');
 }
 
 /** The words of a menu: the amber eyebrow and the big light heading at the left, and the high scores' rows. */
@@ -408,7 +408,7 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
   const W = l.width * PX;
   /** The eyebrow, then the big heading shrunk to fit the card. */
   const head = (eyebrow: string, big: string, bigSize = 34, top = l.height - 0.02) => {
-    text(g, eyebrow, left, y(top), jfont(600, 8.5), C.amber, 'left', 6);
+    text(g, eyebrow, left, y(top), jfont(600, T.eyebrow), C.amber, 'left', 6);
     g.font = jfont(300, bigSize);
     g.letterSpacing = '4px';
     const size = bigSize * Math.min(1, (W - mm(2 * 24)) / g.measureText(big).width);
@@ -421,15 +421,19 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
       break;
     case 'options':
       head(ctx.confirm ? 'ARE YOU SURE' : 'SETTINGS', ctx.confirm ? 'RESET?' : 'OPTIONS');
-      if (ctx.confirm) text(g, 'Clears the saved run. Best times stay.', left, y(l.height - 0.092), jfont(400, 9.5), C.menuMuted, 'left', 1);
+      {
+        const line = ctx.confirm ? 'Clears the saved run. Best times stay.' : ctx.xr ? 'Grab a gear: pinch it, carry it, let go.' : ctx.narrow ? 'Grab a gear: touch and drag it.' : 'Grab a gear: click and drag it.';
+        g.font = jfont(400, T.body * 0.85);
+        text(g, line, left, y(l.height - 0.092), jfont(400, T.body * 0.85 * Math.min(1, (W - mm(2 * 24)) / g.measureText(line).width)), C.menuMuted, 'left', 0);
+      }
       break;
     case 'picker':
       head('PRACTICE', 'RANDOM LEVEL');
-      text(g, 'A new puzzle each time. How hard?', left, y(l.height - 0.092), jfont(400, 9.5), C.menuMuted, 'left', 1);
+      text(g, 'A new puzzle each time. How hard?', left, y(l.height - 0.092), jfont(400, T.body * 0.85), C.menuMuted, 'left', 1);
       break;
     case 'paused':
       head('PAUSED', ctx.level >= ctx.levels - 1 ? (ctx.random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : 'SHARED PUZZLE') : `LEVEL ${ctx.level + 1}`);
-      text(g, clock(ctx.time), left, y(l.height - 0.092), jfont(400, 11), C.menuMuted, 'left', 2);
+      text(g, clock(ctx.time), left, y(l.height - 0.092), jfont(400, T.body * 0.9), C.menuMuted, 'left', 2);
       break;
     case 'result': {
       const r = ctx.result!;
@@ -439,9 +443,9 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
     }
     case 'initials': {
       const ini = ctx.initials!;
-      text(g, `RUN COMPLETE · #${ini.rank}`, left, y(l.height - 0.02), jfont(600, 8.5), C.amber, 'left', 6);
+      text(g, `RUN COMPLETE · #${ini.rank}`, left, y(l.height - 0.02), jfont(600, T.eyebrow), C.amber, 'left', 6);
       text(g, clock(ini.ms / 1000), left, y(l.height - 0.062), jfont(300, 30), C.logo, 'left', 3);
-      text(g, 'YOUR NAME', left, y(l.height - 0.1), jfont(400, 9), C.menuMuted, 'left', 4);
+      text(g, 'YOUR NAME', left, y(l.height - 0.1), jfont(400, T.body * 0.8), C.menuMuted, 'left', 4);
       break;
     }
     case 'board': {
@@ -451,7 +455,7 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
       const lowered = !!b.note;
       if (b.note) {
         const [nx, ny] = at(-l.width / 2 + 0.024, grid.y0);
-        text(g, b.note, nx, ny + 1, jfont(400, ctx.narrow ? 9.5 : 10.5), C.menuMuted, 'left', 1);
+        text(g, b.note, nx, ny + 1, jfont(400, ctx.narrow ? 10.5 : 10.5), C.menuMuted, 'left', 1);
       }
       if (!b.entries.length) {
         g.font = jfont(400, T.body * 0.8);
@@ -459,7 +463,7 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
         text(g, b.empty, ex, ey, jfont(400, T.body * 0.8 * Math.min(1, mm((l.width - 0.048) * 1000) / g.measureText(b.empty).width)), C.menuMuted, 'left');
         break;
       }
-      const [size, small] = ctx.narrow ? [11.5, 10.5] : [12.5, 11.5];
+      const [size, small] = ctx.narrow ? [11.5, 11] : [12.5, 11.5];
       const cols = ctx.narrow ? { name: 0.026, time: 0.2 } : { name: 0.028, time: 0.2 };
       (lowered ? b.entries.slice(0, grid.rows - 1) : b.entries).forEach((e, n) => {
         const i = n + (lowered ? 1 : 0);

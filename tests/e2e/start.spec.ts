@@ -75,7 +75,7 @@ test('desktop 1440x900: the start panel has three buttons, and each reaches its 
   expect(await ids(page)).toEqual(['start', 'random', 'options', 'scores']);
   expect(await labelsOf(page)).toEqual(['New Game', 'Random level', 'Options', 'High scores']);
   const w = await words(page);
-  expect(w).toEqual(expect.arrayContaining(['ChronoGrip', 'A CLOCKWORK PUZZLE', 'Mesh the gears. Wake the bird.']));
+  expect(w).toEqual(expect.arrayContaining(['CHRONOGRIP', 'A CLOCKWORK PUZZLE']));
   await page.screenshot({ path: `${OUT}/start-1440.png` });
 
   // Start game: level select, and its Back returns to the start panel.
@@ -91,7 +91,7 @@ test('desktop 1440x900: the start panel has three buttons, and each reaches its 
   await cardIs(page, 'options');
   expect(await ids(page)).toEqual(['relaxed', 'sound', 'music', 'reset', 'back']);
   expect(await labelsOf(page)).toEqual(['No timer', 'Sound', 'Music', 'Reset progress', 'Back']);
-  expect(await words(page)).toEqual(expect.arrayContaining(['Options', 'Grab a gear: click and drag it.']));
+  expect(await words(page)).toEqual(expect.arrayContaining(['OPTIONS', 'Grab a gear: click and drag it.']));
   await page.screenshot({ path: `${OUT}/options-1440.png` });
   await click(page, 'back');
   await cardIs(page, 'title');
@@ -99,7 +99,7 @@ test('desktop 1440x900: the start panel has three buttons, and each reaches its 
   // High scores: the existing board, with a Local tab and room beside it.
   await click(page, 'scores');
   await cardIs(page, 'board');
-  expect(await words(page)).toEqual(expect.arrayContaining(['High scores', 'Local', 'Campaign']));
+  expect(await words(page)).toEqual(expect.arrayContaining(['HIGH SCORES', 'LOCAL', 'CAMPAIGN · FASTEST RUNS']));
   await page.screenshot({ path: `${OUT}/scores-1440.png` });
   await click(page, 'back');
   await cardIs(page, 'title');
@@ -133,7 +133,7 @@ test('phone 375x812: the start panel is a centred column of 44 px buttons', asyn
   await click(page, 'scores');
   await cardIs(page, 'board');
   await phoneFits(page, 'scores');
-  expect(await words(page)).toContain('Local');
+  expect(await words(page)).toContain('LOCAL');
   await page.screenshot({ path: `${OUT}/scores-375.png` });
   await click(page, 'back');
   await cardIs(page, 'title');

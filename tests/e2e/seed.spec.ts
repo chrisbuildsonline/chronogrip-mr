@@ -121,7 +121,7 @@ for (const size of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) 
       expect(b.rect[3] - b.rect[1], `${b.id} tall`).toBeGreaterThanOrEqual(44);
       expect(b.rect[0] >= 0 && b.rect[2] <= size.width && b.rect[1] >= 0 && b.rect[3] <= size.height, `${b.id} on screen`).toBe(true);
     }
-    const word = (await page.evaluate(() => window.__chrono!.labels())).find((l) => l.text === 'Shared puzzle')!;
+    const word = (await page.evaluate(() => window.__chrono!.labels())).find((l) => l.text === 'SHARED PUZZLE')!;
     expect(word.left).toBeGreaterThanOrEqual(buttons[0]!.rect[0]);
     expect(word.right).toBeLessThanOrEqual(buttons[0]!.rect[2]);
     expect(word.height).toBeGreaterThanOrEqual(12);
@@ -160,7 +160,7 @@ test('phone 375x812: the shared puzzle complete card fits the bottom sheet, with
   const buttons = await page.evaluate(() => window.__chrono!.buttons());
   expect(buttons.map((b) => b.id)).toEqual(['restart', 'menu']);
   for (const b of buttons) {
-    const text = labels.find((l) => l.text === b.label)!;
+    const text = labels.find((l) => l.text === b.label || l.text === b.label.toUpperCase())!;
     expect(text.left, `${b.id} label inside its pill`).toBeGreaterThanOrEqual(b.rect[0]);
     expect(text.right, `${b.id} label inside its pill`).toBeLessThanOrEqual(b.rect[2]);
     expect(b.rect[0] >= x0 && b.rect[2] <= x1, `${b.id} inside the sheet`).toBe(true);

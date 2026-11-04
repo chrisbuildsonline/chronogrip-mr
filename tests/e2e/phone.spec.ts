@@ -186,7 +186,7 @@ test('desktop 1440x900: the cards are the wide ones, placed and sized as before'
     // The desktop type scale: buttons 12.5 mm, body 13.5 mm (design/DESIGN.md).
     const labels = await page.evaluate(() => window.__chrono!.labels());
     for (const l of labels.filter((x) => ['Resume', 'Restart'].includes(x.text))) expect(l.size, l.text).toBeCloseTo(0.0125, 6);
-    for (const l of labels.filter((x) => ['New Game', 'Random level', 'Options', 'High scores'].includes(x.text))) expect(l.size, l.text).toBeCloseTo(0.01375, 6); // the start panel's big buttons
+    for (const l of labels.filter((x) => ['NEW GAME', 'RANDOM LEVEL', 'OPTIONS', 'HIGH SCORES'].includes(x.text))) expect(l.size, l.text).toBeCloseTo(0.01375, 6); // the start panel's big buttons
     for (const l of labels.filter((x) => x.text === 'Turn the marked gear')) expect(l.size, l.text).toBeCloseTo(0.0135, 6);
     await page.screenshot({ path: `${OUT}/1440x900-${name}.png` });
   };

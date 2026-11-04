@@ -49,7 +49,7 @@ test('dev server: the start panel shows its three buttons inside the comfort zon
   // High scores: poke it open and back.
   await poke(page, 'scores');
   await cardIs(page, 'board');
-  expect(await page.evaluate(() => window.__chrono!.labels().map((l) => l.text))).toContain('Local');
+  expect(await page.evaluate(() => window.__chrono!.labels().map((l) => l.text))).toContain('LOCAL');
   const board = await page.evaluate(() => window.__chrono!.buttons());
   for (const b of board) expect(inZone(b.world, PANEL_ZONE), `${b.id} in the panel zone`).toBe(true);
   await poke(page, 'back');

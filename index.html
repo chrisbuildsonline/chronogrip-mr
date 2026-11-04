@@ -19,6 +19,7 @@
         font: 300 1.5rem/1 "Josefin Sans", system-ui, sans-serif; letter-spacing: 0.32em; color: #f1e8d8; pointer-events: none;
         display: flex; align-items: center;
       }
+      @media (max-width: 520px) { h1 { font-size: 1.05rem; letter-spacing: 0.2em; } h1 svg { width: 0.9rem; height: 0.9rem; } }
       h1 svg { width: 1.3rem; height: 1.3rem; margin: 0 0.1em 0 -0.12em; fill: #d99a2b; fill-rule: evenodd; }
       h1::after { content: ""; position: absolute; left: 0; right: 0.32em; bottom: -9px; height: 2px; background: linear-gradient(90deg, #d99a2b, transparent); }
       /* Top right, opposite the wordmark, so it never covers the board in the desktop view. */

@@ -843,6 +843,14 @@ canvas.setAttribute('aria-label', `${APP_TITLE}, a clockwork puzzle: drag brass 
 // Desktop keys press the shown card's buttons, as a click would: Enter is the primary pill, Esc pauses, resumes or goes back.
 window.addEventListener('keydown', (e) => {
   if (e.repeat || world.renderer.xr.isPresenting || e.target instanceof HTMLButtonElement) return;
+  if (overlay?.kind === 'initials' && e.key.startsWith('Arrow')) {
+    // The name entry: up and down cycle the letter, left and right move between the three slots.
+    e.preventDefault();
+    const slot = Math.min(overlay.cursor, 2);
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') overlay = { ...overlay, ...stepInitial(overlay, slot, e.key === 'ArrowUp' ? 1 : -1) };
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') overlay = { ...overlay, cursor: Math.max(0, Math.min(2, slot + (e.key === 'ArrowRight' ? 1 : -1))) };
+    return;
+  }
   if (overlay?.kind === 'initials' && !(e.ctrlKey || e.metaKey || e.altKey) && (e.key === 'Backspace' || /^[a-z]$/i.test(e.key))) {
     e.preventDefault();
     overlay = { ...overlay, ...(e.key === 'Backspace' ? backInitial(overlay) : typeInitial(overlay, e.key)) };

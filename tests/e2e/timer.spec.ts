@@ -191,10 +191,10 @@ for (const size of [{ width: 375, height: 812 }]) {
       }
       // The toggle's words (and its check disc) sit wholly inside the pill.
       const pill = (await page.evaluate(() => window.__chrono!.buttons())).find((b) => b.id === 'relaxed');
-      const words = (await page.evaluate(() => window.__chrono!.labels())).find((l) => l.text === 'No timer');
+      const words = (await page.evaluate(() => window.__chrono!.labels())).find((l) => l.text === 'NO TIMER');
       if (pill) {
         expect(words, `${what} toggle word`).toBeTruthy();
-        expect(words!.left, `${what} toggle word`).toBeGreaterThanOrEqual(pill.rect[0] + 16); // room for the check disc before the words
+        expect(words!.left, `${what} toggle word`).toBeGreaterThanOrEqual(pill.rect[0] + 8); // the row's left bar and padding before the words
         expect(words!.right, `${what} toggle word`).toBeLessThanOrEqual(pill.rect[2] - 5); // 5 px of air at the pill's end
       }
       for (const b of await page.evaluate(() => window.__chrono!.buttons())) {
