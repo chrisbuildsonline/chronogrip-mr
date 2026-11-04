@@ -12,8 +12,8 @@ import { trackMr } from './mr';
 import { tuneForSoftwareGl } from './render';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
-import { SCREENS, buttonAt, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button } from './ui';
-import { createPanels, RING, SMALL_TABLE_TEXT } from './panels';
+import { SCREENS, buttonAt, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
+import { createPanels, RING, SMALL_TABLE_TEXT, type PanelCtx } from './panels';
 import { createGhostHand, ghostAt, ghostTwistAt } from './ghost';
 import { TWEEN_MS, easeOut, tweenAt } from './tween';
 import { faultKind, faultOf, faultText, shakeSpin, shakeTilt, SHAKE_MS, type Fault } from './fault';
@@ -26,6 +26,7 @@ import { firstUnsolved, loadProgress, recordOutcome, recordSolve, saveProgress, 
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
 import { dailySeed, tinkerLevel, withDaily } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
+import { BOARDS, addEntry, backInitial, boardOf, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
 import { adapt, freshSeed, loadRandom, puzzleFor, randomLevel, saveRandom, type RandomState } from './random';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
@@ -81,6 +82,18 @@ let levelIds = levels.map((l) => l.id);
 /** The slot of the Random puzzle: always the last one. */
 const randomSlot = () => levels.length - 1;
 let progress: Progress = loadProgress(storage);
+// High score boards (src/scores.ts): a top ten per hand-made level and one for Random, kept on this device.
+let scores: Scores = loadScores(storage);
+/**
+ * A card laid over the flow's own: the best times board (opened from the title), or the initials entry that comes before
+ * the complete card when a solve makes its board's top ten. `board` is the board id (l1-l8, random).
+ */
+type Overlay =
+  | { kind: 'board'; board: string }
+  | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; letters: string; cursor: number };
+let overlay: Overlay | null = null;
+/** The board of the level last started: the board the Best times card opens on. */
+let lastBoard = BOARDS[0]!;
 /** True on the complete card when this solve beat a saved time. */
 let newBest = false;
 /** Relaxed: no timer. Default off (timer on), saved across visits. */
@@ -169,8 +182,11 @@ let anchor: Anchor = panelAnchor(level);
 /** The camera's backward axis (from what it looks at towards the eye). */
 const cameraBack = (): Vec3 => world.camera.getWorldDirection(new Vector3()).negate().toArray();
 const PLAY_SCREENS = SCREENS.filter((s) => s !== 'select');
-/** The cards the camera fits for: the wide level select alone, or the others (so it holds still between them). */
-const fitScreens = () => (flow.name === 'select' ? (['select'] as const) : PLAY_SCREENS);
+/**
+ * The cards the camera fits for: the wide level select alone, or the others (so it holds still between them). A card laid over
+ * the flow's own is fitted for on the desktop; on a phone the board keeps the view it has, and the sheet sits over its foot.
+ */
+const fitScreens = (): readonly Screen[] => (overlay && !phone() ? [overlay.kind] : flow.name === 'select' ? ['select'] : PLAY_SCREENS);
 const xrEntry = document.getElementById('xr-entry')!;
 /** The page header's foot in px: the wordmark and the Enter MR column, plus a little air. */
 const headerBottom = () => Math.max(heading?.getBoundingClientRect().bottom ?? 0, xrEntry.getBoundingClientRect().bottom) + 8;
@@ -420,9 +436,47 @@ function playRandom(): void {
   send({ type: 'select', level: randomSlot() });
 }
 
+/** If this solve makes its board's top ten, the initials card comes up before the complete card. */
+function askInitials(board: string, extra: { step?: number }): void {
+  const entry = { ms: Math.round(levelClock.seconds * 1000), date: todayISO(), ...extra };
+  const q = qualifies(scores, board, { ...entry, name: scores.initials });
+  if (q.ok) overlay = { kind: 'initials', board, rank: q.rank, entry, letters: scores.initials, cursor: 0 };
+}
+
+/** The best times card's board: its name, its rows and what it says while empty. */
+function boardCard(id: string): NonNullable<PanelCtx['board']> {
+  const n = id.slice(1);
+  const random = id === 'random';
+  return { label: random ? 'Random' : `Level ${n}`, entries: scores.boards[id]!, empty: `No times yet. Solve ${random ? 'a Random puzzle' : `level ${n}`} to set one.` };
+}
+
+/** A press on the card laid over the flow: the board's Back and level arrows, or the initials' arrows, Save and Skip. */
+function pressOverlay(id: string): void {
+  const o = overlay!;
+  if (o.kind === 'board') {
+    if (id === 'back') overlay = null;
+    else if (id === 'board-prev' || id === 'board-next') overlay = { ...o, board: BOARDS[(BOARDS.indexOf(o.board) + (id === 'board-next' ? 1 : BOARDS.length - 1)) % BOARDS.length]! };
+    else return;
+  } else {
+    const arrow = /^(up|down)-([0-2])$/.exec(id);
+    if (arrow) overlay = { ...o, ...stepInitial(o, Number(arrow[2]), arrow[1] === 'up' ? 1 : -1) };
+    else if (id === 'save') {
+      scores = addEntry(scores, o.board, { ...o.entry, name: o.letters });
+      saveScores(storage, scores);
+      overlay = null;
+    } else if (id === 'skip') overlay = null;
+    else return;
+  }
+  showPanel();
+  fitView(true);
+}
+
 function send(e: FlowEvent): void {
   const next = step(flow, e, levels.length);
   if (next === flow) return;
+  // A card laid over the flow goes when the flow leaves its place: the board with the title, the initials with the complete card.
+  if (overlay && next.name !== (overlay.kind === 'board' ? 'title' : 'complete')) overlay = null;
+  if (next.name === 'playing') lastBoard = next.level === randomSlot() ? 'random' : (boardOf(levels[next.level]!.id) ?? lastBoard);
   if (next.name === 'paused') {
     putBack();
     letGoKnob();
@@ -451,6 +505,7 @@ function send(e: FlowEvent): void {
         randomScored = true;
         run = adapt(run, relaxed ? null : levelClock.seconds, par);
         saveRandom(storage, run);
+        askInitials('random', { step: randomStep });
       }
     } else {
       // A first solve is just solved; New best is for beating a time already saved.
@@ -461,6 +516,8 @@ function send(e: FlowEvent): void {
       // Held to par unless Relaxed: past it the bird still wakes, but the card says over time. The best time is kept either way.
       if (outcome) progress = recordOutcome(progress, level.id, outcome);
       if (r.newBest || outcome) saveProgress(storage, progress);
+      const board = boardOf(level.id);
+      if (board) askInitials(board, {});
     }
     burst.position.set(...trayLocal(DIAL_AT[0], DIAL_AT[1], 0.008));
   }
@@ -487,6 +544,12 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   const now = performance.now();
   if (by === 'hand' && now - pressedAt < PRESS_GAP_MS) return;
   pressedAt = now;
+  if (overlay) return pressOverlay(id);
+  if (id === 'scores' && flow.name === 'title') {
+    overlay = { kind: 'board', board: lastBoard };
+    showPanel();
+    return fitView(true);
+  }
   const n = /^level-(\d+)$/.exec(id);
   if (id === 'next' && flow.name === 'complete' && levelIndex >= randomSlot() - 1) {
     // After the daily or a shared puzzle the way on is level select; after a Random puzzle it is the next one.
@@ -647,8 +710,13 @@ canvas.setAttribute('aria-label', `${APP_TITLE}, a clockwork puzzle: drag brass 
 // Desktop keys press the shown card's buttons, as a click would: Enter is the primary pill, Esc pauses, resumes or goes back.
 window.addEventListener('keydown', (e) => {
   if (e.repeat || world.renderer.xr.isPresenting || e.target instanceof HTMLButtonElement) return;
+  if (overlay?.kind === 'initials' && !(e.ctrlKey || e.metaKey || e.altKey) && (e.key === 'Backspace' || /^[a-z]$/i.test(e.key))) {
+    e.preventDefault();
+    overlay = { ...overlay, ...(e.key === 'Backspace' ? backInitial(overlay) : typeInitial(overlay, e.key)) };
+    return;
+  }
   const shown = shownButtons();
-  const id = e.key === 'Enter' ? shown.find((b) => b.kind === 'primary')?.id : e.key === 'Escape' ? ['pause', 'resume', 'back'].find((k) => shown.some((b) => b.id === k)) : undefined;
+  const id = e.key === 'Enter' ? shown.find((b) => b.kind === 'primary')?.id : e.key === 'Escape' ? ['pause', 'resume', 'back', 'skip'].find((k) => shown.some((b) => b.id === k)) : undefined;
   if (!id) return;
   e.preventDefault();
   sound.unlock();
@@ -1047,7 +1115,9 @@ world.scene.onBeforeRender = () => {
 /** Draws the card for the current state; run every frame and after every transition, so the buttons on show never lag the flow. */
 function showPanel(now = performance.now()): void {
   const waiting = flow.name === 'complete' && now - calibratedAt < COMPLETE_DELAY_MS;
-  panels.show(waiting ? null : screenOf(flow), {
+  panels.show(waiting ? null : (overlay?.kind ?? screenOf(flow)), {
+    initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor } : undefined,
+    board: overlay?.kind === 'board' ? boardCard(overlay.board) : undefined,
     level: levelIndex,
     levels: levels.length,
     daily: sharedSeed === null, // a shared puzzle in the last slot is not today's daily: it is named "Shared puzzle"
@@ -1223,6 +1293,12 @@ window.__chrono = Object.freeze({
   },
   get seedCode() {
     return codeOf(level);
+  },
+  get scores() {
+    return structuredClone(scores);
+  },
+  get initials() {
+    return overlay?.kind === 'initials' ? { board: overlay.board, rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor } : null;
   },
   get random() {
     return { mode: levelIndex === randomSlot(), step: randomStep, next: run.step, slow: run.slow, slot: randomSlot() };

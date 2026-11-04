@@ -44,6 +44,9 @@ test('dev server: poke Start, the ghost hand shows until the first grab, solve l
   await pinch(page, 'right', 0);
   await page.waitForFunction(() => window.__chrono!.turning === null, undefined, { timeout: 10_000 });
   await page.screenshot({ path: 'test-results/f10-dev-calibrated.png' });
+  // A first solve asks for initials first: poke Skip to reach the complete card.
+  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'skip'), undefined, { timeout: 10_000 });
+  await poke(page, 'skip');
   await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'), undefined, { timeout: 10_000 });
   await page.screenshot({ path: 'test-results/f9-dev-complete.png' });
 

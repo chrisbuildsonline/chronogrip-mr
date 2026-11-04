@@ -2,10 +2,12 @@ import type { Level } from './levels';
 import { COMFORT, TRAY_POSE, layerLift, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
 
 /** Layouts and placement of the in-world panels (see design/DESIGN.md). Panel space: metres, origin at the bottom centre, +Y up, +Z towards the player. */
-export type Screen = 'title' | 'select' | 'hud' | 'complete' | 'paused';
+export type Screen = 'title' | 'select' | 'hud' | 'complete' | 'paused' | 'initials' | 'board';
 export const SCREENS: readonly Screen[] = ['title', 'select', 'hud', 'complete', 'paused'];
+/** Cards laid over the title or the complete card for a moment: the initials entry and the best times board. */
+export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board'];
 
-export type ButtonKind = 'primary' | 'secondary' | 'tile' | 'icon' | 'toggle';
+export type ButtonKind = 'primary' | 'secondary' | 'tile' | 'icon' | 'toggle' | 'arrow';
 /** A button rectangle in panel space; x, y is its centre. */
 export type Button = { id: string; label: string; kind: ButtonKind; x: number; y: number; w: number; h: number };
 export type Layout = { width: number; height: number; buttons: Button[] };
@@ -55,6 +57,8 @@ const BACK_W = 0.076;
 const BACK_GAP = 0.02;
 /** The Relaxed toggle on the phone's pause card. */
 const TOGGLE_W = 0.082;
+/** The phone's title card is one pill row taller than the wide one, for the Best times and No timer pills. */
+export const NARROW_TITLE_EXTRA = BH + GAP;
 /** Wide enough for "Turn the marked gear ↻ 37.5 rpm" in body type, and for the countdown ring and its time between the clock and the pause button. */
 const HUD_W = 0.3;
 
@@ -64,16 +68,15 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
   // Phone: the same buttons in one phone width (content 268 mm): primary 100 mm, secondaries 72 mm.
   const [primaryW, secondaryW] = narrow ? [0.1, 0.072] : [0.11, 0.088];
   switch (screen) {
-    case 'title':
-      return {
-        width: narrow ? NARROW_W : 0.34,
-        height: 0.15,
-        buttons: row(low, [
-          ['start', ctx.resume ? 'Continue' : 'Start', 'primary', narrow ? 0.08 : 0.106],
-          ['levels', 'Levels', 'secondary', narrow ? 0.07 : 0.09],
-          ['relaxed', 'No timer', 'toggle', narrow ? 0.098 : 0.088],
-        ]),
-      };
+    case 'title': {
+      const start: Parameters<typeof row>[1][number] = ['start', ctx.resume ? 'Continue' : 'Start', 'primary', 0.1];
+      // Wide: one row of four, as wide as the pause card so every pill stays in the panel zone.
+      if (!narrow) return { width: 0.42, height: 0.15, buttons: row(low, [start, ['levels', 'Levels', 'secondary', 0.074], ['scores', 'Best times', 'secondary', 0.096], ['relaxed', 'No timer', 'toggle', 0.088]]) };
+      // Phone: four pills at 14 mm type will not fit one 268 mm row, so two: Start and Levels under the thumb, the other two above.
+      const [a, b] = row(low, [start, ['levels', 'Levels', 'secondary', 0.072]]);
+      const [c, d] = row(low + BH + GAP, [['scores', 'Best times', 'secondary', 0.1], ['relaxed', 'No timer', 'toggle', 0.098]]);
+      return { width: NARROW_W, height: 0.15 + NARROW_TITLE_EXTRA, buttons: [a!, b!, c!, d!] };
+    }
     case 'select': {
       const n = ctx.levels;
       const rnd = !!ctx.random;
@@ -156,7 +159,74 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
         buttons: [...row(low, [['resume', 'Resume', 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW], ['levels', 'Levels', 'secondary', secondaryW]]), toggle],
       };
     }
+    case 'initials': {
+      const letter = (k: number) => [`up-${k}`, `down-${k}`] as const;
+      const arrow = (id: string, label: string, x: number, y: number, w: number, h: number): Button => ({ id, label, kind: 'arrow', x, y, w, h });
+      if (!narrow) {
+        // One row, low on the card (the panel zone's pitch rules out a second): an up and a down arrow under each of the three letters, then Save and Skip.
+        const slot = 2 * BH + GAP;
+        const slotGap = 0.02;
+        const total = 3 * slot + 2 * slotGap + 0.03 + 0.088 + GAP + 0.066;
+        let x = -total / 2;
+        const buttons: Button[] = [];
+        for (let k = 0; k < 3; k++) {
+          const [up, down] = letter(k);
+          buttons.push(arrow(up, 'Up', x + BH / 2, low, BH, BH), arrow(down, 'Down', x + BH + GAP + BH / 2, low, BH, BH));
+          x += slot + slotGap;
+        }
+        const at = x - slotGap + 0.03; // Save and Skip start a wider gap after the last letter's arrows
+        buttons.push(
+          { id: 'save', label: 'Save', kind: 'primary', x: at + 0.044, y: low, w: 0.088, h: BH },
+          { id: 'skip', label: 'Skip', kind: 'secondary', x: at + 0.088 + GAP + 0.033, y: low, w: 0.066, h: BH },
+        );
+        return { width: total + 2 * PAD, height: 0.18, buttons };
+      }
+      // Phone: the zone does not apply, so each letter gets its arrows over and under it, and Save and Skip sit under the thumb.
+      const col = (NARROW_W - 2 * PAD - 2 * GAP) / 3;
+      const AH = 0.044;
+      const downY = low + BH / 2 + GAP + AH / 2;
+      const upY = downY + AH + 0.042;
+      const buttons: Button[] = [];
+      for (let k = 0; k < 3; k++) {
+        const [up, down] = letter(k);
+        const cx = -NARROW_W / 2 + PAD + col / 2 + k * (col + GAP);
+        buttons.push(arrow(up, 'Up', cx, upY, col, AH), arrow(down, 'Down', cx, downY, col, AH));
+      }
+      buttons.push(...row(low, [['save', 'Save', 'primary', 0.15], ['skip', 'Skip', 'secondary', 0.106]]));
+      return { width: NARROW_W, height: 0.29, buttons };
+    }
+    case 'board': {
+      const g = boardGrid(narrow);
+      const right = g.width / 2 - PAD;
+      const backW = narrow ? 0.07 : 0.076;
+      const next = right - BH / 2;
+      const prev = right - BH - GAP - g.labelW - GAP - BH / 2;
+      return {
+        width: g.width,
+        height: g.height,
+        buttons: [
+          { id: 'back', label: 'Back', kind: 'secondary', x: -g.width / 2 + PAD + backW / 2, y: low, w: backW, h: BH },
+          { id: 'board-prev', label: 'Previous', kind: 'arrow', x: prev, y: low, w: BH, h: BH },
+          { id: 'board-next', label: 'Next', kind: 'arrow', x: next, y: low, w: BH, h: BH },
+        ],
+      };
+    }
   }
+}
+
+/**
+ * The best times card, over the one button row: ten rows as two columns of five, or on a phone (where a column would leave
+ * too little room for a name, a step, a time and a date at 12 px) one column of ten. `y0` is the centre of the first row from
+ * the card's foot, `pitch` the distance between rows, `labelW` the room for "Level 3" between the arrows, `headY` the heading's centre.
+ */
+export function boardGrid(narrow: boolean) {
+  const width = narrow ? NARROW_W : 0.48;
+  const [cols, rows] = narrow ? [1, 10] : [2, 5];
+  const gap = 0.03;
+  const pitch = narrow ? 0.0165 : 0.0185;
+  const y0 = PAD + BH + GAP + pitch / 2 + (rows - 1) * pitch;
+  const headY = y0 + pitch / 2 + 0.024;
+  return { width, cols, rows, gap, pitch, y0, headY, height: headY + 0.027, colW: (width - 2 * PAD - (cols - 1) * gap) / cols, labelW: narrow ? 0.066 : 0.12 };
 }
 
 /** The button under a panel-space point that is within touch depth of the face, else null. */
@@ -212,5 +282,5 @@ export function worldToPanel(a: Anchor, p: Vec3): Vec3 {
 }
 
 /** Seconds as m:ss, with tenths under 10 s (0:04.7) so a quick solve never reads 0:00. Truncated, never rounded up. */
-export const clock = (s: number) =>
+export const clock =(s: number) =>
   s < 10 ? `0:0${(Math.floor(s * 10 + 1e-6) / 10).toFixed(1)}` : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;

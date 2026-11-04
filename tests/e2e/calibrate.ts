@@ -5,7 +5,7 @@ import { DRAG_FULL_PX, TWIST_FULL, settingOf } from '../../src/escapement';
 const toTarget = (page: Page) => page.evaluate(() => ({ setting: window.__chrono!.regulator, target: window.__chrono!.targetRate })).then(({ setting, target }) => settingOf(target) - setting);
 
 /** Desktop: presses the regulator knob and drags sideways onto the target; holds until calibrated, then lets go. */
-export async function calibrateByMouse(page: Page, opts: { onInBand?: () => Promise<void> } = {}) {
+export async function calibrateByMouse(page: Page, opts: { onInBand?: () => Promise<void>; keepInitials?: boolean } = {}) {
   await page.waitForFunction(() => window.__chrono!.flow === 'calibrate');
   const at = await page.evaluate(() => window.__chrono!.toScreen(window.__chrono!.regulatorAt));
   const dx = (await toTarget(page)) * DRAG_FULL_PX;
@@ -17,6 +17,16 @@ export async function calibrateByMouse(page: Page, opts: { onInBand?: () => Prom
   await opts.onInBand?.();
   await page.waitForFunction(() => window.__chrono!.automatonRunning);
   await page.mouse.up();
+  if (!opts.keepInitials) await skipInitials(page);
+}
+
+/**
+ * A first solve asks for initials before the complete card (tests/e2e/scores.spec.ts covers that card). Flows that only want
+ * the complete card skip it with Esc, once the reward has played and whichever card is up.
+ */
+export async function skipInitials(page: Page) {
+  await page.waitForFunction(() => ['initials', 'complete'].includes(window.__chrono!.card?.screen ?? ''), undefined, { timeout: 15_000 });
+  if ((await page.evaluate(() => window.__chrono!.card?.screen)) === 'initials') await page.keyboard.press('Escape');
 }
 
 type Q = { x: number; y: number; z: number; w: number };

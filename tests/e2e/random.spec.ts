@@ -259,7 +259,7 @@ test('desktop: corrupt storage starts the run at step 1 without a console error'
 test('desktop: Random never changes the hand-made levels, the daily or the title', async ({ page }) => {
   const errors = await open(page);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1');
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Start', 'Levels', 'No timer']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Start', 'Levels', 'Best times', 'No timer']);
   await click(page, 'levels');
   await click(page, 'level-9');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');

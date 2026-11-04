@@ -123,7 +123,7 @@ for (const [w, h] of [[375, 812], [768, 1024], [1440, 900]] as const) {
     await fits(page, w, h, 'level5');
     const after = dist(await page.evaluate(() => window.__chrono!.cameraAt));
     if (w > h) expect(after).toBeCloseTo(before, 4);
-    else expect(after).toBeGreaterThan(before);
+    else expect(after).toBeGreaterThanOrEqual(before - 1e-9); // the phone title card is two pill rows tall, so on a phone level 1 may already sit as far back as level 5 needs
     expect(errors).toEqual([]);
   });
 }

@@ -1,5 +1,6 @@
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace } from 'three';
-import { clock, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
+import { boardGrid, clock, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
+import { formatDate, type Entry } from './scores';
 import { C } from './palette';
 import { rpmLabel, type Goal } from './goal';
 import { FAULT_WORDS } from './fault';
@@ -56,6 +57,10 @@ export type PanelCtx = {
   /** The complete card: whether this solve beat par, and the par it was held to. Absent in Relaxed mode. */
   outcome?: Outcome | null;
   par?: number | null;
+  /** The initials card: the rank this solve would take, the three letters, and the slot typing fills next (3: all in). */
+  initials?: { rank: number; letters: string; cursor: number };
+  /** The best times card: the board's name, its rows, and the muted line shown while it is empty. */
+  board?: { label: string; entries: readonly Entry[]; empty: string };
 };
 
 /** Levels that count towards "N of M solved": Random is endless, so it is not one of them. */
@@ -333,6 +338,21 @@ function backLabel(g: Draw, label: string, x: number, y: number, stacked: boolea
   text(g, label, left + chev + gap, y + 1, font(600, T.button), C.ink, 'left');
 }
 
+/** The arrow on a round arrow button: a chevron pointing up, down, left or right as the button's id says. */
+function arrowGlyph(g: Draw, id: string, x: number, y: number) {
+  const [dx, dy] = id.startsWith('up') ? [0, -1] : id.startsWith('down') ? [0, 1] : id === 'board-prev' ? [-1, 0] : [1, 0];
+  const [px, py] = [-dy, dx]; // across the arrow
+  const [s, tip, tail] = [mm(5), mm(2.6), mm(2.2)];
+  g.beginPath();
+  g.moveTo(x - dx * tail + px * s * 0.9, y - dy * tail + py * s * 0.9);
+  g.lineTo(x + dx * tip, y + dy * tip);
+  g.lineTo(x - dx * tail - px * s * 0.9, y - dy * tail - py * s * 0.9);
+  g.lineWidth = mm(1.8);
+  g.lineCap = g.lineJoin = 'round';
+  g.strokeStyle = C.ink;
+  g.stroke();
+}
+
 function button(g: Draw, b: Button, at: (x: number, y: number) => [number, number], ctx: PanelCtx) {
   const [x, y] = at(b.x, b.y);
   const [w, h] = [b.w * PX, b.h * PX];
@@ -355,7 +375,8 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
   if (b.kind === 'icon') {
     g.fillStyle = C.ink;
     for (const dx of [-mm(3.2), mm(3.2)]) g.fillRect(x + dx - mm(1.5), y - mm(6), mm(3), mm(12));
-  } else if (b.kind === 'toggle') toggle(g, b.label, on, x, y);
+  } else if (b.kind === 'arrow') arrowGlyph(g, b.id, x, y);
+  else if (b.kind === 'toggle') toggle(g, b.label, on, x, y);
   else if (b.kind === 'tile') tile(g, b, x, y, w, h, ctx);
   else if (b.id === 'back') backLabel(g, b.label, x, y, tall);
   else text(g, b.label, x, y + 1, font(600, T.button), b.kind === 'primary' ? C.cream : C.ink);
@@ -386,10 +407,72 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   const random = isRandom(ctx, ctx.level);
   const name = random ? `Random · Step ${ctx.step ?? 1}` : shared ? 'Shared puzzle' : daily ? 'Daily' : `Level ${level}`;
   switch (screen) {
-    case 'title':
-      text(g, 'A CLOCKWORK PUZZLE', cx, y(0.128), font(700, T.eyebrow), C.muted, 'center', 3);
-      text(g, 'ChronoGrip', cx, y(0.093), font(600, T.display, SERIF), C.ink);
+    case 'title': {
+      const up = l.height - 0.15; // the phone's second pill row lifts the words
+      text(g, 'A CLOCKWORK PUZZLE', cx, y(0.128 + up), font(700, T.eyebrow), C.muted, 'center', 3);
+      text(g, 'ChronoGrip', cx, y(0.093 + up), font(600, T.display, SERIF), C.ink);
       break;
+    }
+    case 'initials': {
+      const ini = ctx.initials!;
+      status(g, `#${ini.rank} BEST TIMES`, left(0.016), y(l.height - 0.022), 'left', T.body * 0.8);
+      const time = clock(ctx.time);
+      g.font = font(700, T.xl);
+      const timeW = g.measureText(time).width;
+      g.font = font(600, T.heading, SERIF);
+      const size = T.heading * Math.min(1, (right(0.016) - left(0.016) - timeW - mm(10)) / g.measureText(name).width);
+      text(g, name, left(0.016), y(l.height - 0.055), font(600, size, SERIF), C.ink, 'left');
+      text(g, time, right(0.016), y(l.height - 0.055), font(700, T.xl), C.ink, 'right');
+      // Each letter sits over its arrows (wide: above the row; phone: between the up and down arrows), with a bar under it that is amber on the slot typing fills.
+      for (let k = 0; k < 3; k++) {
+        const [up, down] = [`up-${k}`, `down-${k}`].map((id) => l.buttons.find((b) => b.id === id)!) as [Button, Button];
+        const [lx, ly] = at((up.x + down.x) / 2, ctx.narrow ? (up.y + down.y) / 2 : 0.088);
+        const active = ini.cursor === k;
+        text(g, ini.letters[k]!, lx, ly + 1, font(700, T.xl), C.ink);
+        pill(g, lx, ly + mm(12), mm(14), mm(active ? 2.4 : 1.6));
+        g.fillStyle = active ? C.amber : C.deepHover;
+        g.fill();
+      }
+      break;
+    }
+    case 'board': {
+      const b = ctx.board!;
+      const grid = boardGrid(!!ctx.narrow);
+      text(g, 'Best times', left(0.016), y(grid.headY), font(600, T.heading, SERIF), C.ink, 'left');
+      // The level switcher's name, between its arrows, shrunk to fit.
+      const [prev, next] = ['board-prev', 'board-next'].map((id) => l.buttons.find((x) => x.id === id)!) as [Button, Button];
+      g.font = font(600, T.heading, SERIF);
+      const [sx, sy] = at((prev.x + next.x) / 2, prev.y);
+      text(g, b.label, sx, sy, font(600, T.heading * Math.min(1, mm(grid.labelW * 1000) / g.measureText(b.label).width), SERIF), C.ink);
+      if (!b.entries.length) {
+        g.font = font(600, T.body);
+        const [ex, ey] = at(0, grid.y0 - ((grid.rows - 1) / 2) * grid.pitch);
+        text(g, b.empty, ex, ey, font(600, T.body * Math.min(1, mm((l.width - 0.032) * 1000) / g.measureText(b.empty).width)), C.muted);
+        break;
+      }
+      // Rank muted, initials bold, the time in tabular figures, the date muted; Random rows show "Step 6" and the time.
+      const phone = !!ctx.narrow;
+      const [size, small] = phone ? [11.5, 11] : [12.5, 12];
+      // Offsets from a column's left edge, wide enough for a wide system font (DejaVu) too.
+      const cols = phone ? { name: 0.021, step: 0.058, level: 0.105, random: 0.152 } : { name: 0.024, step: 0.06, level: 0.114, random: 0.158 };
+      b.entries.forEach((e, i) => {
+        const rowY = grid.y0 - (i % grid.rows) * grid.pitch;
+        const x0 = -l.width / 2 + 0.016 + Math.floor(i / grid.rows) * (grid.colW + grid.gap);
+        const put = (s: string, dx: number, f: string, color: string, align: CanvasTextAlign) => {
+          const [px, py] = at(x0 + dx, rowY);
+          text(g, s, px, py + 1, f, color, align);
+        };
+        put(String(i + 1), 0, font(600, small), C.muted, 'left');
+        put(e.name, cols.name, font(700, size), C.ink, 'left');
+        if (e.step === undefined) put(clock(e.ms / 1000), cols.level, font(600, size), C.ink, 'right');
+        else {
+          put(`Step ${e.step}`, cols.step, font(600, size), C.ink, 'left');
+          put(clock(e.ms / 1000), cols.random, font(600, size), C.ink, 'right');
+        }
+        put(formatDate(e.date), grid.colW, font(500, small), C.muted, 'right');
+      });
+      break;
+    }
     case 'select': {
       const solved = ctx.best.filter((b) => b != null).length;
       // The heading sits in the middle of the room over the targets (one row wide, two on a phone).

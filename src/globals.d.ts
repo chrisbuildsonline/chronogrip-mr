@@ -133,13 +133,17 @@ interface ChronoHook {
   /** Buttons on the panel now shown, with world centre, page pixel position and page-pixel box [x0, y0, x1, y1]. */
   buttons(): { id: string; label: string; world: readonly [number, number, number]; screen: [number, number]; rect: [number, number, number, number] }[];
   /** Live: the card now up (its screen and panel-space size in metres), null when none is shown. */
-  readonly card: { readonly screen: 'title' | 'select' | 'hud' | 'complete' | 'paused'; readonly width: number; readonly height: number } | null;
+  readonly card: { readonly screen: 'title' | 'select' | 'hud' | 'complete' | 'paused' | 'initials' | 'board'; readonly width: number; readonly height: number } | null;
   /** The words on the card now up: text, font size in panel metres, and that size in page pixels as seen now. */
   labels(): { text: string; size: number; height: number; y: number; left: number; right: number }[];
   /** Live: the puzzle code of the loaded level (a tinker level), null for a hand-made one. */
   readonly seedCode: string | null;
   /** Live: Random mode. `mode`: the board is the Random puzzle; `step`: its step; `next`: the step of the next puzzle (saved); `slow`: the last solve was over par; `slot`: its level index. */
   readonly random: { readonly mode: boolean; readonly step: number; readonly next: number; readonly slow: boolean; readonly slot: number };
+  /** Live: the saved high score boards (a copy): the last initials used, and per board id (l1-l8, random) its top ten entries, best first. Random entries carry the `step` solved. */
+  readonly scores: { readonly initials: string; readonly boards: Readonly<Record<string, readonly { readonly name: string; readonly ms: number; readonly date: string; readonly step?: number }[]>> };
+  /** Live: the initials card while it is up (the board it is for, the rank it would take, the three letters, the slot typing fills next, 3 once all are in), else null. */
+  readonly initials: { readonly board: string; readonly rank: number; readonly letters: string; readonly cursor: number } | null;
   /** Live: the note shown for an invalid ?seed= while it is up, else null. */
   readonly seedNote: string | null;
   /** Live: the complete card's Copy link; `link` is what was (or would be) copied, null while idle. */
