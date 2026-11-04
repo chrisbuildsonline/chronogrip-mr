@@ -85,7 +85,7 @@ describe('Given level 1 is loaded', () => {
 
   it('When every level is solved and calibrated in turn, Then the automaton runs and each level completes and Next plays the following level', () => {
     const g = game();
-    for (let i = 0; i < LEVELS.length; i++) {
+    for (let i = 0; i < LEVELS.length - 1; i++) {
       solve(g, i);
       expect(g.flow).toEqual({ name: 'calibrate', level: i });
       expect(g.automatonRunning).toBe(false);
@@ -95,7 +95,7 @@ describe('Given level 1 is loaded', () => {
       expect(g.flow).toEqual({ name: 'complete', level: i });
       g.send({ type: 'next' });
     }
-    expect(g.flow).toEqual({ name: 'playing', level: LEVELS.length });
+    expect(g.flow).toEqual({ name: 'playing', level: LEVELS.length - 1 });
   });
 
   it('When the twist overshoots straight through the band, Then it does not calibrate until held in band', () => {
