@@ -50,7 +50,7 @@ const seedParam = new URLSearchParams(location.search).get('seed');
 const sharedSeed = seedParam === null ? null : decodeSeed(seedParam);
 const seedNote = document.getElementById('seed-note');
 if (seedParam !== null && sharedSeed === null && seedNote) {
-  seedNote.textContent = 'That puzzle code didn’t work, here’s today’s puzzle';
+  seedNote.textContent = 'That puzzle code didn’t work. Pick any level to play.';
   seedNote.hidden = false;
   setTimeout(() => (seedNote.hidden = true), 8000);
 }
@@ -997,7 +997,8 @@ function showPanel(now = performance.now()): void {
   panels.show(waiting ? null : screenOf(flow), {
     level: levelIndex,
     levels: levels.length,
-    daily: sharedSeed === null, // a shared puzzle in the last slot is not today's daily: no "Daily" name or tile
+    daily: sharedSeed === null, // a shared puzzle in the last slot is not today's daily: it is named "Shared puzzle"
+    shared: sharedSeed !== null,
     code: codeOf(level),
     link: copy.state === 'failed' ? copy.link : null,
     copy: world.renderer.xr.isPresenting || !codeOf(level) ? undefined : copy.state === 'copied' ? 'Copied' : 'Copy link',

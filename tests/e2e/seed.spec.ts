@@ -62,9 +62,16 @@ test('desktop: ?seed=CODE opens that exact puzzle; the complete card shows the c
   expect(got).toEqual({ id: want.id, gears: want.fixed.length + want.tray.length, axles: want.axles.length, flow: 'title', index: LEVELS.length, code: CODE, note: null });
   expect(await page.evaluate(() => Object.keys(window.__chrono!.axles))).toEqual(want.axles.map((a) => a.id));
 
+  await click(page, 'start');
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
+  await page.waitForFunction(() => window.__chrono!.labels().some((l) => l.text === 'Puzzle'));
+  const hud = await words(page);
+  expect(hud).toEqual(expect.arrayContaining(['SHARED', 'Puzzle']));
+  expect(hud.some((w) => /^Level/.test(w) || w === 'Daily')).toBe(false);
   await solve(page, want.solution);
   expect(await words(page)).toContain(`Puzzle code ${CODE}`);
-  expect(await words(page)).toContain('Level 9 complete'); // a shared puzzle is not the daily
+  expect(await words(page)).toContain('Shared puzzle complete'); // a friend's puzzle is not "Level 9" and not the daily
+  expect((await words(page)).some((w) => /^(Level 9|Daily)/.test(w))).toBe(false);
   const ids = await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id));
   expect(ids).toEqual(['next', 'restart', 'copy']);
   // The daily slot is the seeded puzzle: its time is saved under its own id, nothing else is touched.
@@ -94,6 +101,7 @@ test('desktop: when the clipboard fails, Copy link shows the link text instead',
   await click(page, `level-${LEVELS.length + 1}`);
   await solve(page, daily.solution);
   expect(await words(page)).toContain(`Puzzle code ${encodeSeed(dailySeed(new Date()))}`);
+  expect(await words(page)).toContain('Daily complete'); // today's daily keeps its name
   await click(page, 'copy');
   await page.waitForFunction(() => window.__chrono!.copy.state === 'failed');
   await frames(page);
@@ -123,9 +131,9 @@ test('desktop: a hand-made level has no puzzle code and no Copy link', async ({ 
 });
 
 for (const bad of ['', 'nope!', 'ZZZZZZZZZ', 'abc']) {
-  test(`desktop: a bad seed (${JSON.stringify(bad)}) shows a friendly note and today's puzzle, with no console errors`, async ({ page }) => {
+  test(`desktop: a bad seed (${JSON.stringify(bad)}) shows a friendly note and the normal game, with no console errors`, async ({ page }) => {
     const errors = await open(page, `/?seed=${encodeURIComponent(bad)}`);
-    expect(await page.evaluate(() => window.__chrono!.seedNote)).toMatch(/puzzle code didn.t work.*today.s puzzle/i);
+    expect(await page.evaluate(() => window.__chrono!.seedNote)).toBe('That puzzle code didn’t work. Pick any level to play.');
     expect(await page.evaluate(() => window.__chrono!.seedCode)).toBeNull();
     expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1'); // the normal game, as without a seed
     await page.screenshot({ path: `${OUT}/bad-seed-1440x900.png` });
@@ -134,6 +142,29 @@ for (const bad of ['', 'nope!', 'ZZZZZZZZZ', 'abc']) {
     await page.waitForFunction(() => window.__chrono!.flow === 'playing');
     expect(await page.evaluate(() => window.__chrono!.levelId)).toBe(tinkerLevel(dailySeed(new Date())).id);
     expect(errors).toEqual([]);
+  });
+}
+
+for (const size of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) {
+  test(`${size.width}x${size.height}: the shared puzzle's level-select tile reads Shared and fits; the daily's still reads Daily`, async ({ page }) => {
+    const errors = await open(page, `/?seed=${CODE}`, size);
+    await click(page, 'levels');
+    await page.waitForFunction(() => window.__chrono!.flow === 'select');
+    await page.waitForFunction(() => window.__chrono!.labels().some((l) => l.text === 'Shared'));
+    await frames(page);
+    const tile = (await page.evaluate(() => window.__chrono!.buttons())).find((b) => b.id === `level-${LEVELS.length + 1}`)!;
+    expect(tile.label).toBe('Shared');
+    const word = (await page.evaluate(() => window.__chrono!.labels())).find((l) => l.text === 'Shared')!;
+    expect(word.left).toBeGreaterThanOrEqual(tile.rect[0]);
+    expect(word.right).toBeLessThanOrEqual(tile.rect[2]);
+    expect(word.height).toBeGreaterThanOrEqual(size.width < 500 ? 12 : 9);
+    await page.screenshot({ path: `${OUT}/select-${size.width}x${size.height}.png` });
+    expect(errors).toEqual([]);
+
+    await page.goto('/');
+    await page.waitForFunction(() => window.__chrono?.ready === true);
+    await click(page, 'levels');
+    expect(await page.evaluate((id) => window.__chrono!.buttons().find((b) => b.id === id)!.label, `level-${LEVELS.length + 1}`)).toBe('Daily');
   });
 }
 
@@ -152,6 +183,7 @@ test('phone 375x812: the code line and the Copy link pill fit the bottom sheet',
   const line = labels.find((l) => l.text === `Puzzle code ${CODE}`);
   expect(line, 'the code line is on the sheet').toBeDefined();
   expect(line!.height).toBeGreaterThanOrEqual(12);
+  expect(labels.map((l) => l.text)).toContain('Shared puzzle complete');
   const corners = await page.evaluate(() => window.__chrono!.panelCorners());
   const [x0, x1] = [Math.min(...corners.map((c) => c[0])), Math.max(...corners.map((c) => c[0]))];
   for (const l of labels) {

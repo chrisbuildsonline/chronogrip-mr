@@ -67,9 +67,12 @@ Puzzle code line and Copy link (tinker puzzles only, never on levels 1-8): under
 third pill, "Copy link", after Levels and Restart: a secondary pill, so the near-black primary stays the one action. It
 is outside XR only (desktop and phone) and reads "Copied" for 2.5 s after a copy. If the clipboard refuses, the code line
 becomes the link itself, shrunk to the card's width if long, and the pill keeps its label. On a phone the primary gives
-8 mm to the Copy pill (92 / 72 / 82 mm) so "Copy link" fits at 14 mm type. A shared puzzle (`?seed=`) is not the daily: its
-card reads "Level 9 complete" and its tile "9", without the amber edge. An invalid code shows one cream pill, centred at
-the top of the page (the hint pills' look, ink 600 text), "That puzzle code didn't work, here's today's puzzle", for 8 s.
+8 mm to the Copy pill (92 / 72 / 82 mm) so "Copy link" fits at 14 mm type. A shared puzzle (`?seed=`) is neither a numbered level nor the daily:
+the complete card reads "Shared puzzle complete" (shrunk to stop short of the time on a phone), the pause card "Shared
+puzzle", the HUD eyebrow "Shared" over "Puzzle" (the time moves right), and its level-select tile "Shared" in serif like
+"Daily", without the amber edge, shrunk to fit the tile. An invalid code shows one cream pill, centred at the top of the
+page (the hint pills' look, ink 600 text), "That puzzle code didn't work. Pick any level to play.", for 8 s; the title
+board is level 1, so the words stay true.
 Tests: tests/e2e/seed.spec.ts (incl. 375 x 812).
 
 Progress (best times) is saved in localStorage; the title board is the first unsolved level, so Continue picks up there.

@@ -32,10 +32,10 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
 }
 
 /**
- * `daily`: the last level is today's tinker puzzle. `resume`: a level is solved, so the title offers Continue.
+ * `daily`: the last level is today's tinker puzzle; `shared`: it is a puzzle opened from a ?seed= link. `resume`: a level is solved, so the title offers Continue.
  * `copy`: the label of the Copy link pill on the complete card (absent: no pill). `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
  */
-export type LayoutCtx = { level: number; levels: number; daily?: boolean; resume?: boolean; narrow?: boolean; copy?: string };
+export type LayoutCtx = { level: number; levels: number; daily?: boolean; shared?: boolean; resume?: boolean; narrow?: boolean; copy?: string };
 
 /** Width of every card on a phone in portrait (outside XR), metres of panel space. */
 export const NARROW_W = 0.3;
@@ -67,7 +67,7 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       };
     case 'select': {
       const n = ctx.levels;
-      const label = (i: number) => (ctx.daily && i === n - 1 ? 'Daily' : String(i + 1));
+      const label = (i: number) => (i === n - 1 && (ctx.shared ? 'Shared' : ctx.daily && 'Daily')) || String(i + 1);
       if (narrow) {
         // Phone: Back then the tiles, five to a row, so nine levels make two rows that fit the width. Back takes the top
         // left cell, where a phone keeps its back control; the tiles read left to right, then the lower row.

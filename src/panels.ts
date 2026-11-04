@@ -26,6 +26,8 @@ export type PanelCtx = {
   level: number;
   levels: number;
   daily: boolean;
+  /** The last level is a puzzle opened from a ?seed= link: "Shared puzzle", not a numbered level or the daily. */
+  shared?: boolean;
   resume: boolean;
   newBest: boolean;
   time: number;
@@ -44,6 +46,7 @@ export type PanelCtx = {
 };
 
 const isDaily = (ctx: PanelCtx, i: number) => ctx.daily && i === ctx.levels - 1;
+const isShared = (ctx: PanelCtx, i: number) => !!ctx.shared && i === ctx.levels - 1;
 
 type Draw = CanvasRenderingContext2D;
 
@@ -98,7 +101,13 @@ function tile(g: Draw, b: Button, x: number, y: number, w: number, h: number, ct
     g.fillRect(x - w / 2, y - h / 2, w, mm(4));
     g.restore();
   }
-  text(g, b.label, x, y - (best == null ? 0 : mm(8)), daily ? font(600, T.heading, SERIF) : font(700, T.xl), C.ink);
+  // "Shared" is the longest word on a tile: serif like "Daily", shrunk to leave a little room at each side.
+  let size = T.heading;
+  if (isShared(ctx, i)) {
+    g.font = font(600, size, SERIF);
+    size *= Math.min(1, (w - mm(8)) / g.measureText(b.label).width);
+  }
+  text(g, b.label, x, y - (best == null ? 0 : mm(8)), daily || isShared(ctx, i) ? font(600, size, SERIF) : font(700, T.xl), C.ink);
   if (best == null) return;
   text(g, clock(best), x, y + mm(16), font(700, T.body), C.muted);
   check(g, x + w / 2 - mm(9), y - h / 2 + mm(10));
@@ -286,7 +295,8 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   const cx = at(0, 0)[0];
   const daily = isDaily(ctx, ctx.level);
   const level = String(ctx.level + 1);
-  const name = daily ? 'Daily' : `Level ${level}`;
+  const shared = isShared(ctx, ctx.level);
+  const name = shared ? 'Shared puzzle' : daily ? 'Daily' : `Level ${level}`;
   switch (screen) {
     case 'title':
       text(g, 'A CLOCKWORK PUZZLE', cx, y(0.128), font(700, T.eyebrow), C.muted, 'center', 3);
@@ -301,17 +311,24 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       break;
     }
     case 'hud':
-      text(g, 'LEVEL', left(0.016), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
-      if (daily) text(g, 'Daily', left(0.016), y(0.022), font(600, T.heading, SERIF), C.ink, 'left');
+      // A shared puzzle reads "SHARED" over "Puzzle", and the time moves over to make room.
+      const timeX = shared ? 0.086 : 0.066;
+      text(g, shared ? 'SHARED' : 'LEVEL', left(0.016), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
+      if (shared) text(g, 'Puzzle', left(0.016), y(0.022), font(600, T.heading, SERIF), C.ink, 'left');
+      else if (daily) text(g, 'Daily', left(0.016), y(0.022), font(600, T.heading, SERIF), C.ink, 'left');
       else text(g, level, left(0.016), y(0.022), font(700, T.xl), C.ink, 'left');
-      text(g, 'TIME', left(0.066), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
-      text(g, clock(ctx.time), left(0.066), y(0.022), font(700, T.xl), C.ink, 'left');
+      text(g, 'TIME', left(timeX), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
+      text(g, clock(ctx.time), left(timeX), y(0.022), font(700, T.xl), C.ink, 'left');
       if (ctx.goal && ctx.fault) faultLine(g, ctx.fault, left(0.016), y(0.077), right(0.016) - left(0.016));
       else if (ctx.goal) goalLine(g, ctx.goal, left(0.016), y(0.077));
       break;
     case 'complete': {
       status(g, 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);
-      text(g, `${name} complete`, left(0.016), y(0.11), font(600, T.heading, SERIF), C.ink, 'left');
+      // Shrunk, if need be, to stop short of the time at the right (a long name on a phone).
+      const title = `${name} complete`;
+      g.font = font(600, T.heading, SERIF);
+      const titleSize = T.heading * Math.min(1, (right(0.016) - left(0.016) - mm(95)) / g.measureText(title).width);
+      text(g, title, left(0.016), y(0.11), font(600, titleSize, SERIF), C.ink, 'left');
       text(g, 'TIME', right(0.016), y(0.148), font(700, T.eyebrow), C.muted, 'right', 1);
       text(g, clock(ctx.time), right(0.016), y(0.11), font(700, T.xl), C.ink, 'right');
       // Under the time: the New best pill, or the saved best this run did not beat.
