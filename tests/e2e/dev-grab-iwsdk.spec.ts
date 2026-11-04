@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures';
+import { begin, toSelect } from './start';
 import { LEVELS } from '../../src/levels';
 import { CLEAR, axleAt, carry, device, enterWithHands, gearAt, movePinchTo, nudge, pinch, pinchAt, poke, type Device } from './hands';
-import { begin } from './start';
 
 const [gearId, axleId] = Object.entries(LEVELS[0]!.solution)[0]!;
 
@@ -101,7 +101,7 @@ test('dev server (iwsdk): the headset menu mid-carry puts the gear back, and the
 
 test("dev server (iwsdk): restarting and changing level leave only the new level's gears, back at their start spots", async ({ page }) => {
   const errors = await enter(page, '');
-  await poke(page, 'start');
+  await toSelect(page, (id) => poke(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'select', undefined, { timeout: 10_000 });
   await poke(page, 'level-2');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1, undefined, { timeout: 10_000 });

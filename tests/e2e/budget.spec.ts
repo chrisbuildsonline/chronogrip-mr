@@ -1,6 +1,7 @@
 import { expect, test, type Page } from './fixtures';
 import { RENDER_BUDGET } from '../../src/budget';
 import { LEVELS } from '../../src/levels';
+import { toSelect } from './start';
 
 async function click(page: Page, id: string) {
   await page.waitForFunction((b) => window.__chrono!.buttons().some((x) => x.id === b), id);
@@ -22,7 +23,8 @@ test('every level and the daily stay inside the render budget while playing', as
 
   // Every hand-made level, then the daily.
   for (let i = 0; i < LEVELS.length + 1; i++) {
-    await click(page, i === 0 ? 'start' : 'levels'); // the start panel first, then the pause card
+    if (i === 0) await toSelect(page, (id) => click(page, id)); // the start panel into a level, then Choose level on the pause card
+    else await click(page, 'levels');
     await page.waitForFunction(() => window.__chrono!.flow === 'select');
     await click(page, `level-${i + 1}`);
     await page.waitForFunction((n) => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === n, i);

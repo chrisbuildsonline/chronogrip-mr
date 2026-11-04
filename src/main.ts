@@ -623,7 +623,7 @@ function send(e: FlowEvent): void {
 }
 
 const PRESS: Record<string, FlowEvent> = {
-  start: { type: 'select' }, // Start game / Continue opens level select
+  continue: { type: 'start' }, // straight into the next unsolved level
   levels: { type: 'select' },
   pause: { type: 'pause' },
   resume: { type: 'resume' },
@@ -648,6 +648,8 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
     showPanel();
     return fitView(true);
   }
+  if (flow.name === 'title' && id === 'random') return playRandom();
+  if (flow.name === 'title' && id === 'start') return send({ type: 'select', level: 0 }); // New Game: level 1, no list
   const n = /^level-(\d+)$/.exec(id);
   if (id === 'next' && flow.name === 'complete' && levelIndex >= randomSlot() - 1) {
     // After the daily or a shared puzzle the way on is level select; after a Random puzzle it is the next one.

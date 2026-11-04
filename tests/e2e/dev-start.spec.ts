@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { toSelect } from './start';
 import { PANEL_ZONE } from '../../src/ui';
 import { inZone } from '../../src/seat';
 import { enterWithHands, flow, pinch, poke } from './hands';
@@ -12,9 +13,9 @@ const cardIs = (page: import('@playwright/test').Page, screen: string) =>
 test('dev server: the start panel shows its three buttons inside the comfort zone, and each can be poked open and closed', async ({ page }) => {
   const errors = await enterWithHands(page);
   expect(await flow(page)).toBe('title');
-  await page.waitForFunction(() => window.__chrono!.buttons().length === 3, undefined, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__chrono!.buttons().length === 4, undefined, { timeout: 15_000 });
   const buttons = await page.evaluate(() => window.__chrono!.buttons());
-  expect(buttons.map((b) => [b.id, b.label])).toEqual([['start', 'Start game'], ['options', 'Options'], ['scores', 'High scores']]);
+  expect(buttons.map((b) => [b.id, b.label])).toEqual([['start', 'New Game'], ['random', 'Random level'], ['options', 'Options'], ['scores', 'High scores']]);
   // The head sits at the origin: every button's centre is within the panel zone (yaw 35, pitch 18) and reach (60 cm).
   for (const b of buttons) {
     expect(inZone(b.world, PANEL_ZONE), `${b.id} in the panel zone`).toBe(true);
@@ -27,7 +28,7 @@ test('dev server: the start panel shows its three buttons inside the comfort zon
   await cardIs(page, 'options');
   await pinch(page, 'right', 0);
   const options = await page.evaluate(() => window.__chrono!.buttons());
-  expect(options.map((b) => b.id)).toEqual(['back', 'relaxed', 'sound', 'reset']);
+  expect(options.map((b) => b.id)).toEqual(['relaxed', 'sound', 'reset', 'back']);
   for (const b of options) expect(inZone(b.world, PANEL_ZONE), `${b.id} in the panel zone`).toBe(true);
   expect(await page.evaluate(() => window.__chrono!.labels().map((l) => l.text))).toContain('Grab a gear: pinch it, carry it, let go.');
   await page.screenshot({ path: 'test-results/start/dev-options.png' });
@@ -53,8 +54,8 @@ test('dev server: the start panel shows its three buttons inside the comfort zon
   await poke(page, 'back');
   await cardIs(page, 'title');
 
-  // Start game: level select.
-  await poke(page, 'start');
+  // New Game plays level 1; Choose level on the pause card is the list.
+  await toSelect(page, (id) => poke(page, id));
   await cardIs(page, 'select');
   expect(await card(page)).toBe('select');
   expect(await flow(page)).toBe('select');

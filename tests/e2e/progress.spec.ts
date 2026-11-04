@@ -1,8 +1,8 @@
 import { expect, test, type Page } from './fixtures';
+import { begin, choose, toSelect } from './start';
 import { LEVELS } from '../../src/levels';
 import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { calibrateByMouse } from './calibrate';
-import { begin } from './start';
 
 const KEY = 'chronogrip.progress.v1';
 
@@ -47,7 +47,7 @@ async function place(page: Page, gear: string, axle: string) {
 test('desktop: a solved level is saved, survives a reload and shows its best time on its tile', async ({ page }) => {
   const errors = await open(page);
   expect(await page.evaluate(() => window.__chrono!.progress)).toEqual({ best: {} });
-  expect(await label(page, 'start')).toBe('Start game');
+  expect(await label(page, 'start')).toBe('New Game');
 
   const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
   await begin(page, (id) => click(page, id));
@@ -62,7 +62,7 @@ test('desktop: a solved level is saved, survives a reload and shows its best tim
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);
   expect(await page.evaluate(() => window.__chrono!.progress.best['l1'])).toBe(best);
-  await click(page, 'start');
+  await toSelect(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await frames(page);
   await page.screenshot({ path: 'test-results/f12-select.png' });
@@ -74,23 +74,23 @@ test('desktop: garbage in saved progress boots clean with no progress', async ({
   const errors = await open(page);
   expect(await page.evaluate(() => window.__chrono!.progress)).toEqual({ best: {} });
   expect(await page.evaluate(() => window.__chrono!.flow)).toBe('title');
-  expect(await label(page, 'start')).toBe('Start game');
+  expect(await label(page, 'start')).toBe('New Game');
   expect(errors).toEqual([]);
 });
 
 test('desktop: with level 1 solved the title reads Continue and starts level 2; Back leaves level select', async ({ page }) => {
   await seed(page, JSON.stringify({ best: { l1: 30 } }));
   const errors = await open(page);
-  expect(await label(page, 'start')).toBe('Continue');
+  expect(await label(page, 'continue')).toBe('Continue');
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l2'); // the title board is the level Continue plays
   await frames(page);
   await page.screenshot({ path: 'test-results/f12-title.png' });
 
-  await click(page, 'start');
+  await toSelect(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await click(page, 'back');
   await page.waitForFunction(() => window.__chrono!.flow === 'title');
-  expect(await label(page, 'start')).toBe('Continue');
+  expect(await label(page, 'continue')).toBe('Continue');
 
   await begin(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
@@ -104,8 +104,7 @@ test('desktop: beating a saved time shows New best and saves the lower time', as
   await seed(page, JSON.stringify({ best: { l1: 999 } }));
   const errors = await open(page);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l2');
-  await click(page, 'start');
-  await click(page, 'level-1');
+  await choose(page, (id) => click(page, id), 1);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelId === 'l1');
   await page.waitForFunction(() => window.__chrono!.levelTime > 0);
   const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
@@ -124,7 +123,7 @@ test('desktop: beating a saved time shows New best and saves the lower time', as
 test("desktop: the Daily tile plays today's tinker puzzle through to its complete card", async ({ page }) => {
   const daily = tinkerLevel(dailySeed(new Date()));
   const errors = await open(page);
-  await click(page, 'start');
+  await toSelect(page, (id) => click(page, id));
   const tile = `level-${LEVELS.length + 1}`;
   expect(await label(page, tile)).toBe('Daily');
   await click(page, tile);

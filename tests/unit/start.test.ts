@@ -10,21 +10,28 @@ const ctx = { level: 0, levels: LEVELS.length + 2, daily: true, random: true };
 const levels = [...LEVELS, tinkerLevel(dailySeed(new Date(2026, 10, 4))), tinkerLevel(dailySeed(new Date(2027, 0, 1)))];
 
 describe('start panel layout', () => {
-  it('has three buttons: a primary Start game and two secondaries, Options and High scores', () => {
+  it('has four buttons with no progress: a primary New Game, Random level, Options and High scores; no level list', () => {
     for (const narrow of [false, true]) {
       const l = layout('title', { ...ctx, narrow });
       expect(l.buttons.map((b) => [b.id, b.label, b.kind]), `narrow ${narrow}`).toEqual([
-        ['start', 'Start game', 'primary'],
+        ['start', 'New Game', 'primary'],
+        ['random', 'Random level', 'secondary'],
         ['options', 'Options', 'secondary'],
         ['scores', 'High scores', 'secondary'],
       ]);
     }
   });
 
-  it('reads Continue once any level is solved, Start game before', () => {
+  it('adds a primary Continue on top once any level is solved, and New Game steps down to a secondary', () => {
     for (const narrow of [false, true]) {
-      expect(layout('title', { ...ctx, narrow }).buttons[0]!.label).toBe('Start game');
-      expect(layout('title', { ...ctx, narrow, resume: true }).buttons[0]).toMatchObject({ id: 'start', label: 'Continue', kind: 'primary' });
+      const l = layout('title', { ...ctx, narrow, resume: true });
+      expect(l.buttons.map((b) => [b.id, b.label, b.kind])).toEqual([
+        ['continue', 'Continue', 'primary'],
+        ['start', 'New Game', 'secondary'],
+        ['random', 'Random level', 'secondary'],
+        ['options', 'Options', 'secondary'],
+        ['scores', 'High scores', 'secondary'],
+      ]);
     }
   });
 
@@ -36,14 +43,14 @@ describe('start panel layout', () => {
     }
   });
 
-  it('is one centred column, Start game over Options over High scores, whatever the screen', () => {
+  it('is one centred column, whatever the screen', () => {
     for (const narrow of [false, true]) {
-      const l = layout('title', { ...ctx, narrow });
+      const l = layout('title', { ...ctx, narrow, resume: narrow });
       expect(l.width).toBe(NARROW_W);
       expect(new Set(l.buttons.map((b) => b.x)), `narrow ${narrow}: one x centre`).toEqual(new Set([0]));
       const ys = l.buttons.map((b) => b.y);
-      expect(ys, 'Start game is highest').toEqual([...ys].sort((p, q) => q - p));
-      expect(new Set(ys).size).toBe(3);
+      expect(ys, 'top to bottom').toEqual([...ys].sort((p, q) => q - p));
+      expect(new Set(ys).size).toBe(ys.length);
     }
   });
 
@@ -80,7 +87,7 @@ describe('start panel layout', () => {
   });
 
   it('in XR the start buttons keep their 50 mm and the card is tilted to face the head', () => {
-    const l = layout('title', { ...ctx, xr: true } as never);
+    const l = layout('title', { ...ctx, resume: true });
     const a = menuAnchor(l, levels[0]!);
     for (const b of l.buttons) expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(0.05);
     const mid = panelToWorld(a, [0, l.height / 2, 0]);

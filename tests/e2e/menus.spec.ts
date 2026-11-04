@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { toSelect } from './start';
 
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/menus';
@@ -73,7 +74,7 @@ for (const size of SIZES) {
     const errors = await open(page, size);
     await cardIs(page, 'title');
     await dark(page, 'title');
-    await column(page, ['start', 'options', 'scores'], 'title');
+    await column(page, ['start', 'random', 'options', 'scores'], 'title');
     await centred(page, size, 'title');
     await page.screenshot({ path: `${OUT}/title-${size.name}.png` });
 
@@ -111,7 +112,7 @@ for (const size of SIZES) {
   test(`${size.name}: the stage select is a centred column of tiles (two when the screen is short), readable, and the layer goes when a level starts`, async ({ page }) => {
     const errors = await open(page, size);
     await cardIs(page, 'title');
-    await click(page, 'start');
+    await toSelect(page, (id) => click(page, id));
     await cardIs(page, 'select');
     await dark(page, 'select');
     const all = await rects(page);

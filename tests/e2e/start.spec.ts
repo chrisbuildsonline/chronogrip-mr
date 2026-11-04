@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { choose, toSelect } from './start';
 import { LEVELS } from '../../src/levels';
 
 /** Screenshots land here for a look by eye (gitignored). */
@@ -72,14 +73,14 @@ async function phoneFits(page: Page, at: string) {
 test('desktop 1440x900: the start panel has three buttons, and each reaches its panel and Back returns', async ({ page }) => {
   const errors = await open(page);
   await cardIs(page, 'title');
-  expect(await ids(page)).toEqual(['start', 'options', 'scores']);
-  expect(await labelsOf(page)).toEqual(['Start game', 'Options', 'High scores']);
+  expect(await ids(page)).toEqual(['start', 'random', 'options', 'scores']);
+  expect(await labelsOf(page)).toEqual(['New Game', 'Random level', 'Options', 'High scores']);
   const w = await words(page);
   expect(w).toEqual(expect.arrayContaining(['ChronoGrip', 'A CLOCKWORK PUZZLE', 'Mesh the gears. Wake the bird.']));
   await page.screenshot({ path: `${OUT}/start-1440.png` });
 
   // Start game: level select, and its Back returns to the start panel.
-  await click(page, 'start');
+  await toSelect(page, (id) => click(page, id));
   await cardIs(page, 'select');
   expect(await page.evaluate(() => window.__chrono!.flow)).toBe('select');
   await click(page, 'back');
@@ -88,8 +89,8 @@ test('desktop 1440x900: the start panel has three buttons, and each reaches its 
   // Options: the settings in one place, with a static grab line, and Back.
   await click(page, 'options');
   await cardIs(page, 'options');
-  expect(await ids(page)).toEqual(['back', 'relaxed', 'sound', 'reset']);
-  expect(await labelsOf(page)).toEqual(['Back', 'No timer', 'Sound', 'Reset progress']);
+  expect(await ids(page)).toEqual(['relaxed', 'sound', 'reset', 'back']);
+  expect(await labelsOf(page)).toEqual(['No timer', 'Sound', 'Reset progress', 'Back']);
   expect(await words(page)).toEqual(expect.arrayContaining(['Options', 'Grab a gear: click and drag it.']));
   await page.screenshot({ path: `${OUT}/options-1440.png` });
   await click(page, 'back');
@@ -104,17 +105,15 @@ test('desktop 1440x900: the start panel has three buttons, and each reaches its 
   await cardIs(page, 'title');
 
   // The old title pills are gone: no stray Levels or No timer next to the three buttons.
-  expect(await ids(page)).toEqual(['start', 'options', 'scores']);
+  expect(await ids(page)).toEqual(['start', 'random', 'options', 'scores']);
   expect(errors).toEqual([]);
 });
 
-test('phone 375x812: the start panel is a bottom sheet with Start game under the thumb; Options and High scores fit with 44 px buttons', async ({ page }) => {
+test('phone 375x812: the start panel is a centred column of 44 px buttons', async ({ page }) => {
   const errors = await open(page, PHONE);
   await cardIs(page, 'title');
-  expect(await labelsOf(page)).toEqual(['Start game', 'Options', 'High scores']);
+  expect(await labelsOf(page)).toEqual(['New Game', 'Random level', 'Options', 'High scores']);
   await phoneFits(page, 'start');
-  const start = (await page.evaluate(() => window.__chrono!.buttons())).find((b) => b.id === 'start')!;
-  expect(start.rect[1], 'Start game is in the lower third, under the thumb').toBeGreaterThan((2 * PHONE.height) / 3);
   await page.screenshot({ path: `${OUT}/start-375.png` });
 
   await click(page, 'options');
@@ -139,7 +138,7 @@ test('phone 375x812: the start panel is a bottom sheet with Start game under the
   await click(page, 'back');
   await cardIs(page, 'title');
 
-  await click(page, 'start');
+  await toSelect(page, (id) => click(page, id));
   await cardIs(page, 'select');
   expect(errors).toEqual([]);
 });
@@ -168,8 +167,7 @@ test('desktop: No timer and Sound persist after a reload, and sound off keeps th
 
   // Sound off: a snapped gear makes no click.
   await click(page, 'back');
-  await click(page, 'start');
-  await click(page, 'level-1');
+  await choose(page, (id) => click(page, id), 1);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
@@ -196,7 +194,7 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   const board = { version: 1, initials: 'KIM', boards: { l1: [{ name: 'KIM', ms: 9000, date: '2026-10-01' }] } };
   await seed(page, { [PROGRESS]: { best: { l1: 30, l2: 55 } }, [RANDOM]: { step: 5, slow: false }, [SCORES]: board });
   const errors = await open(page);
-  expect(await labelsOf(page)).toEqual(['Continue', 'Options', 'High scores']);
+  expect(await labelsOf(page)).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores']);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l3'); // the board is the level Continue plays
 
   await click(page, 'options');
@@ -215,7 +213,7 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   await click(page, 'reset-cancel');
   await cardIs(page, 'options');
   expect(await page.evaluate(() => window.__chrono!.options)).toMatchObject({ confirm: false });
-  expect(await ids(page)).toEqual(['back', 'relaxed', 'sound', 'reset']);
+  expect(await ids(page)).toEqual(['relaxed', 'sound', 'reset', 'back']);
   expect(await page.evaluate(() => window.__chrono!.progress.best)).toEqual({ l1: 30, l2: 55 });
 
   // Back leaves the confirm too: opening Options again starts from the plain card.
@@ -223,17 +221,17 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   await cardIs(page, 'options');
   await click(page, 'back');
   await cardIs(page, 'title');
-  expect(await labelsOf(page)).toEqual(['Continue', 'Options', 'High scores']);
+  expect(await labelsOf(page)).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores']);
   await click(page, 'options');
   await cardIs(page, 'options');
   expect(await page.evaluate(() => window.__chrono!.options)).toMatchObject({ confirm: false });
 
-  // Reset now: the start panel is back, reading Start game, on level 1.
+  // Reset now: the start panel is back, reading New Game, on level 1.
   await click(page, 'reset');
   await cardIs(page, 'options');
   await click(page, 'reset-yes');
   await cardIs(page, 'title');
-  expect(await labelsOf(page)).toEqual(['Start game', 'Options', 'High scores']);
+  expect(await labelsOf(page)).toEqual(['New Game', 'Random level', 'Options', 'High scores']);
   expect(await page.evaluate(() => window.__chrono!.progress)).toEqual({ best: {} });
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1');
   expect(await page.evaluate(() => window.__chrono!.random)).toMatchObject({ next: 1, slow: false });
@@ -247,12 +245,12 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);
   await cardIs(page, 'title');
-  expect(await labelsOf(page)).toEqual(['Start game', 'Options', 'High scores']);
+  expect(await labelsOf(page)).toEqual(['New Game', 'Random level', 'Options', 'High scores']);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1');
   expect(errors).toEqual([]);
 });
 
-test('desktop: Enter on the start panel is Start game; Esc leaves Options and High scores', async ({ page }) => {
+test('desktop: Enter on the start panel plays the level it shows; Esc leaves Options and High scores', async ({ page }) => {
   const errors = await open(page);
   await cardIs(page, 'title');
   await click(page, 'options');

@@ -23,7 +23,7 @@ describe('panel layouts', () => {
 
   it('has the buttons each screen needs', () => {
     const ids = (s: (typeof SCREENS)[number], level = 0) => layout(s, { level, levels: 5 }).buttons.map((b) => b.id);
-    expect(ids('title')).toEqual(['start', 'options', 'scores']);
+    expect(ids('title')).toEqual(['start', 'random', 'options', 'scores']);
     expect(ids('select')).toEqual(['back', 'level-1', 'level-2', 'level-3', 'level-4', 'level-5']);
     expect(ids('hud')).toEqual(['pause']);
     expect(ids('complete')).toEqual(['next', 'restart', 'levels']);
@@ -260,9 +260,9 @@ describe('HUD', () => {
 });
 
 describe('title', () => {
-  it('reads Start game with nothing solved and Continue once a level is solved', () => {
-    expect(layout('title', { level: 0, levels: 6 }).buttons[0]!.label).toBe('Start game');
-    expect(layout('title', { level: 1, levels: 6, resume: true }).buttons[0]).toMatchObject({ id: 'start', label: 'Continue', kind: 'primary' });
+  it('reads New Game with nothing solved and adds Continue once a level is solved', () => {
+    expect(layout('title', { level: 0, levels: 6 }).buttons[0]).toMatchObject({ id: 'start', label: 'New Game', kind: 'primary' });
+    expect(layout('title', { level: 1, levels: 6, resume: true }).buttons[0]).toMatchObject({ id: 'continue', label: 'Continue', kind: 'primary' });
   });
 
   it('the complete card on the daily leads back to level select', () => {
@@ -450,13 +450,13 @@ describe('best times and initials cards', () => {
     }
   });
 
-  it('the start panel is one column of three, Continue on top', () => {
+  it('the start panel is one column of five, Continue on top', () => {
     const wide = layout('title', { ...ctx, resume: true });
-    expect(wide.buttons.map((b) => b.label)).toEqual(['Continue', 'Options', 'High scores']);
-    expect(new Set(wide.buttons.map((b) => b.y)).size).toBe(3);
+    expect(wide.buttons.map((b) => b.label)).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores']);
+    expect(new Set(wide.buttons.map((b) => b.y)).size).toBe(5);
     expect(wide.width).toBe(NARROW_W);
     const phone = layout('title', { ...ctx, resume: true, narrow: true });
-    expect(phone.buttons.map((b) => b.id)).toEqual(['start', 'options', 'scores']);
+    expect(phone.buttons.map((b) => b.id)).toEqual(['continue', 'start', 'random', 'options', 'scores']);
     expect(phone.buttons.map((b) => b.y)).toEqual(wide.buttons.map((b) => b.y));
     for (const b of phone.buttons) expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(phone.width / 2 - 0.008 + 1e-9);
   });

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { toSelect } from './start';
 import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
 
@@ -96,7 +97,7 @@ for (const [w, h] of [[375, 812], [768, 1024], [1440, 900]] as const) {
 
     await fits(page, w, h, 'title');
     await square(page, w, h);
-    await click(page, 'start');
+    await toSelect(page, (id) => click(page, id));
     await page.waitForFunction(() => window.__chrono!.flow === 'select');
     await fits(page, w, h, 'select');
     await square(page, w, h);

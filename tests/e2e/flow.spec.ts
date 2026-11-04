@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures';
+import { begin, toSelect } from './start';
 import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
-import { begin } from './start';
 
 async function open(page: Page) {
   const errors: string[] = [];
@@ -76,7 +76,7 @@ test('desktop: title, start, solve level 1, complete card, next loads level 2', 
 
 test('desktop: level select reaches level 3; a hidden tab pauses and resume keeps the board', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'start');
+  await toSelect(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await page.waitForTimeout(300);
   await page.screenshot({ path: 'test-results/f9-select.png' });

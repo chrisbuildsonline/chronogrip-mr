@@ -5,7 +5,7 @@ import { randomLevel, unpackSeed } from '../../src/random';
 import { formatDate } from '../../src/scores';
 import { clockTenths } from '../../src/ui';
 import { calibrateByMouse } from './calibrate';
-import { begin } from './start';
+import { begin, choose } from './start';
 
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/scores';
@@ -147,7 +147,7 @@ test('desktop: a first solve asks for initials (#1), Save writes them, and Best 
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);
   await cardIs(page, 'title');
-  expect((await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label)))).toEqual(['Continue', 'Options', 'High scores']);
+  expect((await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label)))).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores']);
   await click(page, 'scores');
   await cardIs(page, 'board');
   const row = saved.boards.l1![0]!;
@@ -273,8 +273,7 @@ test('desktop: against a full board, a solve faster than the slowest asks at its
 
 test('desktop: a Random solve is saved with its step and shows as "Step N"', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'start');
-  await click(page, `level-${LEVELS.length + 2}`);
+  await choose(page, (id) => click(page, id), LEVELS.length + 2);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await solve(page, await randomSolution(page));
   await cardIs(page, 'initials');
@@ -342,7 +341,7 @@ test('phone 375 x 812: the start panel fits its three buttons, and the board is 
   await cardIs(page, 'title');
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
   const pills = await page.evaluate(() => window.__chrono!.buttons());
-  expect(pills.map((b) => b.id)).toEqual(['start', 'options', 'scores']);
+  expect(pills.map((b) => b.id)).toEqual(['start', 'random', 'options', 'scores']);
   for (const b of pills) {
     expect(b.rect[2] - b.rect[0], `${b.id} is 44 px wide or more`).toBeGreaterThanOrEqual(44);
     expect(b.rect[3] - b.rect[1], `${b.id} is 44 px tall or more`).toBeGreaterThanOrEqual(44);
@@ -356,7 +355,7 @@ test('phone 375 x 812: the start panel fits its three buttons, and the board is 
     expect(apart, `${a.id} and ${b.id} do not overlap`).toBe(true);
   }
   const labels = await page.evaluate(() => window.__chrono!.labels());
-  for (const name of ['Start game', 'Options', 'High scores']) {
+  for (const name of ['New Game', 'Random level', 'Options', 'High scores']) {
     const l = labels.find((x) => x.text === name)!;
     expect(l.height, `${name} is 12 px or more`).toBeGreaterThanOrEqual(12);
     const b = pills.find((p) => p.label === name)!;

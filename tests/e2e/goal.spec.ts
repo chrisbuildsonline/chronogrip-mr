@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { choose, toSelect } from './start';
 import { LEVELS } from '../../src/levels';
 import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { calibrateByMouse } from './calibrate';
@@ -83,8 +84,7 @@ async function badgePixels(page: Page, at: [number, number], path: string) {
 
 test('desktop: the target gear carries a goal badge that turns amber once the train matches it', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'start');
-  await click(page, 'level-2');
+  await choose(page, (id) => click(page, id), 2);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelId === 'l2');
   expect(await page.evaluate(() => {
     const g = window.__chrono!.goal!;
@@ -118,7 +118,7 @@ for (const [i, level] of LEVELS.entries()) {
   if (i < 5) continue;
   test(`desktop: level ${i + 1} (${level.name}) solves through to its complete card, and Next goes on`, async ({ page }) => {
     const errors = await open(page);
-    await click(page, 'start');
+    await toSelect(page, (id) => click(page, id));
     await page.waitForFunction(() => window.__chrono!.flow === 'select');
     const tiles = await page.evaluate(() => window.__chrono!.buttons().filter((b) => b.id.startsWith('level-')).map((b) => b.label));
     expect(tiles).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', 'Daily', 'Random']);

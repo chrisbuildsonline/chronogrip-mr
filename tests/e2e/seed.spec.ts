@@ -1,9 +1,9 @@
 import { expect, test, type Page } from './fixtures';
+import { begin, choose, toSelect } from './start';
 import { LEVELS } from '../../src/levels';
 import { encodeSeed } from '../../src/seed';
 import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { calibrateByMouse } from './calibrate';
-import { begin } from './start';
 
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/seed';
@@ -98,8 +98,7 @@ test('desktop: when the clipboard fails, Copy link shows the link text instead',
   });
   const daily = tinkerLevel(dailySeed(new Date()));
   const errors = await open(page, '/');
-  await click(page, 'start');
-  await click(page, `level-${LEVELS.length + 1}`);
+  await choose(page, (id) => click(page, id), LEVELS.length + 1);
   await solve(page, daily.solution);
   expect(await words(page)).toContain(`Puzzle code ${encodeSeed(dailySeed(new Date()))}`);
   expect(await words(page)).toContain('Daily complete'); // today's daily keeps its name
@@ -117,8 +116,7 @@ test('desktop: when the clipboard fails, Copy link shows the link text instead',
 
 test('desktop: a hand-made level has no puzzle code and no Copy link', async ({ page }) => {
   const errors = await open(page, '/');
-  await click(page, 'start');
-  await click(page, 'level-1');
+  await choose(page, (id) => click(page, id), 1);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   expect(await page.evaluate(() => window.__chrono!.seedCode)).toBeNull();
   const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
@@ -138,8 +136,7 @@ for (const bad of ['', 'nope!', 'ZZZZZZZZZ', 'abc']) {
     expect(await page.evaluate(() => window.__chrono!.seedCode)).toBeNull();
     expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1'); // the normal game, as without a seed
     await page.screenshot({ path: `${OUT}/bad-seed-1440x900.png` });
-    await click(page, 'start');
-    await click(page, `level-${LEVELS.length + 1}`);
+    await choose(page, (id) => click(page, id), LEVELS.length + 1);
     await page.waitForFunction(() => window.__chrono!.flow === 'playing');
     expect(await page.evaluate(() => window.__chrono!.levelId)).toBe(tinkerLevel(dailySeed(new Date())).id);
     expect(errors).toEqual([]);
@@ -149,7 +146,7 @@ for (const bad of ['', 'nope!', 'ZZZZZZZZZ', 'abc']) {
 for (const size of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) {
   test(`${size.width}x${size.height}: the shared puzzle's level-select tile reads Shared and fits; the daily's still reads Daily`, async ({ page }) => {
     const errors = await open(page, `/?seed=${CODE}`, size);
-    await click(page, 'start');
+    await toSelect(page, (id) => click(page, id));
     await page.waitForFunction(() => window.__chrono!.flow === 'select');
     await page.waitForFunction(() => window.__chrono!.labels().some((l) => l.text === 'Shared'));
     await frames(page);
@@ -164,7 +161,7 @@ for (const size of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) 
 
     await page.goto('/');
     await page.waitForFunction(() => window.__chrono?.ready === true);
-    await click(page, 'start');
+    await toSelect(page, (id) => click(page, id));
     expect(await page.evaluate((id) => window.__chrono!.buttons().find((b) => b.id === id)!.label, `level-${LEVELS.length + 1}`)).toBe('Daily');
   });
 }

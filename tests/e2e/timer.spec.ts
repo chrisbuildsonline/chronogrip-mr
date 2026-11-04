@@ -5,7 +5,7 @@ import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { clock } from '../../src/ui';
 import { parFor } from '../../src/timer';
 import { calibrateByMouse } from './calibrate';
-import { begin } from './start';
+import { begin, choose } from './start';
 
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/timer';
@@ -201,8 +201,7 @@ test('desktop: the daily and a shared ?seed= puzzle get the par of their own dif
   expect((await timer(page)).par).toBe(parFor(tinkerLevel(seed)));
   const errors2 = await open(page, '/');
   expect((await timer(page)).par).toBe(L1_PAR);
-  await click(page, 'start');
-  await click(page, `level-${LEVELS.length + 1}`);
+  await choose(page, (id) => click(page, id), LEVELS.length + 1);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   expect((await timer(page)).par).toBe(parFor(tinkerLevel(dailySeed(new Date()))));
   expect(await words(page)).toContain('LEFT');

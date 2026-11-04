@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { choose } from './start';
 import { C } from '../../src/palette';
 import { FAULT_WORDS } from '../../src/fault';
 
@@ -24,8 +25,7 @@ async function click(page: Page, id: string) {
 }
 
 async function playLevel(page: Page, n: number, id: string) {
-  await click(page, 'start');
-  await click(page, `level-${n}`);
+  await choose(page, (id) => click(page, id), n);
   await page.waitForFunction((l) => window.__chrono!.flow === 'playing' && window.__chrono!.levelId === l && !window.__chrono!.cameraMoving, id);
 }
 

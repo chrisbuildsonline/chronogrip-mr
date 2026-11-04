@@ -16,18 +16,18 @@ test('demo story (desktop): click Start, drag the escapement gear onto its axle,
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
 
-  await test.step('Given the app is loaded and the title shows Enter MR and Start', async () => {
+  await test.step('Given the app is loaded and the title shows Enter MR and New Game', async () => {
     await page.goto('/');
     await page.waitForFunction(() => window.__chrono?.ready === true);
     await expect(page.getByRole('button', { name: 'Enter MR' })).toBeVisible();
     expect(await page.evaluate(() => window.__chrono!.flow)).toBe('title');
     await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'start'));
-    expect(await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'start')!.label)).toMatch(/start/i);
+    expect(await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'start')!.label)).toMatch(/new game/i);
     await page.waitForTimeout(1200); // let the ghost hand reach its pose
     await shot(page, '1-title');
   });
 
-  await test.step('When the player clicks Start game and picks level 1', async () => {
+  await test.step('When the player clicks New Game, which plays level 1 at once', async () => {
     await begin(page, async (id) => {
       await page.waitForFunction((b) => !window.__chrono!.cameraMoving && window.__chrono!.buttons().some((x) => x.id === b), id);
       const [x, y] = await page.evaluate((b) => window.__chrono!.buttons().find((x) => x.id === b)!.screen, id);

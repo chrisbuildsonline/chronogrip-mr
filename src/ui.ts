@@ -67,8 +67,8 @@ const MENU_GAP = 0.012;
 /** The start panel's big buttons: 50 mm tall in XR and everywhere else; three stacked, with the words over them. */
 const START_BH = 0.05;
 const START_BTN_W = 0.2;
-/** The start panel: three buttons stacked, then the tagline, title and eyebrow over them. */
-export const START_H = PAD + 3 * START_BH + 2 * MENU_GAP + 0.106;
+/** The start panel: up to five buttons stacked, then the tagline, title and eyebrow over them. */
+const startHeight = (buttons: number) => PAD + buttons * START_BH + (buttons - 1) * MENU_GAP + 0.106;
 /** Room over the options buttons for the heading and the static line. */
 const OPTIONS_HEAD = 0.078;
 /** The level select's tiles: 44 mm tall and 6 mm apart in one column (a mouse), 50 mm and 12 mm in two (a finger or a hand); room over them for the "Levels" heading. */
@@ -84,9 +84,16 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
   const [primaryW, secondaryW] = narrow ? [0.1, 0.072] : [0.11, 0.088];
   switch (screen) {
     case 'title': {
-      // One column, centred: Start game (or Continue), Options, High scores, top to bottom.
-      const start = ['start', ctx.resume ? 'Continue' : 'Start game', 'primary'] as const;
-      return { width: NARROW_W, height: START_H, buttons: stack(PAD, [start, ['options', 'Options', 'secondary'], ['scores', 'High scores', 'secondary']], START_BTN_W, START_BH) };
+      // One column, centred: Continue (only with progress), New Game, Random level, Options, High scores, top to bottom.
+      // Continue and New Game go straight into a level; the level list is Choose level on the pause card.
+      const items: Parameters<typeof stack>[1] = [
+        ...(ctx.resume || ctx.shared ? [['continue', ctx.shared ? 'Shared puzzle' : 'Continue', 'primary'] as const] : []), // a ?seed= link opens its puzzle from here
+        ['start', 'New Game', ctx.resume || ctx.shared ? 'secondary' : 'primary'],
+        ['random', 'Random level', 'secondary'],
+        ['options', 'Options', 'secondary'],
+        ['scores', 'High scores', 'secondary'],
+      ];
+      return { width: NARROW_W, height: startHeight(items.length), buttons: stack(PAD, items, START_BTN_W, START_BH) };
     }
     case 'options': {
       // One column: the two switches, Reset progress, then Back. Confirming swaps the first three for a choice.
@@ -146,7 +153,7 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
         return {
           width: 0.42,
           height: 0.15,
-          buttons: row(low, [['resume', 'Resume', 'primary', 0.1], ['restart', 'Restart', 'secondary', 0.084], ['levels', 'Levels', 'secondary', 0.084], ['relaxed', 'No timer', 'toggle', 0.09]]),
+          buttons: row(low, [['resume', 'Resume', 'primary', 0.1], ['restart', 'Restart', 'secondary', 0.08], ['levels', 'Choose level', 'secondary', 0.108], ['relaxed', 'No timer', 'toggle', 0.09]]),
         };
       }
       // Phone: the row is full, and the zone does not apply outside XR, so the toggle rides the top right beside the "Paused" words.
@@ -154,7 +161,7 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       return {
         width: NARROW_W,
         height: 0.15,
-        buttons: [...row(low, [['resume', 'Resume', 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW], ['levels', 'Levels', 'secondary', secondaryW]]), toggle],
+        buttons: [...row(low, [['resume', 'Resume', 'primary', 0.086], ['restart', 'Restart', 'secondary', 0.066], ['levels', 'Choose level', 'secondary', 0.1]]), toggle],
       };
     }
     case 'initials': {

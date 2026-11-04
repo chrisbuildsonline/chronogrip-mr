@@ -26,17 +26,8 @@ test('desktop: the canvas is labelled, Enter is the card primary, Esc pauses and
   await page.keyboard.press('Escape');
   expect(await flowOf(page)).toBe('title');
 
-  // Enter on the start panel is Start game: it opens level select, Esc comes back, and a level tile plays.
+  // Enter on the start panel plays the level it shows (Continue), no list.
   await page.keyboard.press('Enter');
-  await expect.poll(() => flowOf(page)).toBe('select');
-  await page.keyboard.press('Escape');
-  await expect.poll(() => flowOf(page)).toBe('title');
-  await page.keyboard.press('Enter');
-  await expect.poll(() => flowOf(page)).toBe('select');
-  await hasButton(page, 'level-1');
-  await page.waitForFunction(() => !window.__chrono!.cameraMoving);
-  const [tx, ty] = await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'level-1')!.screen);
-  await page.mouse.click(tx, ty);
   await expect.poll(() => flowOf(page)).toBe('playing');
   // Esc pauses, Esc again resumes, Enter on the pause card is Resume.
   await page.keyboard.press('Escape');
