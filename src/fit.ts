@@ -1,4 +1,4 @@
-import type { Level } from './levels';
+import { LEVELS, type Level } from './levels';
 import { BIRD, DIAL_AT, KNOB_TOP } from './clockwork';
 import { BOARD_MARGIN, TRAY_HALF, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
 import { NARROW_W, SCREENS, layout, panelAnchor, panelToWorld, type Anchor, type Screen } from './ui';
@@ -127,7 +127,7 @@ export function phoneShift(o: View & { d: number; points: readonly Vec3[]; top: 
 
 /** Page pixels kept clear along the bottom of a phone view for the tallest of `screens` as a bottom-sheet card. */
 export function phoneReserve(width: number, screens: readonly Screen[], levels: number): number {
-  const tallest = Math.max(...screens.map((s) => layout(s, { level: 0, levels, daily: true, narrow: true }).height));
+  const tallest = Math.max(...screens.map((s) => layout(s, { level: 0, levels, daily: true, random: levels > LEVELS.length + 1, narrow: true }).height));
   return PHONE.bottom + PHONE.gap + tallest * phonePx(width);
 }
 
@@ -152,7 +152,7 @@ export function viewContent(level: Level, levels: number, pose: TrayPose, back: 
   }
   const anchor = faceView(panelAnchor(level, pose), back);
   for (const s of screens) {
-    const l = layout(s, { level: 0, levels, daily: true });
+    const l = layout(s, { level: 0, levels, daily: true, random: levels > LEVELS.length + 1 });
     for (const [sx, k] of [[-1, 0], [1, 0], [-1, 1], [1, 1]] as const) out.push(panelToWorld(anchor, [(sx * l.width) / 2, k * l.height, 0]));
   }
   out.push(trayToWorld(DIAL_AT[0], DIAL_AT[1], KNOB_TOP, pose));

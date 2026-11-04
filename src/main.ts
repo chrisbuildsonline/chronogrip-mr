@@ -13,7 +13,7 @@ import { tuneForSoftwareGl } from './render';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
 import { SCREENS, buttonAt, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button } from './ui';
-import { createPanels, SMALL_TABLE_TEXT } from './panels';
+import { createPanels, RING, SMALL_TABLE_TEXT } from './panels';
 import { createGhostHand, ghostAt, ghostTwistAt } from './ghost';
 import { TWEEN_MS, easeOut, tweenAt } from './tween';
 import { faultKind, faultOf, faultText, shakeSpin, shakeTilt, SHAKE_MS, type Fault } from './fault';
@@ -26,6 +26,7 @@ import { firstUnsolved, loadProgress, recordOutcome, recordSolve, saveProgress, 
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
 import { dailySeed, tinkerLevel, withDaily } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
+import { adapt, freshSeed, loadRandom, puzzleFor, randomLevel, saveRandom, type RandomState } from './random';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
 import { goalOf, goalText } from './goal';
@@ -55,9 +56,6 @@ if (seedParam !== null && sharedSeed === null && seedNote) {
   seedNote.hidden = false;
   setTimeout(() => (seedNote.hidden = true), 8000);
 }
-// The hand-made levels, then today's daily tinker puzzle (or the shared one) after them.
-let levels: readonly Level[] = [...LEVELS, tinkerLevel(sharedSeed ?? dailySeed(new Date()))];
-let levelIds = levels.map((l) => l.id);
 // Saved best times. Reading localStorage itself can throw (storage blocked), so fall back to none.
 const storage = (() => {
   try {
@@ -66,6 +64,22 @@ const storage = (() => {
     return null;
   }
 })();
+// Random mode (src/random.ts): the run's step is saved; the puzzle in the last slot is re-rolled for each new one.
+// Its solves are never saved as level progress: the run's one key is all it keeps.
+let run: RandomState = loadRandom(storage);
+/** The step of the Random puzzle in the last slot, and whether its first solve has already moved the run on. */
+let randomStep = run.step;
+let randomScored = false;
+const rollRandom = (): Level => {
+  randomStep = run.step;
+  randomScored = false;
+  return randomLevel(randomStep, freshSeed(randomStep));
+};
+// The hand-made levels, then today's daily tinker puzzle (or the shared one), then the Random puzzle.
+let levels: readonly Level[] = [...LEVELS, sharedSeed === null ? tinkerLevel(dailySeed(new Date())) : puzzleFor(sharedSeed, tinkerLevel), rollRandom()];
+let levelIds = levels.map((l) => l.id);
+/** The slot of the Random puzzle: always the last one. */
+const randomSlot = () => levels.length - 1;
 let progress: Progress = loadProgress(storage);
 /** True on the complete card when this solve beat a saved time. */
 let newBest = false;
@@ -75,10 +89,10 @@ let relaxed = loadRelaxed(storage);
 let par = 0;
 let outcome: Outcome | null = null;
 /** The title board is the level Continue plays: the first one not yet solved. */
-const continueAt = () => firstUnsolved(progress, levelIds);
-const resume = () => levelIds.some((id) => Object.hasOwn(progress.best, id));
+const continueAt = () => firstUnsolved(progress, levelIds.slice(0, -1));
+const resume = () => levelIds.slice(0, -1).some((id) => Object.hasOwn(progress.best, id));
 
-let levelIndex = sharedSeed === null ? continueAt() : levels.length - 1;
+let levelIndex = sharedSeed === null ? continueAt() : randomSlot() - 1;
 let level: Level = levels[levelIndex]!;
 par = parFor(level);
 tuneForSoftwareGl(world.renderer);
@@ -388,14 +402,22 @@ function putBack(): void {
 /** On the title or level select, swaps in today's daily if the date has rolled over since it was picked (a session left open past midnight). */
 function rolloverDaily(): void {
   if (sharedSeed !== null || (flow.name !== 'title' && flow.name !== 'select')) return;
-  const fresh = withDaily(levels, new Date());
-  if (fresh === levels) return;
-  levels = fresh;
+  const base = levels.slice(0, -1);
+  const fresh = withDaily(base, new Date());
+  if (fresh === base) return;
+  levels = [...fresh, levels[randomSlot()]!];
   levelIds = levels.map((l) => l.id);
   if (flow.name === 'title') {
     loadLevel(continueAt());
     flow = { ...flow, level: levelIndex };
   }
+}
+
+/** A new Random puzzle at the run's step, played at once. */
+function playRandom(): void {
+  levels = [...levels.slice(0, -1), rollRandom()];
+  levelIds = levels.map((l) => l.id);
+  send({ type: 'select', level: randomSlot() });
 }
 
 function send(e: FlowEvent): void {
@@ -421,15 +443,25 @@ function send(e: FlowEvent): void {
     sound.chime();
     rewardAt = calibratedAt = performance.now();
     letGoKnob();
-    // A first solve is just solved; New best is for beating a time already saved.
-    const had = Object.hasOwn(progress.best, level.id);
-    const r = recordSolve(progress, level.id, levelClock.seconds);
-    progress = r.progress;
-    newBest = had && r.newBest;
-    // Held to par unless Relaxed: past it the bird still wakes, but the card says over time. The best time is kept either way.
     outcome = relaxed ? null : outcomeOf(levelClock.seconds, par);
-    if (outcome) progress = recordOutcome(progress, level.id, outcome);
-    if (r.newBest || outcome) saveProgress(storage, progress);
+    if (levelIndex === randomSlot()) {
+      // Random: the first solve of a puzzle moves the run on (a Retry after going over does not count twice); nothing goes into level progress.
+      newBest = false;
+      if (!randomScored) {
+        randomScored = true;
+        run = adapt(run, relaxed ? null : levelClock.seconds, par);
+        saveRandom(storage, run);
+      }
+    } else {
+      // A first solve is just solved; New best is for beating a time already saved.
+      const had = Object.hasOwn(progress.best, level.id);
+      const r = recordSolve(progress, level.id, levelClock.seconds);
+      progress = r.progress;
+      newBest = had && r.newBest;
+      // Held to par unless Relaxed: past it the bird still wakes, but the card says over time. The best time is kept either way.
+      if (outcome) progress = recordOutcome(progress, level.id, outcome);
+      if (r.newBest || outcome) saveProgress(storage, progress);
+    }
     burst.position.set(...trayLocal(DIAL_AT[0], DIAL_AT[1], 0.008));
   }
   showPanel();
@@ -456,7 +488,12 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   if (by === 'hand' && now - pressedAt < PRESS_GAP_MS) return;
   pressedAt = now;
   const n = /^level-(\d+)$/.exec(id);
-  if (id === 'copy') void copyLink();
+  if (id === 'next' && flow.name === 'complete' && levelIndex >= randomSlot() - 1) {
+    // After the daily or a shared puzzle the way on is level select; after a Random puzzle it is the next one.
+    if (levelIndex === randomSlot()) playRandom();
+    else send({ type: 'select' });
+  } else if (n && Number(n[1]) - 1 === randomSlot()) playRandom();
+  else if (id === 'copy') void copyLink();
   else if (id === 'relaxed') {
     relaxed = !relaxed;
     saveRelaxed(storage, relaxed);
@@ -1015,6 +1052,9 @@ function showPanel(now = performance.now()): void {
     levels: levels.length,
     daily: sharedSeed === null, // a shared puzzle in the last slot is not today's daily: it is named "Shared puzzle"
     shared: sharedSeed !== null,
+    random: true,
+    step: randomStep,
+    next: run.step,
     code: codeOf(level),
     link: copy.state === 'failed' ? copy.link : null,
     copy: world.renderer.xr.isPresenting || !codeOf(level) ? undefined : copy.state === 'copied' ? 'Copied' : 'Copy link',
@@ -1184,6 +1224,9 @@ window.__chrono = Object.freeze({
   get seedCode() {
     return codeOf(level);
   },
+  get random() {
+    return { mode: levelIndex === randomSlot(), step: randomStep, next: run.step, slow: run.slow, slot: randomSlot() };
+  },
   get seedNote() {
     return seedNote && !seedNote.hidden ? seedNote.textContent : null;
   },
@@ -1200,7 +1243,7 @@ window.__chrono = Object.freeze({
     return newBest;
   },
   get timer() {
-    return { relaxed, par, ring: panels.ring, ...timerView(levelClock.seconds, par) };
+    return { relaxed, par, ring: panels.ring, ringSpan: [RING.x - RING.r, RING.x + RING.r] as const, ...timerView(levelClock.seconds, par) };
   },
   get outcome() {
     return outcome;

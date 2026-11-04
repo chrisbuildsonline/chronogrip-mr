@@ -99,7 +99,7 @@ async function phoneCard(page: Page, w: number, h: number, name: Screen | 'calib
 }
 
 for (const [w, h] of [[375, 812], [390, 844]] as const) {
-  test(`phone ${w}x${h}: every card is a bottom sheet with 44 px buttons and 12 px words; every level tile in two rows and clickable`, async ({ page }) => {
+  test(`phone ${w}x${h}: every card is a bottom sheet with 44 px buttons and 12 px words; every level tile in two rows, Random under them, and clickable`, async ({ page }) => {
     const errors = await open(page, w, h);
     // The page header's words are 12 px or more too.
     for (const sel of ['#title', '#enter-mr', '#enter-note']) {
@@ -112,11 +112,13 @@ for (const [w, h] of [[375, 812], [390, 844]] as const) {
     await page.waitForFunction(() => window.__chrono!.flow === 'select');
     await phoneCard(page, w, h, 'select');
     const tiles = (await page.evaluate(() => window.__chrono!.buttons())).filter((b) => b.id.startsWith('level-'));
-    expect(tiles.map((t) => t.id)).toEqual(Array.from({ length: 9 }, (_, i) => `level-${i + 1}`));
-    expect(new Set(tiles.map((t) => Math.round(t.screen[1]))).size, 'tiles in two rows').toBe(2);
+    expect(tiles.map((t) => t.id)).toEqual(Array.from({ length: 10 }, (_, i) => `level-${i + 1}`));
+    expect(new Set(tiles.slice(0, 9).map((t) => Math.round(t.screen[1]))).size, 'tiles in two rows').toBe(2);
+    expect(tiles[9]!.label, 'Random on a row of its own').toBe('Random');
+    expect(tiles[9]!.screen[1]).toBeGreaterThan(Math.max(...tiles.slice(0, 9).map((t) => t.screen[1])));
 
     // Every tile is a working target: each one opens its level, and Pause, Levels comes back.
-    for (let i = 1; i <= 9; i++) {
+    for (let i = 1; i <= 10; i++) {
       await click(page, `level-${i}`);
       await page.waitForFunction((k) => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === k, i - 1);
       await click(page, 'pause');
@@ -161,7 +163,7 @@ test('desktop 1440x900: the cards are the wide ones, placed and sized as before'
     const eye = await page.evaluate(() => window.__chrono!.cameraAt);
     eye.forEach((v, k) => expect(v, 'tuned eye').toBeCloseTo(DESKTOP_EYE[k]!, 4));
     const level = await page.evaluate(() => window.__chrono!.levelIndex);
-    const wide = layout(name, { level, levels: LEVELS.length + 1, daily: true });
+    const wide = layout(name, { level, levels: LEVELS.length + 2, daily: true, random: true });
     const card = await page.evaluate(() => window.__chrono!.card);
     expect(card).toEqual({ screen: name, width: wide.width, height: wide.height });
     // Anchored above the board, face on to the camera, at full size: the corners land where they always have.

@@ -121,11 +121,11 @@ for (const [i, level] of LEVELS.entries()) {
     await click(page, 'levels');
     await page.waitForFunction(() => window.__chrono!.flow === 'select');
     const tiles = await page.evaluate(() => window.__chrono!.buttons().filter((b) => b.id.startsWith('level-')).map((b) => b.label));
-    expect(tiles).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', 'Daily']);
+    expect(tiles).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', 'Daily', 'Random']);
     if (i === 5) {
       await frames(page);
       await page.screenshot({ path: `${OUT}/select.png` });
-      // The nine-tile card is the widest: it must stay clear of the Enter MR note in the top right corner.
+      // The ten-tile card is the widest: it must stay clear of the Enter MR note in the top right corner.
       const note = (await page.locator('#enter-note').boundingBox())!;
       const corners = await page.evaluate(() => window.__chrono!.panelCorners());
       expect(Math.max(...corners.map(([x]) => x))).toBeLessThan(note.x - 8);

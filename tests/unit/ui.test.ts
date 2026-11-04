@@ -165,6 +165,72 @@ describe('level select with the daily', () => {
   });
 });
 
+describe('level select with Random', () => {
+  const N = LEVELS.length + 2; // eight levels, the daily or shared puzzle, Random
+  const wide = (extra = {}) => layout('select', { level: 0, levels: N, daily: true, random: true, ...extra });
+
+  it('has a Random tile after the daily, and the daily or shared tile keeps its place', () => {
+    expect(wide().buttons.map((b) => b.label)).toEqual(['Back', '1', '2', '3', '4', '5', '6', '7', '8', 'Daily', 'Random']);
+    expect(wide({ daily: false, shared: true }).buttons.at(-2)!.label).toBe('Shared');
+    expect(wide().buttons.at(-1)).toMatchObject({ id: 'level-10', kind: 'tile' });
+    expect(layout('select', { level: 0, levels: N - 1, daily: true }).buttons.some((b) => b.label === 'Random')).toBe(false);
+  });
+
+  it('keeps every target 4 cm or more, 12 mm apart and inside the panel, wide and on a phone', () => {
+    for (const sel of [wide(), wide({ narrow: true })]) {
+      for (const b of sel.buttons) {
+        expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(BUTTON_MIN_M);
+        expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(sel.width / 2 - 0.016 + 1e-9);
+        expect(b.y - b.h / 2).toBeGreaterThanOrEqual(0.016 - 1e-9);
+        expect(b.y + b.h / 2).toBeLessThanOrEqual(sel.height - 0.016 + 1e-9);
+      }
+      for (const a of sel.buttons) for (const b of sel.buttons) {
+        if (a === b) continue;
+        const apart = Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= 0.012 - 1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= 0.012 - 1e-9;
+        expect(apart, `${a.id} ${b.id}`).toBe(true);
+      }
+    }
+  });
+
+  it('is no wider than the nine tile row was, and every target stays inside the comfort cone above every level', () => {
+    expect(wide().width).toBeLessThanOrEqual(0.674 + 0.011);
+    for (const level of [...LEVELS, tinkerLevel(dailySeed(new Date(2026, 10, 4)))]) {
+      const a = panelAnchor(level);
+      for (const b of wide().buttons) {
+        const w = panelToWorld(a, [b.x, b.y, 0]);
+        expect(inZone(w, PANEL_ZONE), `${level.id} ${b.id}`).toBe(true);
+        expect(Math.hypot(...w)).toBeLessThanOrEqual(0.6);
+      }
+    }
+  });
+
+  it('on a phone Random is a bar on a row of its own under the grid', () => {
+    const sel = wide({ narrow: true });
+    const bar = sel.buttons.find((b) => b.id === 'level-10')!;
+    expect(bar.w).toBeGreaterThan(0.2);
+    expect(sel.buttons.filter((b) => b !== bar).every((b) => b.y - b.h / 2 > bar.y + bar.h / 2)).toBe(true);
+    expect(sel.width).toBe(NARROW_W);
+  });
+
+  it('the Random complete card leads with Next puzzle; over par Retry leads and Next puzzle follows', () => {
+    const at = { level: N - 1, levels: N, daily: true, random: true } as const;
+    expect(layout('complete', at).buttons.map((b) => [b.id, b.label, b.kind])).toEqual([['next', 'Next puzzle', 'primary'], ['restart', 'Restart', 'secondary']]);
+    expect(layout('complete', { ...at, over: true }).buttons.map((b) => [b.id, b.label, b.kind])).toEqual([['restart', 'Retry', 'primary'], ['next', 'Next puzzle', 'secondary']]);
+    expect(layout('complete', { ...at, copy: 'Copy link' }).buttons.map((b) => b.id)).toEqual(['next', 'restart', 'copy']);
+    // the daily's own card is unchanged when Random is on the select card: it still leads back to level select
+    expect(layout('complete', { level: N - 2, levels: N, daily: true, random: true }).buttons.map((b) => b.label)).toEqual(['Levels', 'Restart']);
+  });
+
+  it('the Random complete card fits its row on a phone and desktop', () => {
+    for (const narrow of [false, true]) {
+      for (const over of [false, true]) {
+        const l = layout('complete', { level: N - 1, levels: N, daily: true, random: true, copy: 'Copy link', over, narrow });
+        for (const b of l.buttons) expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(l.width / 2 - 0.0145 + 1e-9);
+      }
+    }
+  });
+});
+
 describe('HUD', () => {
   it('has a goal line across the top, above the level, the time and the pause button', () => {
     const hud = layout('hud', { level: 0, levels: 9, daily: true });

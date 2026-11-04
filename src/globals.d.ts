@@ -119,7 +119,7 @@ interface ChronoHook {
    * Live: the level timer. `relaxed`: the Relaxed (no timer) setting; `par`: this level's time limit in seconds; `left`,
    * `over`: whole seconds left (0 once out) and past par; `fraction`: share of par left, 0..1; `ring`: the HUD up now carries the countdown ring.
    */
-  readonly timer: { readonly relaxed: boolean; readonly par: number; readonly left: number; readonly over: number; readonly fraction: number; readonly ring: boolean };
+  readonly timer: { readonly relaxed: boolean; readonly par: number; readonly left: number; readonly over: number; readonly fraction: number; readonly ring: boolean; /** The ring's left and right edge, metres from the card's left edge. */ readonly ringSpan: readonly [number, number] };
   /** Live: whether this level's last solve beat par ('pass') or not ('over'); null while playing and in Relaxed. */
   readonly outcome: 'pass' | 'over' | null;
   /** Live: saved pass/over per level id (a copy); Relaxed solves are not marked. */
@@ -138,6 +138,8 @@ interface ChronoHook {
   labels(): { text: string; size: number; height: number; y: number; left: number; right: number }[];
   /** Live: the puzzle code of the loaded level (a tinker level), null for a hand-made one. */
   readonly seedCode: string | null;
+  /** Live: Random mode. `mode`: the board is the Random puzzle; `step`: its step; `next`: the step of the next puzzle (saved); `slow`: the last solve was over par; `slot`: its level index. */
+  readonly random: { readonly mode: boolean; readonly step: number; readonly next: number; readonly slow: boolean; readonly slot: number };
   /** Live: the note shown for an invalid ?seed= while it is up, else null. */
   readonly seedNote: string | null;
   /** Live: the complete card's Copy link; `link` is what was (or would be) copied, null while idle. */

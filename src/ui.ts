@@ -32,10 +32,10 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
 }
 
 /**
- * `daily`: the last level is today's tinker puzzle; `shared`: it is a puzzle opened from a ?seed= link. `resume`: a level is solved, so the title offers Continue.
+ * `random`: the last level is the endless Random puzzle, after the daily or shared one, with its own tile; `daily`: the last base level is today's tinker puzzle; `shared`: it is a puzzle opened from a ?seed= link. `resume`: a level is solved, so the title offers Continue.
  * `over`: the level was solved past its par time, so the complete card leads with Retry. `copy`: the label of the Copy link pill on the complete card (absent: no pill). `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
  */
-export type LayoutCtx = { level: number; levels: number; daily?: boolean; shared?: boolean; resume?: boolean; narrow?: boolean; copy?: string; over?: boolean };
+export type LayoutCtx = { level: number; levels: number; daily?: boolean; shared?: boolean; random?: boolean; resume?: boolean; narrow?: boolean; copy?: string; over?: boolean };
 
 /** Width of every card on a phone in portrait (outside XR), metres of panel space. */
 export const NARROW_W = 0.3;
@@ -46,6 +46,9 @@ const NARROW_TILE_H = 0.06;
 const NARROW_HEAD = 0.052;
 
 const TILE_W = 0.05;
+/** With the Random tile there are ten, so the level tiles narrow a little and Random, the longest word, gets a wider one: the row is no wider than before, so the outer tile stays inside the yaw cone. */
+const TILE_W_RANDOM = 0.042;
+const RANDOM_W = 0.07; // wide enough for "Random" to be drawn at least as large as "Daily", with the run's step under it
 const TILE_H = 0.07;
 const BACK_W = 0.076;
 /** Back is navigation, not a level: a little more room sets it apart from the tiles. */
@@ -73,30 +76,40 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       };
     case 'select': {
       const n = ctx.levels;
-      const label = (i: number) => (i === n - 1 && (ctx.shared ? 'Shared' : ctx.daily && 'Daily')) || String(i + 1);
+      const rnd = !!ctx.random;
+      const base = rnd ? n - 1 : n; // the numbered levels and the daily or shared one; Random comes after them
+      const label = (i: number) => (rnd && i === n - 1 ? 'Random' : i === base - 1 && (ctx.shared ? 'Shared' : ctx.daily && 'Daily')) || String(i + 1);
       if (narrow) {
         // Phone: Back then the tiles, five to a row, so nine levels make two rows that fit the width. Back takes the top
         // left cell, where a phone keeps its back control; the tiles read left to right, then the lower row.
         const w = (NARROW_W - 2 * PAD - (NARROW_COLS - 1) * GAP) / NARROW_COLS;
-        const rows = Math.ceil((n + 1) / NARROW_COLS);
+        // Random is a bar across the width on a row of its own under the grid.
+        const rows = Math.ceil((base + 1) / NARROW_COLS);
+        const bar = rnd ? BH + GAP : 0;
         const cell = (k: number) => ({
           x: -NARROW_W / 2 + PAD + (k % NARROW_COLS) * (w + GAP) + w / 2,
-          y: PAD + (rows - 1 - Math.floor(k / NARROW_COLS)) * (NARROW_TILE_H + GAP) + NARROW_TILE_H / 2,
+          y: PAD + bar + (rows - 1 - Math.floor(k / NARROW_COLS)) * (NARROW_TILE_H + GAP) + NARROW_TILE_H / 2,
           w,
           h: NARROW_TILE_H,
         });
         const back: Button = { id: 'back', label: 'Back', kind: 'secondary', ...cell(0) };
-        const tiles = Array.from({ length: n }, (_, i): Button => ({ id: `level-${i + 1}`, label: label(i), kind: 'tile', ...cell(i + 1) }));
-        return { width: NARROW_W, height: PAD + rows * NARROW_TILE_H + (rows - 1) * GAP + NARROW_HEAD, buttons: [back, ...tiles] };
+        const tiles = Array.from({ length: base }, (_, i): Button => ({ id: `level-${i + 1}`, label: label(i), kind: 'tile', ...cell(i + 1) }));
+        if (rnd) tiles.push({ id: `level-${n}`, label: 'Random', kind: 'tile', x: 0, y: PAD + BH / 2, w: NARROW_W - 2 * PAD, h: BH });
+        return { width: NARROW_W, height: PAD + bar + rows * NARROW_TILE_H + (rows - 1) * GAP + NARROW_HEAD, buttons: [back, ...tiles] };
       }
       // One row, low on the card so every target stays in reach: the Back pill, a wider gap, then one tile per level.
-      const width = 2 * PAD + BACK_W + BACK_GAP + n * TILE_W + (n - 1) * GAP;
+      const widthOf = (i: number) => (rnd ? (i === n - 1 ? RANDOM_W : TILE_W_RANDOM) : TILE_W);
+      const width = 2 * PAD + BACK_W + BACK_GAP + (n - 1) * GAP + Array.from({ length: n }, (_, i) => widthOf(i)).reduce((a, b) => a + b, 0);
       const y = PAD + TILE_H / 2;
       const left = -width / 2 + PAD;
       const back: Button = { id: 'back', label: 'Back', kind: 'secondary', x: left + BACK_W / 2, y, w: BACK_W, h: BH };
-      const tiles = Array.from({ length: n }, (_, i): Button => ({
-        id: `level-${i + 1}`, label: label(i), kind: 'tile', x: left + BACK_W + BACK_GAP + i * (TILE_W + GAP) + TILE_W / 2, y, w: TILE_W, h: TILE_H,
-      }));
+      let x = left + BACK_W + BACK_GAP;
+      const tiles = Array.from({ length: n }, (_, i): Button => {
+        const w = widthOf(i);
+        const b: Button = { id: `level-${i + 1}`, label: label(i), kind: 'tile', x: x + w / 2, y, w, h: TILE_H };
+        x += w + GAP;
+        return b;
+      });
       return { width, height: 0.15, buttons: [back, ...tiles] };
     }
     case 'hud': {
@@ -107,16 +120,22 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
     }
     case 'complete': {
       // After the last level the primary already goes to level select, so there is no second Levels button.
-      const last = ctx.level + 1 >= ctx.levels;
+      // Random is not "the next level" after the daily: the daily is still the last of the levels.
+      const endless = !!ctx.random && ctx.level === ctx.levels - 1;
+      const last = endless || ctx.level + 1 >= (ctx.random ? ctx.levels - 1 : ctx.levels);
+      // Random keeps going: its primary is the next puzzle, not a way back to level select.
+      const nextLabel = endless ? 'Next puzzle' : last ? 'Levels' : 'Next';
       // Over par: Retry leads, and Next stays a plain secondary so a slow solve never blocks the way on.
       const items: Parameters<typeof row>[1] = ctx.over
-        ? [['restart', 'Retry', 'primary', primaryW], ['next', last ? 'Levels' : 'Next', 'secondary', secondaryW]]
-        : [['next', last ? 'Levels' : 'Next', 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW]];
+        ? [['restart', 'Retry', 'primary', primaryW], ['next', nextLabel, 'secondary', secondaryW]]
+        : [['next', nextLabel, 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW]];
       if (!last) items.push(['levels', 'Levels', 'secondary', secondaryW]);
       if (ctx.copy && last) {
         // The tinker puzzle is always the last level; only it has room for a third pill. On a phone "Copy link" needs a little more than 72 mm, so the primary gives it 8.
         items[0]![3] = narrow ? 0.092 : primaryW;
         items.push(['copy', ctx.copy, 'secondary', narrow ? 0.082 : secondaryW]);
+        // "Next puzzle" is the longest label: on a phone it gets 104 mm and Restart/Retry and Copy link share the rest (the row may use a little of the card's padding).
+        if (narrow && endless) for (const it of items) it[3] = it[0] === 'next' ? 0.104 : it[0] === 'restart' ? 0.062 : 0.08;
       }
       return { width: narrow ? NARROW_W : 0.35, height: 0.17, buttons: row(low, items) };
     }

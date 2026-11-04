@@ -29,6 +29,11 @@ export type PanelCtx = {
   daily: boolean;
   /** The last level is a puzzle opened from a ?seed= link: "Shared puzzle", not a numbered level or the daily. */
   shared?: boolean;
+  /** The very last level is the endless Random puzzle, after the daily or shared one; `step` is the step of the Random puzzle on the board. */
+  random?: boolean;
+  step?: number;
+  /** The step the next Random puzzle will be (the run's saved step), shown on the Random tile. */
+  next?: number;
   resume: boolean;
   newBest: boolean;
   time: number;
@@ -53,8 +58,13 @@ export type PanelCtx = {
   par?: number | null;
 };
 
-const isDaily = (ctx: PanelCtx, i: number) => ctx.daily && i === ctx.levels - 1;
-const isShared = (ctx: PanelCtx, i: number) => !!ctx.shared && i === ctx.levels - 1;
+/** Levels that count towards "N of M solved": Random is endless, so it is not one of them. */
+const counted = (ctx: PanelCtx) => ctx.levels - (ctx.random ? 1 : 0);
+const isDaily = (ctx: PanelCtx, i: number) => ctx.daily && i === counted(ctx) - 1;
+const isShared = (ctx: PanelCtx, i: number) => !!ctx.shared && i === counted(ctx) - 1;
+/** The HUD's countdown ring: its centre from the card's left edge, and its radius with the stroke, metres. */
+export const RING = { x: 0.183, r: 0.011 };
+const isRandom = (ctx: PanelCtx, i: number) => !!ctx.random && i === ctx.levels - 1;
 
 type Draw = CanvasRenderingContext2D;
 
@@ -103,7 +113,7 @@ function status(g: Draw, s: string, x: number, y: number, align: 'left' | 'cente
  * and beside it "LEFT" over the time left; past par the arc is gone and it reads "OVER" and "+m:ss". Returns nothing drawn
  * if there is no timer (Relaxed).
  */
-function ring(g: Draw, t: NonNullable<PanelCtx['timer']>, x: number, y: number) {
+function ring(g: Draw, t: NonNullable<PanelCtx['timer']>, x: number, y: number, stop: number) {
   const r = mm(9.5);
   g.lineWidth = mm(3);
   g.lineCap = 'round';
@@ -118,10 +128,15 @@ function ring(g: Draw, t: NonNullable<PanelCtx['timer']>, x: number, y: number) 
     g.stroke();
   }
   const over = t.left === 0 && t.over > 0;
-  const tx = x + r + mm(7);
+  const tx = x + r + mm(4);
+  const room = stop - tx;
   const whole = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; // the ring counts whole seconds, no tenths
   text(g, over ? 'OVER' : 'LEFT', tx, y - mm(8.5), font(700, T.eyebrow), C.muted, 'left', 1);
-  text(g, over ? `+${whole(t.over)}` : whole(t.left), tx, y + mm(6), font(700, T.body), C.ink, 'left');
+  // The count shrinks to stop short of the pause button when it runs long (+10:23).
+  const count = over ? `+${whole(t.over)}` : whole(t.left);
+  g.font = font(700, T.body);
+  const size = T.body * Math.min(1, room / g.measureText(count).width);
+  text(g, count, tx, y + mm(6), font(700, size), C.ink, 'left');
 }
 
 /** The Relaxed toggle: a pill that is cream deep with an empty circle while the timer is on, and amber tint with an amber check once Relaxed is on. */
@@ -157,13 +172,26 @@ function tile(g: Draw, b: Button, x: number, y: number, w: number, h: number, ct
     g.fillRect(x - w / 2, y - h / 2, w, mm(4));
     g.restore();
   }
-  // "Shared" is the longest word on a tile: serif like "Daily", shrunk to leave a little room at each side.
+  // "Shared" and "Random" are the longest words on a tile: serif like "Daily", shrunk to leave a little room at each side.
+  const word = daily || isShared(ctx, i) || isRandom(ctx, i);
   let size = T.heading;
-  if (isShared(ctx, i)) {
+  if (word) {
     g.font = font(600, size, SERIF);
     size *= Math.min(1, (w - mm(8)) / g.measureText(b.label).width);
   }
-  text(g, b.label, x, y - (best == null ? 0 : mm(8)), daily || isShared(ctx, i) ? font(600, size, SERIF) : font(700, T.xl), C.ink);
+  // Random says where the run stands: "Step 3" in muted type under its name, or beside it on the phone's wide bar.
+  if (isRandom(ctx, i) && ctx.next !== undefined) {
+    const step = `Step ${ctx.next}`;
+    if (w > 2 * h) {
+      text(g, b.label, x - mm(24), y, font(600, size, SERIF), C.ink);
+      text(g, step, x + mm(46), y + 1, font(700, T.body), C.muted);
+    } else {
+      text(g, b.label, x, y - mm(8), font(600, size, SERIF), C.ink);
+      text(g, step, x, y + mm(16), font(700, T.body), C.muted);
+    }
+    return;
+  }
+  text(g, b.label, x, y - (best == null ? 0 : mm(8)), word ? font(600, size, SERIF) : font(700, T.xl), C.ink);
   if (best == null) return;
   text(g, clock(best), x, y + mm(16), font(700, T.body), C.muted);
   check(g, x + w / 2 - mm(9), y - h / 2 + mm(10));
@@ -355,7 +383,8 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   const daily = isDaily(ctx, ctx.level);
   const level = String(ctx.level + 1);
   const shared = isShared(ctx, ctx.level);
-  const name = shared ? 'Shared puzzle' : daily ? 'Daily' : `Level ${level}`;
+  const random = isRandom(ctx, ctx.level);
+  const name = random ? `Random · Step ${ctx.step ?? 1}` : shared ? 'Shared puzzle' : daily ? 'Daily' : `Level ${level}`;
   switch (screen) {
     case 'title':
       text(g, 'A CLOCKWORK PUZZLE', cx, y(0.128), font(700, T.eyebrow), C.muted, 'center', 3);
@@ -366,20 +395,29 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       // The heading sits in the middle of the room over the targets (one row wide, two on a phone).
       const head = (Math.max(...l.buttons.map((b) => b.y + b.h / 2)) + l.height) / 2;
       text(g, 'Levels', left(0.016), y(head), font(600, T.heading, SERIF), C.ink, 'left');
-      text(g, `${solved} of ${ctx.levels} solved`, right(0.016), y(head), font(600, T.body), C.muted, 'right');
+      text(g, `${solved} of ${counted(ctx)} solved`, right(0.016), y(head), font(600, T.body), C.muted, 'right');
       break;
     }
     case 'hud':
       // A shared puzzle reads "SHARED" over "Puzzle", and the time moves over to make room.
-      const timeX = shared ? 0.086 : 0.066;
-      text(g, shared ? 'SHARED' : 'LEVEL', left(0.016), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
-      if (shared) text(g, 'Puzzle', left(0.016), y(0.022), font(600, T.heading, SERIF), C.ink, 'left');
-      else if (daily) text(g, 'Daily', left(0.016), y(0.022), font(600, T.heading, SERIF), C.ink, 'left');
-      else text(g, level, left(0.016), y(0.022), font(700, T.xl), C.ink, 'left');
-      text(g, 'TIME', left(timeX), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
+      // Random has no column split: one eyebrow line, "RANDOM · STEP 3", with the time under it at the left, so the step is
+      // never squeezed beside the time.
+      const timeX = random ? 0.016 : shared ? 0.08 : 0.066; // "SHARED" is wider than "LEVEL"
+      // The heading shrinks to stop short of the time ("Step 12" is the widest).
+      const headSize = (words: string) => {
+        g.font = font(600, T.heading, SERIF);
+        return T.heading * Math.min(1, mm((timeX - 0.016 - 0.008) * 1000) / g.measureText(words).width);
+      };
+      text(g, random ? `RANDOM · STEP ${ctx.step ?? 1}` : shared ? 'SHARED' : 'LEVEL', left(0.016), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
+      if (!random) {
+        if (shared) text(g, 'Puzzle', left(0.016), y(0.022), font(600, headSize('Puzzle'), SERIF), C.ink, 'left');
+        else if (daily) text(g, 'Daily', left(0.016), y(0.022), font(600, T.heading, SERIF), C.ink, 'left');
+        else text(g, level, left(0.016), y(0.022), font(700, T.xl), C.ink, 'left');
+        text(g, 'TIME', left(timeX), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
+      }
       text(g, clock(ctx.time), left(timeX), y(0.022), font(700, T.xl), C.ink, 'left');
       if (ctx.timer) {
-        ring(g, ctx.timer, left(0.178), y(0.031));
+        ring(g, ctx.timer, left(RING.x), y(0.031), left(l.width - 0.008 - 0.046 - 0.006)); // up to 6 mm short of the pause button
         ringShown = true;
       }
       if (ctx.goal && ctx.fault) faultLine(g, ctx.fault, left(0.016), y(0.077), right(0.016) - left(0.016));
@@ -391,7 +429,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       // Shrunk, if need be, to stop short of the time at the right (a long name on a phone).
       const title = `${name} complete`;
       g.font = font(600, T.heading, SERIF);
-      const titleSize = T.heading * Math.min(1, (right(0.016) - left(0.016) - mm(95)) / g.measureText(title).width);
+      const titleSize = T.heading * Math.min(1, (right(0.016) - left(0.016) - mm(ctx.outcome === 'pass' ? 109 : 95)) / g.measureText(title).width); // a pass puts an amber check before the time
       text(g, title, left(0.016), y(0.11), font(600, titleSize, SERIF), C.ink, 'left');
       text(g, 'TIME', right(0.016), y(0.148), font(700, T.eyebrow), C.muted, 'right', 1);
       text(g, clock(ctx.time), right(0.016), y(0.11), font(700, T.xl), C.ink, 'right');
