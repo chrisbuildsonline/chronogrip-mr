@@ -64,7 +64,7 @@ test('desktop: a real click on the pause button opens the pause menu; Main menu 
   await page.screenshot({ path: `${OUT}/paused.png` });
   await click(page, 'menu');
   await cardIs(page, 'title');
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores', 'About']);
   expect(await page.evaluate(() => window.__chrono!.run)).toMatchObject({ stage: 'medium' });
   await click(page, 'continue');
   await playing(page);

@@ -116,7 +116,7 @@ for (const size of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) 
     await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'continue'));
     await frames(page);
     const buttons = await page.evaluate(() => window.__chrono!.buttons());
-    expect(buttons.map((b) => [b.id, b.label])).toEqual([['continue', 'Shared puzzle'], ['start', 'New Game'], ['random', 'Random level'], ['options', 'Options'], ['scores', 'High scores']]);
+    expect(buttons.map((b) => [b.id, b.label])).toEqual([['continue', 'Shared puzzle'], ['start', 'New Game'], ['random', 'Random level'], ['options', 'Options'], ['scores', 'High scores'], ['about', 'About']]);
     for (const b of buttons) {
       expect(b.rect[3] - b.rect[1], `${b.id} tall`).toBeGreaterThanOrEqual(44);
       expect(b.rect[0] >= 0 && b.rect[2] <= size.width && b.rect[1] >= 0 && b.rect[3] <= size.height, `${b.id} on screen`).toBe(true);

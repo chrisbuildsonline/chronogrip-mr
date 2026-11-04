@@ -53,7 +53,7 @@ async function solve(page: Page) {
 
 test('desktop: New Game is level 1; a solve goes to level 2, a different puzzle; there is no level list or Choose level anywhere', async ({ page }) => {
   const errors = await open(page);
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['New Game', 'Random level', 'Options', 'High scores']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['New Game', 'Random level', 'Options', 'High scores', 'About']);
   await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 0);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1');

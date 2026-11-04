@@ -16,7 +16,7 @@ import { tuneForSoftwareGl } from './render';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
 import { MENU_SCREENS, PLAY_SCREENS, SCRIM_OPACITY, buttonAt, clockTenths, layout, menuAnchor, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
-import { createPanels, RING, SMALL_TABLE_TEXT, type PanelCtx } from './panels';
+import { aboutMax, createPanels, RING, SMALL_TABLE_TEXT, type PanelCtx } from './panels';
 import { createGhostHand, ghostAt, ghostTwistAt } from './ghost';
 import { TWEEN_MS, easeOut, tweenAt } from './tween';
 import { faultKind, faultOf, faultText, shakeSpin, shakeTilt, SHAKE_MS, type Fault } from './fault';
@@ -26,7 +26,7 @@ import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistO
 import { createSound, loadSoundOn, saveSoundOn, tickGain, ticksBetween } from './sound';
 import { loadMusicOn, saveMusicOn } from './music';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
-import { carried, loadRun, nextIndex, reached, saveRun, solvedLevel, startRun, won, type Run } from './run';
+import { carried, loadRun, nextIndex, pausedOnce, reached, saveRun, solvedLevel, startRun, totalMs, won, type Run } from './run';
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
 import { fallbackLevel, tinkerLevel } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
@@ -122,8 +122,10 @@ type Overlay =
   | { kind: 'options'; confirm: boolean }
   | { kind: 'stages' }
   | { kind: 'picker' }
-  | { kind: 'result'; level: number; ms: number }
-  | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; letters: string; cursor: number };
+  | { kind: 'result'; level: number; ms: number; pauses: number }
+  | { kind: 'countdown'; at: number }
+  | { kind: 'about'; scroll: number }
+  | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; pauses: number; letters: string; cursor: number };
 let overlay: Overlay | null = null;
 // The global top tens (src/global.ts): the last good board per id, kept so a tab switch does not ask again, and how this
 // opening of the scores screen has fared per board (asking, or gave up). Opening the screen asks afresh.
@@ -522,10 +524,10 @@ function newRun(id: StageId): void {
 }
 
 /** The name entry for a completed run, over the title: the total time large, then three letters. */
-function askInitials(ms: number, board: string): void {
+function askInitials(ms: number, board: string, pauses: number): void {
   const entry = { ms, date: todayISO() };
   const q = qualifies(scores, board, { ...entry, name: scores.initials });
-  if (q.ok) overlay = { kind: 'initials', board, rank: q.rank, entry, letters: scores.initials, cursor: 0 };
+  if (q.ok) overlay = { kind: 'initials', board, rank: q.rank, entry, pauses, letters: scores.initials, cursor: 0 };
 }
 
 /**
@@ -537,10 +539,10 @@ function endRun(why: 'timeout' | 'giveup' | 'won'): void {
   run = null;
   saveRun(storage, run);
   send({ type: 'back', level: 0 });
-  if (r && why === 'won') askInitials(r.ms, boardOf(r.stage));
+  if (r && why === 'won') askInitials(totalMs(r), boardOf(r.stage), r.pauses);
   else if (r) {
     const end = reached(r, levelClock.seconds);
-    overlay = { kind: 'result', level: end.level, ms: end.ms };
+    overlay = { kind: 'result', level: end.level, ms: end.ms, pauses: end.pauses };
   }
   showPanel();
   fitView(true);
@@ -571,9 +573,25 @@ function resetProgress(): void {
 }
 
 /** A press on the card laid over the flow: the board's Back and level arrows, or the initials' arrows, Save and Skip. */
+/** Seconds each number of the resume countdown stays up. */
+const COUNT_S = 0.7;
+const countdownNumber = (at: number, now: number): number => 3 - Math.floor((now - at) / (COUNT_S * 1000));
+/** Where the About text is scrolled to by one arrow press or key, metres. */
+const ABOUT_STEP = 0.06;
+const scrollAbout = (by: number): void => {
+  if (overlay?.kind !== 'about') return;
+  overlay = { ...overlay, scroll: Math.min(aboutMax, Math.max(0, overlay.scroll + by)) };
+  showPanel();
+};
+
 function pressOverlay(id: string): void {
   const o = overlay!;
-  if (o.kind === 'options') {
+  if (o.kind === 'countdown') return; // nothing to press: the board is coming back
+  if (o.kind === 'about') {
+    if (id === 'back') overlay = null;
+    else if (id === 'up-scroll' || id === 'down-scroll') return scrollAbout(id === 'up-scroll' ? -ABOUT_STEP : ABOUT_STEP);
+    else return;
+  } else if (o.kind === 'options') {
     if (id === 'back') overlay = null;
     else if (id === 'relaxed') {
       relaxed = !relaxed;
@@ -664,6 +682,7 @@ function send(e: FlowEvent): void {
     burst.position.set(...trayLocal(DIAL_AT[0], DIAL_AT[1], 0.008));
   }
   syncBackdrop();
+  built.tray.visible = flow.name !== 'paused'; // a paused level shows nothing of its board
   showPanel();
   fitView(true); // a new level or card may want the camera nearer or further
 }
@@ -702,6 +721,11 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
     showPanel();
     return fitView(true);
   }
+  if (flow.name === 'title' && id === 'about') {
+    overlay = { kind: 'about', scroll: 0 };
+    showPanel();
+    return fitView(true);
+  }
   if (flow.name === 'title' && id === 'random') {
     overlay = { kind: 'picker' }; // Random level: how hard?
     showPanel();
@@ -712,6 +736,17 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
     overlay = { kind: 'stages' };
     showPanel();
     return fitView(true);
+  }
+  if (id === 'pause' && (flow.name === 'playing' || flow.name === 'calibrate') && run && levelIndex < CAMPAIGN) {
+    // A manual pause (the button, Esc, P) costs 5 s on the run's total; a system pause (tab hidden, headset off) goes through send() and costs nothing.
+    run = pausedOnce(run);
+    saveRun(storage, run);
+  }
+  if (id === 'resume' && flow.name === 'paused') {
+    // Resuming counts down 3, 2, 1 with the board still hidden; the clock restarts when the board comes back.
+    overlay = { kind: 'countdown', at: performance.now() };
+    showPanel();
+    return;
   }
   if (id === 'giveup') return isRandomLevel(levelIndex) ? send({ type: 'back', level: continueAt() }) : endRun('giveup');
   if (id === 'menu') {
@@ -897,6 +932,11 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const shown = shownButtons();
+  if (overlay?.kind === 'about' && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'PageUp' || e.key === 'PageDown')) {
+    e.preventDefault();
+    scrollAbout((e.key === 'ArrowUp' || e.key === 'PageUp' ? -1 : 1) * ABOUT_STEP * (e.key.startsWith('Page') ? 3 : 1));
+    return;
+  }
   // A menu: nothing is selected until a key reaches it. Arrows and Tab walk the buttons (top to bottom, left to right) from the
   // top, Enter presses the one reached. The play cards keep Enter on their primary pill (Next).
   if (menuUp() && overlay?.kind !== 'initials' && (e.key.startsWith('Arrow') || e.key === 'Tab' || e.key === 'Enter')) {
@@ -930,6 +970,17 @@ window.addEventListener('keydown', (e) => {
   press(id, 'key');
 });
 canvas.addEventListener('pointerdown', () => sound.unlock(), { capture: true });
+// The About window scrolls with the wheel (and keeps the orbit controls from zooming under it).
+canvas.addEventListener(
+  'wheel',
+  (e) => {
+    if (overlay?.kind !== 'about') return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    scrollAbout(e.deltaY * 0.0004);
+  },
+  { capture: true, passive: false },
+);
 const rayAt = (e: PointerEvent): [Vec3, Vec3] => {
   const rect = canvas.getBoundingClientRect();
   const ray = new Raycaster();
@@ -1330,6 +1381,18 @@ world.scene.onBeforeRender = () => {
     ghost.update(ghostAt(now / 1000, [slot.x, slot.y], [axle.x, axle.y]));
   }
 
+  // The resume countdown: a soft tick on each number, then the board is back and the level clock runs on.
+  if (overlay?.kind === 'countdown') {
+    const n = countdownNumber(overlay.at, now);
+    if (n !== lastCount && n >= 1) sound.tick(1);
+    lastCount = n;
+    if (n < 1) {
+      overlay = null;
+      send({ type: 'resume' });
+    }
+  } else lastCount = 4;
+  // A paused level hides its board: no gears, axles, strip, badge, goal ring or dial to study while the clock is stopped.
+  built.tray.visible = flow.name !== 'paused';
   showPanel(now);
   panels.tick(now);
 };
@@ -1362,12 +1425,17 @@ function updateProgress(): void {
   [...progressBar.children].forEach((seg, i) => seg.classList.toggle('on', campaign && i <= levelIndex));
 }
 
+let lastCount = 4;
+
 /** Draws the card for the current state; run every frame and after every transition, so the buttons on show never lag the flow. */
 function showPanel(now = performance.now()): void {
   const waiting = flow.name === 'complete' && now - calibratedAt < COMPLETE_DELAY_MS;
   panels.show(waiting ? null : (overlay?.kind ?? screenOf(flow)), {
-    initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms } : undefined,
-    result: overlay?.kind === 'result' ? { level: overlay.level, ms: overlay.ms } : undefined,
+    initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms, pauses: overlay.pauses } : undefined,
+    result: overlay?.kind === 'result' ? { level: overlay.level, ms: overlay.ms, pauses: overlay.pauses } : undefined,
+    pauses: run && levelIndex < CAMPAIGN ? run.pauses : undefined,
+    countdown: overlay?.kind === 'countdown' ? countdownNumber(overlay.at, now) : undefined,
+    aboutScroll: overlay?.kind === 'about' ? overlay.scroll : undefined,
     board: overlay?.kind === 'board' ? boardCard(overlay.board, overlay.tab) : undefined,
     stage: levelIndex < CAMPAIGN ? stageOf(stage).name : undefined,
     level: levelIndex,
@@ -1570,6 +1638,15 @@ window.__chrono = Object.freeze({
   },
   get stage() {
     return stage;
+  },
+  get boardVisible() {
+    return built.tray.visible;
+  },
+  get countdown() {
+    return overlay?.kind === 'countdown' ? Math.max(0, countdownNumber(overlay.at, performance.now())) : null;
+  },
+  get aboutScroll() {
+    return overlay?.kind === 'about' ? { scroll: overlay.scroll, max: aboutMax } : null;
   },
   get stageCards() {
     return panels.stageCards;

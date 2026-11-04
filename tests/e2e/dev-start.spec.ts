@@ -14,9 +14,9 @@ const cardIs = (page: import('@playwright/test').Page, screen: string) =>
 test('dev server: the start panel shows its three buttons inside the comfort zone, and each can be poked open and closed', async ({ page }) => {
   const errors = await enterWithHands(page);
   expect(await flow(page)).toBe('title');
-  await page.waitForFunction(() => window.__chrono!.buttons().length === 4, undefined, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__chrono!.buttons().length === 5, undefined, { timeout: 15_000 });
   const buttons = await page.evaluate(() => window.__chrono!.buttons());
-  expect(buttons.map((b) => [b.id, b.label])).toEqual([['start', 'New Game'], ['random', 'Random level'], ['options', 'Options'], ['scores', 'High scores']]);
+  expect(buttons.map((b) => [b.id, b.label])).toEqual([['start', 'New Game'], ['random', 'Random level'], ['options', 'Options'], ['scores', 'High scores'], ['about', 'About']]);
   // The head sits at the origin: every button's centre is within the panel zone (yaw 35, pitch 18) and reach (60 cm).
   for (const b of buttons) {
     expect(inZone(b.world, PANEL_ZONE), `${b.id} in the panel zone`).toBe(true);

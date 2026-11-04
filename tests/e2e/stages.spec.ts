@@ -65,7 +65,7 @@ test('the backdrop follows the stage: Easy attic, Medium atelier, Hard movement,
 
 test('Continue resumes the stage and the level of the saved run', async ({ page }) => {
   const errors = await open(page, { [RUN]: { stage: 'hard', cleared: 3, ms: 90_000 } });
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores', 'About']);
   await click(page, 'continue');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   expect(await page.evaluate(() => window.__chrono!.hudLabel)).toBe('Hard · Level 4');

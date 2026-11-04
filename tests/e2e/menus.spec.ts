@@ -75,7 +75,7 @@ for (const size of SIZES) {
     const errors = await open(page, size);
     await cardIs(page, 'title');
     await dark(page, 'title');
-    await column(page, ['start', 'random', 'options', 'scores'], 'title');
+    await column(page, ['start', 'random', 'options', 'scores', 'about'], 'title');
     await centred(page, size, 'title');
     await page.screenshot({ path: `${OUT}/title-${size.name}.png` });
 

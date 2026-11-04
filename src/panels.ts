@@ -4,6 +4,8 @@ import { formatDate, type Entry } from './scores';
 import { C } from './palette';
 import { createStageCards } from './cards';
 import type { StageId } from './stages';
+import { PAUSE_PENALTY_MS, timeText, totalLine } from './run';
+import { ABOUT_VIEW_H } from './ui';
 import { rpmLabel, type Goal } from './goal';
 import { FAULT_WORDS } from './fault';
 import type { Outcome } from './timer';
@@ -58,10 +60,16 @@ export type PanelCtx = {
   /** The complete card: whether this solve beat par, and the par it was held to. Absent in Relaxed mode. */
   outcome?: Outcome | null;
   par?: number | null;
-  /** The initials card: the rank this solve would take, the three letters, and the slot typing fills next (3: all in). */
-  initials?: { rank: number; letters: string; cursor: number; ms: number };
-  /** The result card of a run that did not finish: the level it reached and its total time in ms. */
-  result?: { level: number; ms: number };
+  /** The initials card: the rank this solve would take, the three letters, the slot typing fills next (3: all in), the run's total in ms and its pauses. */
+  initials?: { rank: number; letters: string; cursor: number; ms: number; pauses: number };
+  /** The result card of a run that did not finish: the level it reached, its total time in ms (pauses included) and how many pauses. */
+  result?: { level: number; ms: number; pauses: number };
+  /** In a campaign run: how many manual pauses it has taken (the pause card says what the next costs, the HUD shows what they have cost). */
+  pauses?: number;
+  /** The resume countdown: 3, 2 or 1. */
+  countdown?: number;
+  /** The About window: how far the text is scrolled, metres. */
+  aboutScroll?: number;
   /** The best times card: the board's name, its rows, and the muted line shown while it is empty. */
   /** `tab` is the board shown; `note` is a quiet line over the rows (the global board is offline). */
   /** The stage picker: the player's best time on each stage, as m:ss. */
@@ -409,6 +417,88 @@ function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: numb
   } else if (lit) text(g, '›', left + w - mm(8), y, jfont(300, 28), C.amber, 'right');
 }
 
+
+/** What the About window says: a heading and its paragraphs (a paragraph starting with a dot is a bullet). */
+export const ABOUT: readonly { heading: string; lines: readonly string[] }[] = [
+  { heading: 'WHAT IT IS', lines: ['ChronoGrip is a mixed-reality clockwork puzzle, made by Chris for the Meta VR Start Developer Competition 2026, a hackathon.'] },
+  { heading: 'HOW TO PLAY', lines: ['Pick a gear from the strip and fit it on an axle. Build a train that turns the marked gear at the target rpm and in the target direction. Then twist the regulator until the ticking matches, and the brass bird comes alive.'] },
+  {
+    heading: 'MECHANICS',
+    lines: [
+      '· Three stages of 20 levels, made fresh every time.',
+      '· Each level has a time limit. No timer, in Options or on the pause menu, turns the limit off.',
+      '· Pausing hides the board and adds 0:05 to your time.',
+      '· Give up, or run out of time, and the run ends with no score.',
+      '· Finish all 20 levels of a stage to enter three initials on that stage\'s board, on this device and global.',
+      '· Random level is practice: no scores.',
+    ],
+  },
+  { heading: 'CREDITS', lines: ['Built with Meta IWSDK and Three.js. The music is generated in code. The environments are rendered in Blender. The font is Josefin Sans (SIL Open Font License).'] },
+];
+
+/** The most the About text can scroll, metres: set by the last draw (src/main.ts clamps its scroll to it). */
+export let aboutMax = 0;
+
+/** The About text, wrapped to the window and clipped to it, `ctx.aboutScroll` metres up; a thin bar shows where the window is. */
+function drawAbout(g: Draw, l: Layout, ctx: PanelCtx, at: (x: number, y: number) => [number, number]) {
+  const pad = 0.024;
+  const topY = l.height - 0.115; // the window's top edge, panel metres
+  const [x0] = at(-l.width / 2 + pad, 0);
+  const maxW = (l.width - 2 * pad - 0.008) * PX;
+  const size = T.body * 0.85;
+  const lineH = size * 3 * 1.5;
+  const scroll = (ctx.aboutScroll ?? 0) * PX;
+  const [, top] = at(0, topY);
+  const bottom = top + ABOUT_VIEW_H * PX;
+  g.save();
+  g.beginPath();
+  g.rect(0, top, g.canvas.width, ABOUT_VIEW_H * PX);
+  g.clip();
+  let y = top + mm(3) - scroll;
+  const wrap = (s: string, indent: number): string[] => {
+    g.font = jfont(400, size);
+    const words = s.split(' ');
+    const lines: string[] = [];
+    let line = '';
+    for (const w of words) {
+      const next = line ? `${line} ${w}` : w;
+      if (g.measureText(next).width > maxW - indent && line) {
+        lines.push(line);
+        line = w;
+      } else line = next;
+    }
+    return line ? [...lines, line] : lines;
+  };
+  for (const block of ABOUT) {
+    text(g, block.heading, x0, y + mm(3), jfont(600, T.eyebrow), C.amber, 'left', 6);
+    y += mm(9);
+    for (const para of block.lines) {
+      const bullet = para.startsWith('· ');
+      for (const [i, line] of wrap(bullet ? para.slice(2) : para, bullet ? mm(5) : 0).entries()) {
+        if (bullet && i === 0) text(g, '·', x0, y + lineH / 2, jfont(600, size), C.amber, 'left', 0);
+        text(g, line, x0 + (bullet ? mm(5) : 0), y + lineH / 2, jfont(400, size), C.menuInk, 'left', 0);
+        y += lineH;
+      }
+      y += mm(2);
+    }
+    y += mm(4);
+  }
+  const content = y + scroll - top;
+  aboutMax = Math.max(0, (content - ABOUT_VIEW_H * PX) / PX);
+  g.restore();
+  // The scroll bar: a hairline at the window's right edge, its thumb showing the visible share.
+  if (aboutMax > 0) {
+    const [bx] = at(l.width / 2 - 0.016, 0);
+    const share = Math.min(1, (ABOUT_VIEW_H * PX) / content);
+    const trackH = ABOUT_VIEW_H * PX;
+    g.fillStyle = 'rgba(241,232,216,0.15)';
+    g.fillRect(bx, top, mm(0.8), trackH);
+    g.fillStyle = C.amber;
+    g.fillRect(bx, top + (scroll / PX / aboutMax) * trackH * (1 - share), mm(0.8), trackH * share);
+  }
+  void bottom;
+}
+
 /** The words of a menu: the amber eyebrow and the big light heading at the left, and the high scores' rows. */
 function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: number, y: number) => [number, number]) {
   const left = at(-l.width / 2 + 0.024, 0)[0];
@@ -445,18 +535,28 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
     case 'paused':
       head('PAUSED', ctx.level >= ctx.levels - 1 ? (ctx.random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : 'SHARED PUZZLE') : `${ctx.stage ? `${ctx.stage.toUpperCase()} · ` : ''}LEVEL ${ctx.level + 1}`);
       text(g, clock(ctx.time), left, y(l.height - 0.092), jfont(400, T.body * 0.9), C.menuMuted, 'left', 2);
+      if (ctx.pauses !== undefined) text(g, `Pausing adds ${timeText(PAUSE_PENALTY_MS)} to your time`, left, y(l.height - 0.108), jfont(400, T.body * 0.8), C.menuMuted, 'left', 0);
+      break;
+    case 'countdown':
+      text(g, 'GET READY', at(0, 0)[0], y(l.height - 0.03), jfont(600, T.eyebrow), C.amber, 'center', 6);
+      text(g, String(ctx.countdown ?? 3), at(0, 0)[0], y(l.height / 2 - 0.01), jfont(300, 78), C.logo, 'center', 0);
+      break;
+    case 'about':
+      head('ABOUT', 'CHRONOGRIP');
+      drawAbout(g, l, ctx, at);
       break;
     case 'result': {
       const r = ctx.result!;
       head('RUN OVER', `LEVEL ${r.level} REACHED`, 22);
-      text(g, clock(r.ms / 1000), left, y(l.height - 0.106), jfont(300, 24), C.logo, 'left', 3);
+      text(g, totalLine(r.ms, r.pauses), left, y(l.height - 0.106), jfont(400, T.body * 0.85), C.menuHi, 'left', 0);
       break;
     }
     case 'initials': {
       const ini = ctx.initials!;
       text(g, `RUN COMPLETE · #${ini.rank}`, left, y(l.height - 0.02), jfont(600, T.eyebrow), C.amber, 'left', 6);
-      text(g, clock(ini.ms / 1000), left, y(l.height - 0.062), jfont(300, 30), C.logo, 'left', 3);
-      text(g, 'YOUR NAME', left, y(l.height - 0.1), jfont(400, T.body * 0.8), C.menuMuted, 'left', 4);
+      text(g, clock(ini.ms / 1000), left, y(l.height - 0.06), jfont(300, 30), C.logo, 'left', 3);
+      text(g, totalLine(ini.ms, ini.pauses), left, y(l.height - 0.083), jfont(400, T.body * 0.8), C.menuMuted, 'left', 0);
+      text(g, 'YOUR NAME', left, y(l.height - 0.108), jfont(400, T.body * 0.8), C.menuMuted, 'left', 4);
       break;
     }
     case 'board': {
@@ -556,6 +656,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
           text(g, `/ ${ctx.levels - 1}`, left(0.016) + g.measureText(level).width + mm(2), y(0.022), font(700, T.eyebrow), C.muted, 'left', 1);
         }
         text(g, 'TIME', left(timeX), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
+        if (ctx.pauses) text(g, `+${timeText(ctx.pauses * PAUSE_PENALTY_MS)}`, left(timeX) + mm(13), y(0.048), font(700, T.eyebrow), C.amber, 'left', 1); // what the pauses have cost the run so far
       }
       text(g, clock(ctx.time), left(timeX), y(0.022), font(700, T.xl), C.ink, 'left');
       if (ctx.timer) {

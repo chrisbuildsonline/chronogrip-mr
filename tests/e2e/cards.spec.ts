@@ -165,6 +165,9 @@ test('motion: the cards float and the art pans; with reduced motion they stand s
     return out;
   };
   expect((await cards(page)).reduced).toBe(false);
+  // A slow software-GL frame can stall the loop for a while: wait until the cards are really moving before sampling.
+  const first = (await cards(page)).cards[0]!.lift;
+  await page.waitForFunction((v) => window.__chrono!.stageCards.cards[0]!.lift !== v, first, { timeout: 20_000 });
   const moving = await sample();
   for (let i = 0; i < 3; i++) {
     const lifts = moving.map((s) => s.lift[i]!);

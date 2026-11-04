@@ -118,7 +118,7 @@ interface ChronoHook {
   /** Live: seconds played on this level; runs only while playing. */
   readonly levelTime: number;
   /** Live: the campaign run in progress or saved (levels cleared, total time so far in ms), null when none. */
-  readonly run: { readonly stage: 'easy' | 'medium' | 'hard'; readonly cleared: number; readonly ms: number } | null;
+  readonly run: { readonly stage: 'easy' | 'medium' | 'hard'; readonly cleared: number; readonly ms: number; readonly pauses: number } | null;
   /** Live: the stage being played (the one of the run, else the last picked) and the HUD's words for the level, "Hard · Level 3" (just "Level 3" outside the 20 stage levels). */
   readonly stage: 'easy' | 'medium' | 'hard';
   readonly hudLabel: string;
@@ -128,6 +128,12 @@ interface ChronoHook {
   readonly kbdFocus: string | null;
   /** Live: the button drawn selected (hovered by mouse or hand, or reached by the keys); null when nothing is. */
   readonly highlighted: string | null;
+  /** Live: whether the board (the tray and everything on it) is drawn: hidden while the level is paused or counting down. */
+  readonly boardVisible: boolean;
+  /** Live: the resume countdown's number (3, 2, 1) while it runs, else null. */
+  readonly countdown: number | null;
+  /** Live: the About window's scroll and its most, metres; null when it is not up. */
+  readonly aboutScroll: { readonly scroll: number; readonly max: number } | null;
   /** Live: the music theme playing: 'menu' (every menu), 'box' (Easy), 'marimba' (Medium) or 'clockwork' (Hard); `musicDucked`: the pause card has the music 6 dB down. */
   readonly musicTheme: 'menu' | 'box' | 'marimba' | 'clockwork';
   readonly musicDucked: boolean;
@@ -151,7 +157,7 @@ interface ChronoHook {
   /** Live: the black layer behind the menus: `full` over a flat view, `backing` panel behind the card in XR, null in play. */
   readonly scrim: { readonly mode: 'full' | 'backing' | null; readonly opacity: number; readonly backingOpacity: number };
   /** Live: the card now up (its screen and panel-space size in metres), null when none is shown. */
-  readonly card: { readonly screen: 'title' | 'stages' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options' | 'result'; readonly width: number; readonly height: number } | null;
+  readonly card: { readonly screen: 'title' | 'stages' | 'picker' | 'countdown' | 'about' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options' | 'result'; readonly width: number; readonly height: number } | null;
   /** The words on the card now up: text, font size in panel metres, and that size in page pixels as seen now. */
   labels(): { text: string; size: number; height: number; y: number; left: number; right: number }[];
   /** Live: the puzzle code of the loaded level (a tinker level), null for a hand-made one. */

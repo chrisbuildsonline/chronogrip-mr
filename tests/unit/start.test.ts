@@ -10,7 +10,7 @@ const ctx = { level: 0, levels: LEVELS.length + 2, random: true };
 const levels = [...LEVELS, tinkerLevel(dailySeed(new Date(2026, 10, 4))), tinkerLevel(dailySeed(new Date(2027, 0, 1)))];
 
 describe('start panel layout', () => {
-  it('has four buttons with no progress: a primary New Game, Random level, Options and High scores; no level list', () => {
+  it('has five buttons with no progress: New Game, Random level, Options, High scores and About; no level list', () => {
     for (const narrow of [false, true]) {
       const l = layout('title', { ...ctx, narrow });
       expect(l.buttons.map((b) => [b.id, b.label, b.kind]), `narrow ${narrow}`).toEqual([
@@ -18,6 +18,7 @@ describe('start panel layout', () => {
         ['random', 'Random level', 'secondary'],
         ['options', 'Options', 'secondary'],
         ['scores', 'High scores', 'secondary'],
+        ['about', 'About', 'secondary'],
       ]);
     }
   });
@@ -31,6 +32,7 @@ describe('start panel layout', () => {
         ['random', 'Random level', 'secondary'],
         ['options', 'Options', 'secondary'],
         ['scores', 'High scores', 'secondary'],
+        ['about', 'About', 'secondary'],
       ]);
     }
   });

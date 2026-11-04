@@ -3,16 +3,16 @@ import { STAGES } from './stages';
 import { COMFORT, TRAY_POSE, inZone, layerLift, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
 
 /** Layouts and placement of the in-world panels (see design/DESIGN.md). Panel space: metres, origin at the bottom centre, +Y up, +Z towards the player. */
-export type Screen = 'title' | 'stages' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options' | 'result';
+export type Screen = 'title' | 'stages' | 'picker' | 'hud' | 'complete' | 'paused' | 'countdown' | 'about' | 'initials' | 'board' | 'options' | 'result';
 export const SCREENS: readonly Screen[] = ['title', 'hud', 'complete', 'paused'];
 /** Cards laid over the title or the complete card: the initials entry, the high scores board, the options and the difficulty picker. */
 /** How opaque the black layer behind the menus is. */
 export const SCRIM_OPACITY = 0.9;
 /** The menus: the game behind them is dimmed to 90% black (a full-view layer on a flat screen, a backing panel in AR). */
-export const MENU_SCREENS: readonly Screen[] = ['title', 'stages', 'picker', 'board', 'options', 'paused', 'result', 'initials'];
+export const MENU_SCREENS: readonly Screen[] = ['title', 'stages', 'picker', 'board', 'options', 'about', 'paused', 'countdown', 'result', 'initials'];
 /** The cards the board is played with: the camera fits for these, the menus are centred over a black layer. */
 export const PLAY_SCREENS: readonly Screen[] = SCREENS.filter((s) => !MENU_SCREENS.includes(s));
-export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options', 'stages', 'picker', 'result'];
+export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options', 'about', 'stages', 'picker', 'result'];
 
 /** `card`: a stage card, drawn by src/cards.ts (art, gradient and words) rather than in the panel's canvas. */
 export type ButtonKind = 'primary' | 'secondary' | 'icon' | 'toggle' | 'arrow' | 'tab' | 'slot' | 'card';
@@ -60,6 +60,10 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
  */
 export type LayoutCtx = { level: number; levels: number; shared?: boolean; random?: boolean; resume?: boolean; narrow?: boolean; confirm?: boolean };
 
+/** The About window: the text's height in the card, metres, and the sizes of Back and the scroll arrows beside it. */
+export const ABOUT_VIEW_H = 0.22;
+const ABOUT_BACK_W = 0.12;
+const ABOUT_ARROW_W = 0.065;
 /** The stage picker's width with three cards side by side. */
 export const STAGE_W = 0.42;
 /** Width of every card on a phone in portrait (outside XR), metres of panel space. */
@@ -92,6 +96,7 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
         ['random', 'Random level', 'secondary'],
         ['options', 'Options', 'secondary'],
         ['scores', 'High scores', 'secondary'],
+        ['about', 'About', 'secondary'],
       ];
       return { width: NARROW_W, height: startHeight(items.length), buttons: stack(PAD, items, ROW_W, ROW_H) };
     }
@@ -117,6 +122,24 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       // Back is a text row under the cards, its words about where the heading's start (16 mm in from the card's edge, then the row's own padding).
       const back: Button = { id: 'back', label: 'Back', kind: 'secondary', x: -width / 2 + PAD + ROW_W / 2, y: PAD + ROW_H / 2, w: ROW_W, h: ROW_H };
       return { width, height, buttons: [...cards, back] };
+    }
+    case 'countdown': {
+      // Resuming: a big 3, 2, 1 in the middle of the dark layer; nothing to press.
+      return { width: NARROW_W, height: 0.22, buttons: [] };
+    }
+    case 'about': {
+      // What the game is, how to play it, the rules of a run and who made it, in a window of text with its own scroll arrows beside Back.
+      const arrow = (id: string, label: string, x: number): Button => ({ id, label, kind: 'arrow', x, y: PAD + ROW_H / 2, w: ABOUT_ARROW_W, h: ROW_H });
+      const right = NARROW_W / 2 - PAD;
+      return {
+        width: NARROW_W,
+        height: PAD + ROW_H + 0.012 + ABOUT_VIEW_H + MENU_HEAD,
+        buttons: [
+          { id: 'back', label: 'Back', kind: 'secondary', x: -NARROW_W / 2 + PAD + ABOUT_BACK_W / 2, y: PAD + ROW_H / 2, w: ABOUT_BACK_W, h: ROW_H },
+          arrow('up-scroll', 'Up', right - ABOUT_ARROW_W * 1.5 - MENU_GAP),
+          arrow('down-scroll', 'Down', right - ABOUT_ARROW_W / 2),
+        ],
+      };
     }
     case 'picker': {
       // Random level (practice): how hard. Easy, Medium, Hard, Expert, then Back.
@@ -149,7 +172,7 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
     case 'paused': {
       // One column like the other menus: Resume, Restart (a new puzzle), Give up (ends the run), Main menu (the run stays saved), No timer.
       const items: Parameters<typeof stack>[1] = [['resume', 'Resume', 'primary'], ['restart', 'Restart', 'secondary'], ['giveup', 'Give up', 'secondary'], ['menu', 'Main menu', 'secondary'], ['relaxed', 'No timer', 'toggle']];
-      return { width: NARROW_W, height: startHeight(items.length), buttons: stack(PAD, items, ROW_W, ROW_H) };
+      return { width: NARROW_W, height: startHeight(items.length) + 0.014, buttons: stack(PAD, items, ROW_W, ROW_H) }; // a line more for what a pause costs
     }
     case 'initials': {
       // The name entry, arcade style: the time large, then three big letter slots (tap one to move to it) with an arrow over and under each, then OK and Skip.

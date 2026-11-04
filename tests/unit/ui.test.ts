@@ -23,7 +23,7 @@ describe('panel layouts', () => {
 
   it('has the buttons each screen needs', () => {
     const ids = (s: (typeof SCREENS)[number], level = 0) => layout(s, { level, levels: 5 }).buttons.map((b) => b.id);
-    expect(ids('title')).toEqual(['start', 'random', 'options', 'scores']);
+    expect(ids('title')).toEqual(['start', 'random', 'options', 'scores', 'about']);
     expect(ids('hud')).toEqual(['pause']);
     expect(ids('complete')).toEqual(['next']);
     expect(ids('paused')).toEqual(['resume', 'restart', 'giveup', 'menu', 'relaxed']);
@@ -234,7 +234,7 @@ describe('best times and initials cards', () => {
       expect(board.buttons.map((b) => b.id)).toEqual(['back', 'tab-local', 'tab-global', 'tab-easy', 'tab-medium', 'tab-hard']);
       expect(layout('initials', { ...ctx, narrow }).buttons.filter((b) => b.kind === 'primary').map((b) => b.id), 'one primary').toEqual(['save']);
     }
-    expect(OVERLAY_SCREENS).toEqual(['initials', 'board', 'options', 'stages', 'picker', 'result']);
+    expect(OVERLAY_SCREENS).toEqual(['initials', 'board', 'options', 'about', 'stages', 'picker', 'result']);
   });
 
   it('shows every best time as m:ss.t, tenths included from 10 s up', () => {
@@ -317,13 +317,13 @@ describe('best times and initials cards', () => {
     }
   });
 
-  it('the start panel is one column of five, Continue on top', () => {
+  it('the start panel is one column of six, Continue on top', () => {
     const wide = layout('title', { ...ctx, resume: true });
-    expect(wide.buttons.map((b) => b.label)).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores']);
-    expect(new Set(wide.buttons.map((b) => b.y)).size).toBe(5);
+    expect(wide.buttons.map((b) => b.label)).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores', 'About']);
+    expect(new Set(wide.buttons.map((b) => b.y)).size).toBe(6);
     expect(wide.width).toBe(NARROW_W);
     const phone = layout('title', { ...ctx, resume: true, narrow: true });
-    expect(phone.buttons.map((b) => b.id)).toEqual(['continue', 'start', 'random', 'options', 'scores']);
+    expect(phone.buttons.map((b) => b.id)).toEqual(['continue', 'start', 'random', 'options', 'scores', 'about']);
     expect(phone.buttons.map((b) => b.y)).toEqual(wide.buttons.map((b) => b.y));
     for (const b of phone.buttons) expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(phone.width / 2 - 0.008 + 1e-9);
   });
@@ -397,6 +397,35 @@ describe('the stage picker (New Game)', () => {
           expect(inZone(panelToWorld(a, [x, y, 0]), PANEL_ZONE), `${name} ${level.id} ${b.id}`).toBe(true);
         }
       }
+    }
+  });
+});
+
+describe('the countdown and About cards', () => {
+  it('the countdown is a menu card with nothing to press; About has Back and two scroll arrows, each 40 mm or more, inside the card', () => {
+    expect(MENU_SCREENS).toEqual(expect.arrayContaining(['countdown', 'about']));
+    expect(layout('countdown', { level: 0, levels: 21 }).buttons).toEqual([]);
+    for (const narrow of [false, true]) {
+      const l = layout('about', { level: 0, levels: 21, narrow });
+      expect(l.buttons.map((b) => b.id)).toEqual(['back', 'up-scroll', 'down-scroll']);
+      for (const b of l.buttons) {
+        expect(Math.min(b.w, b.h), b.id).toBeGreaterThanOrEqual(BUTTON_MIN_M);
+        expect(Math.abs(b.x) + b.w / 2, b.id).toBeLessThanOrEqual(l.width / 2 - 0.008 + 1e-9);
+      }
+      const [back, up, down] = l.buttons as [Button, Button, Button];
+      expect(back.h, 'Back is a 50 mm row').toBeGreaterThanOrEqual(0.05);
+      expect(up.x + up.w / 2, 'the arrows do not touch Back').toBeLessThan(down.x - down.w / 2 + 1e-9);
+      expect(back.x + back.w / 2).toBeLessThan(up.x - up.w / 2);
+      expect(l.height).toBeLessThan(0.45);
+    }
+  });
+
+  it('the pause card has a line more for what a pause costs, and still fits in XR reach', () => {
+    const l = layout('paused', { level: 0, levels: 21 });
+    expect(l.buttons.map((b) => b.id)).toEqual(['resume', 'restart', 'giveup', 'menu', 'relaxed']);
+    for (const level of LEVELS) {
+      const a = menuAnchor(l, level);
+      for (const b of l.buttons) for (const y of [b.y - b.h / 2, b.y + b.h / 2]) expect(inZone(panelToWorld(a, [b.x, y, 0]), PANEL_ZONE), `${level.id} ${b.id}`).toBe(true);
     }
   });
 });

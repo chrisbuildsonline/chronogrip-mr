@@ -212,7 +212,7 @@ test('phone 375 x 812: the start panel and the board are legible, 44 px rows, Ba
   await cardIs(page, 'title');
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
   const pills = await page.evaluate(() => window.__chrono!.buttons());
-  expect(pills.map((b) => b.id)).toEqual(['start', 'random', 'options', 'scores']);
+  expect(pills.map((b) => b.id)).toEqual(['start', 'random', 'options', 'scores', 'about']);
   for (const b of pills) {
     expect(b.rect[2] - b.rect[0], `${b.id} is 44 px wide or more`).toBeGreaterThanOrEqual(44);
     expect(b.rect[3] - b.rect[1], `${b.id} is 44 px tall or more`).toBeGreaterThanOrEqual(44);
