@@ -26,7 +26,8 @@ cream deep and 4.6:1 on a hovered tile (tests/unit/palette.test.ts). The colours
 ## Type (panel millimetres; canvas at 3 px per mm)
 | Style | Size | Face |
 |---|---|---|
-| Display (game title) | 36 mm | Georgia, serif, 600 |
+| Title (the start panel's name) | 46 mm (42 mm on a phone) | Georgia, serif, 600 |
+| Display (loading card wordmark) | 36 mm | Georgia, serif, 600 |
 | Number XL (level number, time) | 24 mm | system sans, 700 |
 | Heading | 18 mm | Georgia, serif, 600 |
 | Button | 12.5 mm | system sans, 600 |
@@ -56,13 +57,51 @@ Times are m:ss; under 10 s they carry tenths (0:00.4, 0:07.2), truncated, so a q
 ## Screens
 | Screen | Size (m) | Layout |
 |---|---|---|
-| Title | 0.42 x 0.15 | eyebrow "A clockwork puzzle"; Display "ChronoGrip"; row: Start (primary 10 cm; "Continue" once anything is solved), Levels, "Best times" (see Best times), "No timer" toggle (see Time limit). As wide as the Pause card, so the four pills stay on one row inside the panel zone. On a phone 0.30 x 0.208: two rows, Start (100 mm) and Levels (72 mm) under the thumb, Best times (100 mm) and No timer (98 mm) above them, the words lifted a row |
+| Title (the start panel) | 0.42 x 0.17 | The first thing seen. See Start screen below: eyebrow, the Title face "ChronoGrip", a tagline and three big buttons on one row: Start game (primary, 130 mm; "Continue" once anything is solved), Options (90 mm) and High scores (110 mm), each 50 mm tall. On a phone 0.30 x 0.208: Start game across the foot (268 x 52 mm) under the thumb, Options and High scores side by side above it |
+| Options | 0.44 x 0.15 | Over the start panel; see Options below: Heading "Options", one muted grab line, one row of Back, No timer, Sound, Reset progress. Reset progress swaps the row for Back, Keep it and Reset now (primary). On a phone 0.30 x 0.20: Back and Reset progress under the thumb, the two switches above |
 | Level select | 0.684 x 0.15 | Heading "Levels" with muted "N of 9 solved" (Random is endless, so it is not counted); one row (the panel zone's pitch rules out two): Back pill, then nine 42 x 70 mm tiles (1-8, then "Daily" with an amber top edge, serif shrunk to fit) and the "Random" tile, 70 x 70 mm, last, after the daily or the shared puzzle: "Random" in serif, never smaller than "Daily", with the run's next step ("Step 3") under it in muted body type. The row is no wider than the nine 50 mm tiles were, so the outer tile still sits inside the 35 degree cone (tests/unit/ui.test.ts). A solved tile shows its best m:ss in muted text and a small amber check |
 | HUD (playing, calibrate) | 0.30 x 0.096 | top: the goal line (muted "Turn the marked gear", the drawn turn arrow, ink bold "60 rpm", an amber check once matched); below: eyebrow "Level" over Number XL level (or "Daily"); Number XL time; the countdown ring and its "Left" time (see Time limit); round pause button right, kept on the bottom row so it is no higher in view |
 | Level complete | 0.35 x 0.17 | amber "Solved" pill, then muted eyebrow "PAR m:ss"; Heading "Level N complete"; Number XL time right, an amber check just before it when under par, an amber "New best" pill under it when a saved time was beaten, else muted "Best m:ss"; row: Next (primary), Restart, Levels. On the daily: Levels (primary), Restart. Over par: see Time limit |
 | Initials | 0.58 x 0.14 | Over the complete card, before it, when a solve makes its board's top ten (see Best times). Amber tint pill "#3 BEST TIMES"; Heading "Level 4" or "Random · Step 6" at the left, the time in Number XL at the right; then the one button row: three slots, each a 30 x 46 mm Cream deep rounded slot holding one letter in Number XL (Ink), the slot typing fills ringed in Amber (3 mm, the hover ring's look), a 40 x 46 mm down arrow touching its left (3 mm) and an up arrow touching its right, so slot and arrows read as one control, 14 mm between slots; then Save (the primary, 80 mm) and Skip (60 mm). One row only, so every target stays inside the panel zone (the row is about as wide as before, widest edge about 31 degrees yaw against 35). On a phone 0.30 x 0.29: each slot is a 81 x 40 mm Cream deep slot with an up pill (81 x 44 mm) 3 mm over it and a down pill 3 mm under it, the Amber ring on the active one; Save (150 mm) and Skip (106 mm) under the thumb |
-| Best times | 0.48 x 0.22 | Heading "Best times" at the top left; the top ten as two columns of five rows (rank in muted 12 mm, initials in ink bold, the time in ink 600 so the digits stack, the date muted "4 Nov"; a Random row shows "Step 6" before the time). Every row's time is m:ss.t (0:08.0, 0:10.0, 1:01.5), right-aligned so the digits stack, and the date follows it 12 mm after its right edge, so no wide gap opens between them); an empty board shows one muted line in the middle of the rows, "No times yet. Solve level 3 to set one." (Random: "Solve a Random puzzle"). One row: Back pill at the left, then at the right a round arrow, the board's name in serif ("Level 3", "Random") and a round arrow. On a phone 0.30 x 0.29: one column of ten rows at 11.5 mm (13 px) with the same time-then-date order, the same row of Back and arrows under the thumb |
+| High scores (the best times board) | 0.48 x 0.22 | Heading "High scores" at the top left with a tab strip just after it (see Start screen, High scores); the top ten as two columns of five rows (rank in muted 12 mm, initials in ink bold, the time in ink 600 so the digits stack, the date muted "4 Nov"; a Random row shows "Step 6" before the time). Every row's time is m:ss.t (0:08.0, 0:10.0, 1:01.5), right-aligned so the digits stack, and the date follows it 12 mm after its right edge, so no wide gap opens between them); an empty board shows one muted line in the middle of the rows, "No times yet. Solve level 3 to set one." (Random: "Solve a Random puzzle"). One row: Back pill at the left, then at the right a round arrow, the board's name in serif ("Level 3", "Random") and a round arrow. On a phone 0.30 x 0.29: one column of ten rows at 11.5 mm (13 px) with the same time-then-date order, the same row of Back and arrows under the thumb |
 | Pause | 0.42 x 0.15 | Heading "Paused"; muted "Level N - m:ss"; row: Resume (primary), Restart, Levels, "No timer" toggle. The card is wider than the others so the fourth pill stays on the bottom row, inside the panel zone (src/ui.ts) |
+
+## Start screen (src/ui.ts `title`, src/panels.ts, tests/unit/start.test.ts, tests/e2e/start.spec.ts, tests/e2e/dev-start.spec.ts)
+The first card on desktop, phone and in XR, over the live board and the workshop scenery: a game title, not a form.
+- Layout, top to bottom, centred: eyebrow "A CLOCKWORK PUZZLE" (Eyebrow type, Muted, +3 px tracking) between two short Amber
+  rules (12 mm x 1.2 mm; the one accent, here as a flourish only); the game name in the Title face (46 mm, Georgia serif 600,
+  Ink; shrunk to fit if a font is wide); one tagline line, "Mesh the gears. Wake the bird." in Body type, Muted; then the buttons.
+- Buttons: one clear primary, Start game, near-black Ink pill with cream words (reads "Continue" once any level is solved, as
+  before), and two Cream deep secondaries, Options and High scores. They are bigger than the 46 mm pills elsewhere: 50 mm tall
+  in XR and on a desktop (their top edge stays under the panel zone's 18 degrees, tests/unit/start.test.ts), 52 mm on a phone
+  (59 px), with Button type at 1.1x (13.75 mm). Gap 12 mm. Wide: one row, primary 130 mm, Options 90 mm, High scores 110 mm.
+  Phone: Start game full width at the foot under the thumb, Options and High scores half a row each above it.
+- Start game opens level select, whose Back returns here. Touching a gear on the board still starts the level.
+- The settings that used to be title pills (No timer) live only in Options; the pause card keeps its own No timer pill.
+- XR: every edge of every target is inside the panel zone (yaw 35, pitch 18, 60 cm) above every level, checked in
+  tests/unit/start.test.ts; the card is 0.17 m tall (a taller card pushes the desktop camera back at 1440 x 900).
+- Phone: 0.208 m tall, no taller than the old title sheet, so the camera and the board's room are as before; every button is 44 px or more and every word 12 px or more.
+
+### Options
+- Heading "Options" (Heading type) and one static muted line saying how to grab a gear, set by input: in XR "Grab a gear:
+  pinch it, carry it, let go."; on a phone "Grab a gear: touch and drag it."; otherwise "Grab a gear: click and drag it." There is no hint switch (the ghost hand
+  teaches level 1 on its own), so the line is the whole hint section.
+- One row of targets, Back first: "No timer" (toggle, key `chronogrip.relaxed.v1`, see Time limit), "Sound" (toggle, on by
+  default, key `chronogrip.sound.v1`, `0` is off; off makes no voice at all), and "Reset progress". Toggles read as before: Cream
+  deep and an empty circle when off, Amber tint and a check when on. Both settings are saved and read at load.
+- Reset progress asks first. The card turns to the heading "Reset progress?" over the line "Clears levels and Random. Best
+  times stay." and the row becomes Back, Keep it (secondary) and Reset now (the one primary). Keep it returns to the options as
+  they were; Back leaves Options; Reset now clears the saved level progress (best times on the tiles, passes, so Continue
+  reads Start game again and level 1 is on the board) and the Random run's step (`chronogrip.random.v1` back to step 1), then
+  returns to the start panel. The high scores boards (`chronogrip.scores.v1`) are kept: they are a separate store, and a
+  reset is a fresh start on the levels, not a wipe of names on the boards. No red: the destructive step is a plain pill, the primary.
+- Phone: Back and Reset progress (or Reset now and Keep it, with Back above) under the thumb, the two switches above them.
+- Test hooks: `__chrono.options` (while up: confirm, relaxed, sound), `__chrono.soundOn`, `__chrono.card.screen === 'options'`.
+
+### High scores
+The best times board (see Best times) reached from the start panel's High scores button, headed "High scores". Just after
+the heading is a tab strip: "LOCAL" as the selected tab (an Amber tint pill, 66 mm x 26 mm; 60 mm on a phone), and the rest of the strip's 160 mm
+(130 mm on a phone) left free, so the global board's tab can slot in beside it with no relayout. Back returns to the start panel.
 
 ## Time limit (src/timer.ts, tests/e2e/timer.spec.ts)
 Every level, the daily and a shared puzzle has a par time: 60 s plus 25 s per gear to place, 20 s per compound pair and
@@ -79,7 +118,7 @@ under par is a pass; over it the bird still wakes but the card says over time.
 - "No timer" toggle (accessibility, the Relaxed mode): a pill labelled "No timer" in button type, so a first-time player
   knows what it does; the stored key and test hooks keep the name `relaxed`. Off: Cream deep with an empty
   Muted circle before the words. On: Amber tint fill, Amber tint ink words and a small Amber check disc, so the state reads
-  without colour alone; hover is the usual Amber ring. It lives on the title row (fourth pill) and the pause card (fourth
+  without colour alone; hover is the usual Amber ring. It lives in Options (see Start screen) and on the pause card (fourth
   pill; top right on a phone, where the row is full). Default is the timer on; the choice is saved (localStorage
   `chronogrip.relaxed.v1`). While on: no ring, no par, no "over time", and the solve is not marked pass or over.
 - Pass or over is saved per level next to the best times (`outcome` in the progress save, a pass is never undone by a slower
@@ -141,7 +180,7 @@ untouched: it stays in `chronogrip.progress.v1`.
   once all three are in, typing waits for Backspace), Backspace goes back a slot so the next letter replaces it, Enter
   presses Save. The up and down arrows step one letter through the alphabet (Z wraps to A) and make that slot the one
   typing fills. In XR the arrows, Save and Skip are poked or pinched like any other button.
-- Best times: the title's fourth pill opens it; it lies over the title card, and starting a level (Start, or touching a
+- High scores: the start panel's High scores button opens it; it lies over the start panel, and starting a level (touching a
   gear) closes it. It opens on the board of the level last started (Random counts), else level 1. The arrows cycle level 1 to
   8, then Random, then round to 1; Back (or Esc) returns to the title. An empty board says how to set a time.
 - Phone: one job per screen. The title is two rows so each pill is 44 px or more tall at 14 mm type; the board is one
@@ -155,7 +194,7 @@ untouched: it stays in `chronogrip.progress.v1`.
 Progress (best times) is saved in localStorage; the title board is the first unsolved level, so Continue picks up there.
 The daily is a seeded "tinker" puzzle generated from the local date and played after the eight levels, as a ninth.
 
-The title screen leaves the board live: touching a gear starts the level. Level 1 has no text at all: a translucent
+The start panel leaves the board live: touching a gear starts the level. Level 1 has no text at all: a translucent
 cream ghost hand loops pinch, carry, drop from the first loose gear to its axle until the player first grabs a gear.
 It shows the back of a right hand from the seat: a palm, four two-joint fingers reaching up the board, a thumb from the
 near side, 78% opaque with an amber Fresnel rim so each finger's edge and the outline read against wood and brass.
@@ -268,8 +307,8 @@ middle: two brass gears that tick one tooth per half second and rest, the eyebro
 takes no pointer; if startup fails it stops ticking and says "The clockwork would not start." with the reason. Reduced
 motion: no ticking, no fades.
 
-Keys (desktop): Enter presses the card's primary pill; Esc pauses, resumes from the pause card and goes back from level
-select. Held keys do not repeat. The canvas is labelled for screen readers (role img).
+Keys (desktop): Enter presses the card's primary pill (Start game on the start panel); Esc pauses, resumes from the pause card and goes back from level
+select, Options and High scores. Held keys do not repeat. The canvas is labelled for screen readers (role img).
 
 Camera: from above, behind and a little right of the seated head (0.107, 0.225, 0.364) looking at (0.015, -0.08, -0.36):
 a three-quarter view that shows the bevel, gear thickness and the bird standing up. Every card (title, select, HUD,
