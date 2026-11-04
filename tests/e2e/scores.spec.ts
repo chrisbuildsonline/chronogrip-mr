@@ -200,7 +200,7 @@ test('desktop: an empty board says no finished runs yet; Esc is Back', async ({ 
   const errors = await open(page);
   await click(page, 'scores');
   await cardIs(page, 'board');
-  expect(await words(page)).toContain('No finished runs yet. Complete all 20 levels to set one.');
+  expect(await words(page)).toContain('No finished runs yet.');
   await page.keyboard.press('Escape');
   await cardIs(page, 'title');
   expect(errors).toEqual([]);

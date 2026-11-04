@@ -521,7 +521,7 @@ function endRun(why: 'timeout' | 'giveup' | 'won'): void {
 
 /** The best times card: the campaign board, completed runs only. */
 function boardCard(id: string, tab: 'local' | 'global'): NonNullable<PanelCtx['board']> {
-  const local = { label: 'Campaign', tab, entries: scores.boards[id]!, empty: 'No finished runs yet. Complete all 20 levels to set one.' };
+  const local = { label: 'Campaign', tab, entries: scores.boards[id]!, empty: 'No finished runs yet.' };
   if (tab === 'local') return local;
   // Global: the last good rows; with none, "Loading" while asking and the local rows with a quiet note once it failed.
   const rows = globalRows.get(id);

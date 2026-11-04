@@ -57,12 +57,12 @@ async function solve(page: Page) {
   await frames(page);
 }
 
-test('desktop: Random level opens a picker (Easy, Medium, Hard, Expert), Hard plays a generated puzzle, and Next is a new one at the same difficulty', async ({ page }) => {
+test('desktop: Random level opens a picker (Easy, Medium, Hard, Expert), Hard plays a generated puzzle, and Play again is a new one at the same difficulty', async ({ page }) => {
   const errors = await open(page);
   await click(page, 'random');
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'picker');
   expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Easy', 'Medium', 'Hard', 'Expert', 'Back']);
-  expect(await words(page)).toContain('Random level');
+  expect(await words(page)).toContain('RANDOM LEVEL');
   await page.screenshot({ path: `${OUT}/picker.png` });
   await click(page, 'hard');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
@@ -77,14 +77,14 @@ test('desktop: Random level opens a picker (Easy, Medium, Hard, Expert), Hard pl
   await page.screenshot({ path: `${OUT}/hard-play.png` });
 
   await solve(page);
-  // No initials after a puzzle: the run goes on with Next, another puzzle at the same difficulty.
+  // Practice: no initials; Play again deals another puzzle at the same difficulty.
   expect(await page.evaluate(() => window.__chrono!.initials)).toBeNull();
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Next']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Play again', 'Main menu']);
   expect(await words(page)).toContain('Random · Hard complete');
   await click(page, 'next');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelTime >= 0);
   expect(await page.evaluate(() => window.__chrono!.random)).toMatchObject({ mode: true, difficulty: 'hard' });
-  expect(await layoutOf(page), 'Next is a new puzzle').not.toBe(first);
+  expect(await layoutOf(page), 'Play again is a new puzzle').not.toBe(first);
   expect(errors).toEqual([]);
 });
 

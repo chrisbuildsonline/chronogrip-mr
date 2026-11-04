@@ -91,15 +91,13 @@ for (const size of SIZES) {
     await click(page, 'scores');
     await cardIs(page, 'board');
     await dark(page, 'board');
-    // The Local / Global control on top, then the rows, the level switcher and Back: all about the card's middle.
+    // The Local / Global control on top, then the rows and Back: all about the card's middle.
     const all = await rects(page);
     const by = (id: string) => all.find((b) => b.id === id)!.rect;
     const card = (await page.evaluate(() => window.__chrono!.viewBoxes().card))!;
     expect((centreX(by('tab-local')) + centreX(by('tab-global'))) / 2, 'the control is centred').toBeCloseTo(centreX(card), -1);
     expect(centreX(by('tab-local'))).toBeLessThan(centreX(by('tab-global')));
-    expect((centreX(by('board-prev')) + centreX(by('board-next'))) / 2, 'the switcher is centred').toBeCloseTo(centreX(card), -1);
-    expect(centreY(by('tab-local')), 'the control is on top').toBeLessThan(centreY(by('board-prev')));
-    expect(centreY(by('board-prev'))).toBeLessThan(centreY(by('back')));
+    expect(centreY(by('tab-local')), 'the control is on top').toBeLessThan(centreY(by('back')));
     await column(page, ['back'], 'board');
     expect(Math.abs(centreX(by('back')) - centreX(card))).toBeLessThanOrEqual(1);
     await centred(page, size, 'board');

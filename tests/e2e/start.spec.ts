@@ -192,8 +192,8 @@ test('desktop: No timer and Sound persist after a reload, and sound off keeps th
 });
 
 test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now forgets the saved run but keeps the high scores', async ({ page }) => {
-  const board = { version: 1, initials: 'KIM', boards: { campaign: [{ name: 'KIM', ms: 90000, date: '2026-10-01', cleared: 3 }] } };
-  await seed(page, { [RUN]: { kind: 'campaign', cleared: 2, ms: 85000 }, [SCORES]: board });
+  const board = { version: 1, initials: 'KIM', boards: { campaign: [{ name: 'KIM', ms: 590000, date: '2026-10-01' }] } };
+  await seed(page, { [RUN]: { cleared: 2, ms: 85000 }, [SCORES]: board });
   const errors = await open(page);
   expect(await labelsOf(page)).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores']);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l3'); // the board is the level Continue plays (two cleared)
@@ -205,9 +205,9 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   expect(await page.evaluate(() => window.__chrono!.options)).toMatchObject({ confirm: true });
   expect(await ids(page)).toEqual(['reset-yes', 'reset-cancel', 'back']);
   expect(await labelsOf(page)).toEqual(['Reset now', 'Keep it', 'Back']);
-  expect(await words(page)).toEqual(expect.arrayContaining(['Reset progress?', 'Clears solved levels. Best times stay.']));
+  expect(await words(page)).toEqual(expect.arrayContaining(['RESET?', 'Clears the saved run. Best times stay.']));
   // Nothing is gone yet.
-  expect(await page.evaluate(() => window.__chrono!.run)).toEqual({ kind: 'campaign', cleared: 2, ms: 85000 });
+  expect(await page.evaluate(() => window.__chrono!.run)).toEqual({ cleared: 2, ms: 85000 });
   await page.screenshot({ path: `${OUT}/options-confirm-1440.png` });
 
   // Keep it: back to the options as they were, progress untouched.
@@ -215,7 +215,7 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   await cardIs(page, 'options');
   expect(await page.evaluate(() => window.__chrono!.options)).toMatchObject({ confirm: false });
   expect(await ids(page)).toEqual(['relaxed', 'sound', 'music', 'reset', 'back']);
-  expect(await page.evaluate(() => window.__chrono!.run)).toEqual({ kind: 'campaign', cleared: 2, ms: 85000 });
+  expect(await page.evaluate(() => window.__chrono!.run)).toEqual({ cleared: 2, ms: 85000 });
 
   // Back leaves the confirm too: opening Options again starts from the plain card.
   await click(page, 'reset');

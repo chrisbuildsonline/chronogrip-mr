@@ -339,3 +339,13 @@ the Random tile as a full-width bar (a third row, 46 mm tall, "Random" in serif 
 eyebrows grow to 14 mm and 11 mm, so every button is 44 px or more and every word 12 px or more on screen
 (tests/e2e/phone.spec.ts). The board fits the room between the header and the tallest card of its kind, and the view is
 raised (a camera view offset) to centre it there, so it holds still from title to HUD to complete.
+
+## Menus: "Escapement deco" (F38)
+
+The menus (start, options, high scores, pause, random level picker, run result, name entry) have no card. Their words float on the 90% black layer in a flat view, and on a dark 90% backing panel in XR. Josefin Sans, self-hosted in `public/fonts` (300, 400, 600), so it works offline and in XR; the canvas waits for it (`document.fonts.load`) before the first card is drawn.
+
+- Top left of the page: the logo, CHRONOGRIP in Josefin 300, letter-spacing .32em, cream `logo`; both Os are small amber gear SVGs, with a 2 px amber-to-transparent rule under it.
+- A menu: an amber eyebrow ("A CLOCKWORK PUZZLE", 600, wide tracking), a big CHRONOGRIP (or the screen's name) in 300, then the rows in one left-aligned column: upper-case Josefin 400, tracked, `menuInk`. A row is 50 mm tall (a hand's target in XR), the rows nearly touch (4 mm).
+- The selected or hovered row (and the primary one) has a 3.5 mm amber bar at its left edge, an amber-to-transparent gradient fill, an amber "›" at its right, and its words in `menuHi`. A switch shows ON (amber) or OFF at its right.
+- Colour tokens: `logo`, `menuInk`, `menuHi`, `menuMuted` (all checked against `menuBed` for 4.5:1 in tests/unit/palette.test.ts).
+- The pause, result and name-entry cards are menus too. The name entry: the total time large, three 50 mm letter slots (the active one boxed in amber), an arrow over and one under each, then OK and Skip.
