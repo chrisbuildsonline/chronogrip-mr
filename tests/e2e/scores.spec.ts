@@ -116,21 +116,22 @@ test('desktop: a run that cleared a level asks for initials once, at its end (#1
   await click(page, 'down-1');
   await click(page, 'down-1');
   expect((await initials(page))!.letters).toBe('BYA');
-  await page.keyboard.type('kim');
+  await page.keyboard.type('ki'); // typing fills the slot the last arrow chose, then the next
+  expect((await initials(page))!.letters).toBe('BKI');
   expect((await initials(page))!.cursor).toBe(3);
   await click(page, 'save');
   await cardIs(page, 'title'); // Save goes back to the main menu
   const saved = (await scores(page)).boards.campaign!;
   expect(saved).toHaveLength(1);
-  expect(saved[0]).toMatchObject({ name: 'KIM', cleared: 1 });
-  expect((await scores(page)).initials).toBe('KIM');
+  expect(saved[0]).toMatchObject({ name: 'BKI', cleared: 1 });
+  expect((await scores(page)).initials).toBe('BKI');
 
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);
   await click(page, 'scores');
   await cardIs(page, 'board');
   const shown = await words(page);
-  expect(shown).toEqual(expect.arrayContaining(['Campaign', 'KIM', '1 / 20', clockTenths(saved[0]!.ms / 1000)]));
+  expect(shown).toEqual(expect.arrayContaining(['Campaign', 'BKI', '1 / 20', clockTenths(saved[0]!.ms / 1000)]));
   await wordsClear(page, 'campaign board 1440', 9, 4);
   await page.screenshot({ path: `${OUT}/board-campaign-1440.png` });
   expect(errors).toEqual([]);
