@@ -70,10 +70,11 @@ test('README screenshots: title, a gear in hand mid-puzzle, level complete', asy
   // Title: the card over the tray, the level 1 ghost hand partway through its carry (ghost.ts loops on performance.now).
   await shotWhen(page, 'title', `(now / 1000 / ${GHOST_PERIOD_S}) % 1 > 0.36 && (now / 1000 / ${GHOST_PERIOD_S}) % 1 < 0.44`);
 
-  // Mid-puzzle on level 2: one gear placed, the next carried by the mouse towards its axle, the axles it fits pulsing amber.
-  await page.evaluate(() => window.__chrono!.jump(2));
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1);
-  const [[firstGear, firstAxle], [gear, axle]] = Object.entries(await page.evaluate(() => window.__chrono!.solution)) as [string, string][];
+  // Mid-puzzle on level 10 (a generated puzzle, so no two shots are the same): one gear placed, the next carried by the mouse towards its axle, the axles it fits pulsing amber.
+  await page.evaluate(() => window.__chrono!.jump(10));
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 9);
+  const parts = Object.entries(await page.evaluate(() => window.__chrono!.solution)) as [string, string][];
+  const [[firstGear, firstAxle], [gear, axle]] = parts;
   await place(page, firstGear!, firstAxle!);
   await page.waitForFunction((g) => window.__chrono!.placements[g!] !== undefined, firstGear);
   const from = await screen(page, 'gears', gear!);
@@ -89,6 +90,7 @@ test('README screenshots: title, a gear in hand mid-puzzle, level complete', asy
   // Complete: drop it on its axle, calibrate, then catch the bird with its wings up over the complete card.
   await page.mouse.move(to[0], to[1], { steps: 4 });
   await page.mouse.up();
+  for (const [g, a] of parts.slice(2)) await place(page, g, a); // the rest of the train
   await calibrateByMouse(page);
   await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'));
   await shotWhen(page, 'complete', 'window.__chrono.tickPhase % 1 < 0.05');
