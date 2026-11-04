@@ -35,6 +35,20 @@
       #enter-mr:disabled { opacity: 0.5; cursor: not-allowed; }
       #enter-note { text-wrap: balance; }
       #enter-note[hidden] { display: none; }
+      /* Progress, left of Enter MR: "EASY · LEVEL 2 / 20" and a 20-segment bar. main.ts fills it during a campaign level and hides it on the menus. */
+      #progress {
+        position: fixed; top: 14px; right: 196px; height: 46px; z-index: 1; display: flex; flex-direction: column; justify-content: center; align-items: flex-end; gap: 7px;
+        font: 400 0.78rem/1 "Josefin Sans", system-ui, sans-serif; letter-spacing: 0.24em; text-transform: uppercase; color: #f1e8d8; pointer-events: none;
+        padding: 0 12px; border-radius: 10px; background: rgba(14, 10, 6, 0.55); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      }
+      #progress[hidden] { display: none; }
+      #progress .stage { color: #d99a2b; font-weight: 600; }
+      #progress .short { display: none; }
+      #progress .bar { display: flex; gap: 2px; width: 148px; }
+      #progress .bar[hidden] { display: none; }
+      #progress .bar i { flex: 1; height: 3px; background: rgba(241, 232, 216, 0.22); }
+      #progress .bar i.on { background: #d99a2b; }
+      .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
       /* A ?seed= code that did not work: a cream pill under the header, like the in-world hint pills. main.ts hides it after a few seconds. */
       #seed-note {
         position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 1; margin: 0; max-width: calc(100vw - 32px);
@@ -50,6 +64,11 @@
       @media (max-width: 499px) {
         h1 { left: 16px; }
         #xr-entry { right: 16px; max-width: 150px; }
+        /* Compact "E · 2/20" under the logo, so it never meets the button. */
+        #progress { top: 50px; left: 16px; right: auto; height: auto; align-items: flex-start; padding: 5px 8px; font-size: 0.7rem; letter-spacing: 0.2em; }
+        #progress .full { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+        #progress .short { display: inline; }
+        #progress .bar { width: 96px; }
         #seed-note { top: 112px; border-radius: 22px; }
         .cg-more { display: none; }
       }
@@ -127,6 +146,10 @@
       </div>
     </div>
     <h1 id="title" aria-label="ChronoGrip">CHR<svg viewBox="-1.05 -1.05 2.1 2.1" aria-hidden="true"><path d="M0.740 0.000 L0.994 0.113 L0.980 0.200 L0.704 0.229 L0.599 0.435 L0.738 0.675 L0.675 0.738 L0.435 0.599 L0.229 0.704 L0.200 0.980 L0.113 0.994 L0.000 0.740 L-0.229 0.704 L-0.414 0.910 L-0.493 0.870 L-0.435 0.599 L-0.599 0.435 L-0.870 0.493 L-0.910 0.414 L-0.704 0.229 L-0.740 0.000 L-0.994 -0.113 L-0.980 -0.200 L-0.704 -0.229 L-0.599 -0.435 L-0.738 -0.675 L-0.675 -0.738 L-0.435 -0.599 L-0.229 -0.704 L-0.200 -0.980 L-0.113 -0.994 L-0.000 -0.740 L0.229 -0.704 L0.414 -0.910 L0.493 -0.870 L0.435 -0.599 L0.599 -0.435 L0.870 -0.493 L0.910 -0.414 L0.704 -0.229Z M0.34 0 A0.34 0.34 0 1 0 -0.34 0 A0.34 0.34 0 1 0 0.34 0Z"/></svg>N<svg viewBox="-1.05 -1.05 2.1 2.1" aria-hidden="true"><path d="M0.740 0.000 L0.994 0.113 L0.980 0.200 L0.704 0.229 L0.599 0.435 L0.738 0.675 L0.675 0.738 L0.435 0.599 L0.229 0.704 L0.200 0.980 L0.113 0.994 L0.000 0.740 L-0.229 0.704 L-0.414 0.910 L-0.493 0.870 L-0.435 0.599 L-0.599 0.435 L-0.870 0.493 L-0.910 0.414 L-0.704 0.229 L-0.740 0.000 L-0.994 -0.113 L-0.980 -0.200 L-0.704 -0.229 L-0.599 -0.435 L-0.738 -0.675 L-0.675 -0.738 L-0.435 -0.599 L-0.229 -0.704 L-0.200 -0.980 L-0.113 -0.994 L-0.000 -0.740 L0.229 -0.704 L0.414 -0.910 L0.493 -0.870 L0.435 -0.599 L0.599 -0.435 L0.870 -0.493 L0.910 -0.414 L0.704 -0.229Z M0.34 0 A0.34 0.34 0 1 0 -0.34 0 A0.34 0.34 0 1 0 0.34 0Z"/></svg>GRIP</h1>
+    <div id="progress" aria-live="polite" hidden>
+      <span class="label"><span class="full"><span class="stage"></span><span class="level"></span></span><span class="short" aria-hidden="true"><span class="stage"></span><span class="level"></span></span></span>
+      <span class="bar" aria-hidden="true"></span>
+    </div>
     <div id="xr-entry">
       <button id="enter-mr" type="button" disabled>Enter MR</button>
       <span id="enter-note">Mixed reality needs a Quest browser.<span class="cg-more"> Drag to look around the tray.</span></span>

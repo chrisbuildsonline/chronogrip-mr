@@ -1,6 +1,6 @@
 import { expect, test, type Page } from './fixtures';
 import { newGame } from './start';
-import { calibrateByMouse } from './calibrate';
+import { click, frames, solve } from './play';
 
 /** The stages as shipped: every level generated fresh. */
 test.use({ classic: false });
@@ -22,38 +22,9 @@ async function open(page: Page, saves: Record<string, unknown> = {}) {
   return errors;
 }
 
-async function click(page: Page, id: string) {
-  await page.waitForFunction((b) => !window.__chrono!.cameraMoving && window.__chrono!.buttons().some((x) => x.id === b), id);
-  const [x, y] = await page.evaluate((b) => window.__chrono!.buttons().find((x) => x.id === b)!.screen, id);
-  await page.mouse.click(x, y);
-}
-
-const frames = (page: Page) => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 const words = (page: Page) => page.evaluate(() => window.__chrono!.labels().map((l) => l.text));
 const cardIs = (page: Page, s: string) => page.waitForFunction((x) => window.__chrono!.card?.screen === x, s, { timeout: 15_000 });
 const backdrop = (page: Page, id: string) => page.waitForFunction((b) => window.__chrono!.scenery.backdrop === b, id, { timeout: 15_000 });
-
-async function place(page: Page, gear: string, axle: string) {
-  await page.waitForFunction(() => !window.__chrono!.cameraMoving);
-  await frames(page);
-  const from = await page.evaluate((g) => window.__chrono!.toScreen(window.__chrono!.gears[g]!), gear);
-  const to = await page.evaluate((a) => window.__chrono!.toScreen(window.__chrono!.axles[a]!), axle);
-  await page.mouse.move(from[0], from[1]);
-  await page.mouse.down();
-  await page.waitForFunction((g) => window.__chrono!.held === g, gear);
-  await page.mouse.move(to[0], to[1], { steps: 8 });
-  await page.mouse.up();
-  await page.waitForFunction(([g, a]) => window.__chrono!.placements[g!] === a, [gear, axle]);
-}
-
-/** Solves the level on the board (the test hook knows the answer); waits for the complete card's Next. */
-async function solve(page: Page) {
-  const solution = await page.evaluate(() => window.__chrono!.solution);
-  for (const [gear, axle] of Object.entries(solution)) await place(page, gear, axle);
-  await calibrateByMouse(page);
-  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'), undefined, { timeout: 15_000 });
-  await frames(page);
-}
 
 test('New Game opens the stage picker; Hard plays "Hard · Level 1" on the movement backdrop', async ({ page }) => {
   const errors = await open(page);

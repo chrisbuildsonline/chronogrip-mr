@@ -892,7 +892,12 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const shown = shownButtons();
-  const id = e.key === 'Enter' ? shown.find((b) => b.kind === 'primary')?.id : e.key === 'Escape' ? ['pause', 'resume', 'back', 'skip'].find((k) => shown.some((b) => b.id === k)) : undefined;
+  // Enter is the primary pill, Esc pauses, resumes or goes back one menu, P pauses and resumes (never on another menu).
+  const id =
+    e.key === 'Enter' ? shown.find((b) => b.kind === 'primary')?.id
+    : e.key === 'Escape' ? ['pause', 'resume', 'back', 'skip'].find((k) => shown.some((b) => b.id === k))
+    : e.key === 'p' || e.key === 'P' ? ['pause', 'resume'].find((k) => shown.some((b) => b.id === k))
+    : undefined;
   if (!id) return;
   e.preventDefault();
   sound.unlock();
@@ -1291,6 +1296,34 @@ world.scene.onBeforeRender = () => {
   showPanel(now);
 };
 
+/**
+ * The page header's progress, left of Enter MR: "EASY · LEVEL 2 / 20" and a 20-segment bar during a campaign level, "RANDOM · HARD"
+ * with no bar in practice, nothing on the menus (and the pause menu) or a shared puzzle. It is a live region, so a screen reader
+ * hears each level change. On a phone CSS shows the compact "E · 2/20".
+ */
+const progressBox = document.getElementById('progress');
+const progressBar = progressBox?.querySelector('.bar');
+if (progressBar) for (let i = 0; i < CAMPAIGN; i++) progressBar.append(document.createElement('i'));
+let progressShown = '';
+function updateProgress(): void {
+  if (!progressBox || !progressBar) return;
+  const playing = !overlay && PLAY_SCREENS.includes(screenOf(flow));
+  const campaign = levelIndex < CAMPAIGN;
+  const parts = !playing ? null : campaign ? { stage: stageOf(stage).name, level: ` · Level ${levelIndex + 1} / ${CAMPAIGN}`, short: ` · ${levelIndex + 1}/${CAMPAIGN}` } : isRandomLevel(levelIndex) ? { stage: 'Random', level: ` · ${randomDiff}`, short: ` · ${randomDiff[0]!.toUpperCase()}` } : null;
+  const key = parts ? `${parts.stage}${parts.level}|${campaign ? levelIndex : -1}` : '';
+  if (key === progressShown) return;
+  progressShown = key;
+  progressBox.hidden = !parts;
+  if (!parts) return;
+  const [full, short] = [...progressBox.querySelectorAll('.label > span')];
+  for (const [box, level] of [[full, parts.level], [short, parts.short]] as const) {
+    box!.querySelector('.stage')!.textContent = box === short ? parts.stage[0]! : parts.stage;
+    box!.querySelector('.level')!.textContent = level;
+  }
+  (progressBar as HTMLElement).hidden = !campaign;
+  [...progressBar.children].forEach((seg, i) => seg.classList.toggle('on', campaign && i <= levelIndex));
+}
+
 /** Draws the card for the current state; run every frame and after every transition, so the buttons on show never lag the flow. */
 function showPanel(now = performance.now()): void {
   const waiting = flow.name === 'complete' && now - calibratedAt < COMPLETE_DELAY_MS;
@@ -1319,6 +1352,7 @@ function showPanel(now = performance.now()): void {
     fault: faultKind(fault),
     narrow: phone(),
   });
+  updateProgress();
   // A menu is centred in the view and a full-view layer sits under it: place it as soon as it shows, and follow the camera while it does.
   if (menuUp() || placedFor) placePanels();
 }
@@ -1497,6 +1531,9 @@ window.__chrono = Object.freeze({
   },
   get stage() {
     return stage;
+  },
+  get progress() {
+    return progressBox && !progressBox.hidden ? { text: progressBox.querySelector<HTMLElement>('.full')!.innerText, filled: progressBar!.querySelectorAll('i.on').length, bar: !(progressBar as HTMLElement).hidden } : null;
   },
   get hudLabel() {
     return levelIndex < CAMPAIGN ? `${stageOf(stage).name} · Level ${levelIndex + 1}` : `Level ${levelIndex + 1}`;

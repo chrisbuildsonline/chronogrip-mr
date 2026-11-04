@@ -537,10 +537,19 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
         g.font = font(600, T.heading, SERIF);
         return T.heading * Math.min(1, mm((timeX - 0.016 - 0.008) * 1000) / g.measureText(words).width);
       };
-      text(g, random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : shared ? 'SHARED' : ctx.stage ? `${ctx.stage.toUpperCase()} · LEVEL` : 'LEVEL', left(0.016), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
+      const eyebrow = random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : shared ? 'SHARED' : ctx.stage ? `${ctx.stage.toUpperCase()} · LEVEL` : 'LEVEL';
+      // "MEDIUM · LEVEL" shrinks to stop short of the time column.
+      g.font = font(700, T.eyebrow);
+      const eyebrowSize = T.eyebrow * Math.min(1, mm((timeX - 0.016 - 0.006) * 1000) / (g.measureText(eyebrow).width + eyebrow.length));
+      text(g, eyebrow, left(0.016), y(0.048), font(700, random ? T.eyebrow : eyebrowSize), C.muted, 'left', 1);
       if (!random) {
         if (shared) text(g, 'Puzzle', left(0.016), y(0.022), font(600, headSize('Puzzle'), SERIF), C.ink, 'left');
         else text(g, level, left(0.016), y(0.022), font(700, T.xl), C.ink, 'left');
+        if (ctx.stage && !shared) {
+          // "/ 20" after the number, so the card reads "EASY · LEVEL 2 / 20" like the page header.
+          g.font = font(700, T.xl);
+          text(g, `/ ${ctx.levels - 1}`, left(0.016) + g.measureText(level).width + mm(2), y(0.022), font(700, T.eyebrow), C.muted, 'left', 1);
+        }
         text(g, 'TIME', left(timeX), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
       }
       text(g, clock(ctx.time), left(timeX), y(0.022), font(700, T.xl), C.ink, 'left');

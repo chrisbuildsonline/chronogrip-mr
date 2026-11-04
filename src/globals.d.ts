@@ -122,6 +122,8 @@ interface ChronoHook {
   /** Live: the stage being played (the one of the run, else the last picked) and the HUD's words for the level, "Hard · Level 3" (just "Level 3" outside the 20 stage levels). */
   readonly stage: 'easy' | 'medium' | 'hard';
   readonly hudLabel: string;
+  /** Live: the page header's progress (src/main.ts updateProgress): its words, filled bar segments and whether the bar shows; null when hidden. */
+  readonly progress: { readonly text: string; readonly filled: number; readonly bar: boolean } | null;
   /**
    * Live: the level timer. `relaxed`: the Relaxed (no timer) setting; `par`: this level's time limit in seconds; `left`,
    * `over`: whole seconds left (0 once out) and past par; `fraction`: share of par left, 0..1; `ring`: the HUD up now carries the countdown ring.
