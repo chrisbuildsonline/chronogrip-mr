@@ -2,7 +2,7 @@ import { expect, test, type Page } from './fixtures';
 import { device, type Device } from './hands';
 
 // Runs against the dev server (project "dev"), where the IWER emulator is injected. In immersive-ar the passthrough is
-// the background: the workshop backdrop must be gone and only a few small props may stand on the real table.
+// the background: the panorama and bench must be gone and only a few small props may stand on the real table.
 
 const OUT = 'test-results/scenery';
 
@@ -48,14 +48,16 @@ async function enterMr(page: Page) {
 const frames = (page: Page) => page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => done())))));
 const scenery = (page: Page) => page.evaluate(() => window.__chrono!.scenery);
 
-const BACKDROP = ['workbench', 'tray-stand', 'back-wall', 'shelves', 'shelf-props', 'shelf-props-brass', 'bench-props', 'lamp', 'lamp-bulb', 'lamp-glow', 'wall-glow'];
+const BACKDROP = ['workbench', 'tray-stand'];
 const PROPS = ['prop-oil-can', 'prop-screwdriver', 'prop-loupe', 'prop-gear-dish'];
 
 test('immersive-ar without a table: passthrough stays the whole background, no backdrop, no fog, nothing drawn but the game', async ({ page }) => {
   const errors = watchErrors(page);
   await open(page);
-  // Before the session: the inline workshop.
-  expect((await scenery(page)).parts).toEqual(expect.arrayContaining(BACKDROP.slice(0, 4)));
+  // Before the session: the inline bench, with the panorama as the background.
+  await page.waitForFunction(() => window.__chrono!.scenery.backdrop === 'c2');
+  expect((await scenery(page)).background).toBe(true);
+  expect((await scenery(page)).parts).toEqual(expect.arrayContaining(BACKDROP));
   await enterMr(page);
   await frames(page);
   const s = await scenery(page);
@@ -90,7 +92,7 @@ test('immersive-ar with a table: only the four small props stand beside the tray
   expect(errors).toEqual([]);
 });
 
-test('leaving immersive-ar brings the inline workshop back, and the props go', async ({ page }) => {
+test('leaving immersive-ar brings the bench and panorama back, and the props go', async ({ page }) => {
   await open(page);
   await addTable(page);
   await enterMr(page);
@@ -100,8 +102,8 @@ test('leaving immersive-ar brings the inline workshop back, and the props go', a
   await frames(page);
   const s = await scenery(page);
   expect(s.mode).toBe('inline');
-  expect(s.parts).toEqual(expect.arrayContaining(['workbench', 'back-wall', 'shelves', 'lamp']));
+  expect(s.parts).toEqual(expect.arrayContaining(BACKDROP));
   expect(s.parts.some((p) => p.startsWith('prop-'))).toBe(false);
-  expect(s.fog).toBe(true);
-  expect(s.background).toBe(false);
+  expect(s.fog).toBe(false);
+  expect(s.background).toBe(true);
 });

@@ -8,6 +8,7 @@ import { grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle, typ
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
 import { buildScene } from './scene';
+import { loadBackdrop } from './backdrop';
 import { createScenery } from './scenery';
 import { trackMr } from './mr';
 import { tuneForSoftwareGl } from './render';
@@ -146,8 +147,10 @@ let level: Level = levels[levelIndex]!;
 par = parFor(level);
 tuneForSoftwareGl(world.renderer);
 const built = buildScene(level, world.scene, world.renderer);
-// The workshop behind the tray on desktop and phone; in immersive-ar only a few props on the real table (src/scenery.ts).
+// The bench and a rendered panorama behind the tray on desktop and phone; in immersive-ar only a few props on the real table (src/scenery.ts).
 const scenery = createScenery(world.scene);
+/** The rendered panorama behind the tray; the first look is the attic (c2) everywhere. */
+void loadBackdrop('c2', isPhone(window.innerWidth, window.innerHeight)).then((t) => scenery.setBackdrop('c2', t));
 world.renderer.xr.addEventListener('sessionstart', () => scenery.set(true));
 world.renderer.xr.addEventListener('sessionend', () => scenery.set(false));
 

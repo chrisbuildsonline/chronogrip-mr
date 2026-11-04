@@ -9,3 +9,5 @@ test-results/
 playwright-report/
 PLAN.md
 CLAUDE.md
+art/backdrops/out/
+__pycache__/

@@ -1,7 +1,8 @@
-import { Box3, Color, Mesh, type MeshBasicMaterial, Scene, Vector3, type BufferGeometry, type Object3D } from 'three';
+import { Box3, Color, EquirectangularReflectionMapping, Mesh, Texture, type MeshBasicMaterial, Scene, Vector3, type BufferGeometry, type Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PLACEMENT, type Placement } from '../../src/anchor';
 import { C, SCENE } from '../../src/palette';
+import { backdropFile } from '../../src/backdrop';
 import { buildScenery, createScenery } from '../../src/scenery';
 import { BOARD_MARGIN, COMFORT, TRAY_HALF, TRAY_POSE, inZone, type Vec3 } from '../../src/seat';
 import { PANEL_ZONE } from '../../src/ui';
@@ -20,34 +21,36 @@ describe('buildScenery inline (desktop and phone)', () => {
   const s = buildScenery('inline');
   const n = names(s.group);
 
-  it('builds the workshop: a workbench, a back wall, shelves with props, a desk lamp and its glow', () => {
-    for (const part of ['workbench', 'back-wall', 'shelves', 'shelf-props', 'bench-props', 'lamp', 'lamp-glow']) expect(n, part).toContain(part);
+  it('keeps only the bench and the stand the tray sits on: the panorama is the room', () => {
+    expect([...n].sort()).toEqual(['tray-stand', 'workbench']);
+    for (const gone of ['back-wall', 'shelves', 'shelf-props', 'bench-props', 'lamp', 'lamp-glow']) expect(n, gone).not.toContain(gone);
   });
 
-  it('lights the lamp with a warm glow, not a scene light (a light costs every gear and panel pixel on software GL)', () => {
-    const glow = meshes(s.group).find((m) => m.name === 'lamp-glow')!;
-    expect((glow.material as MeshBasicMaterial).color.getHex()).toBe(new Color(SCENE.glow).getHex());
+  it('has no lights', () => {
     let lights = 0;
     s.group.traverse((o) => (o as { isLight?: boolean }).isLight && lights++);
     expect(lights).toBe(0);
   });
 
-  it('stays cheap: few meshes and a triangle bound', () => {
-    const count = meshes(s.group).length;
-    expect(count).toBeGreaterThan(5);
-    expect(count).toBeLessThanOrEqual(20);
+  it('stays cheap: two meshes and a small triangle bound', () => {
+    expect(meshes(s.group).length).toBe(2);
     expect(s.tris).toBe(meshes(s.group).reduce((sum, m) => sum + tris(m.geometry), 0));
-    expect(s.tris).toBeGreaterThan(500);
-    expect(s.tris).toBeLessThanOrEqual(8000);
+    expect(s.tris).toBeGreaterThan(50);
+    expect(s.tris).toBeLessThanOrEqual(1000);
   });
 
-  it('keeps the bench below the tray and the wall behind it', () => {
+  it('keeps the bench below the tray', () => {
     // The lowest point of the tray is its near edge underside, about y = -0.332.
     const top = new Box3().setFromObject(meshes(s.group).find((m) => m.name === 'workbench')!);
     expect(top.max.y).toBeLessThan(-0.33);
-    const wall = new Box3().setFromObject(meshes(s.group).find((m) => m.name === 'back-wall')!);
-    // Behind the far end of the tray (z about -0.5) and the bird standing off the board.
-    expect(wall.max.z).toBeLessThan(-0.7);
+  });
+});
+
+describe('backdrop files', () => {
+  it('names the panorama per concept, 2048 wide on a phone and 4096 otherwise', () => {
+    expect(backdropFile('c2', false)).toBe('backdrops/c2_pano.jpg');
+    expect(backdropFile('c2', true)).toBe('backdrops/c2_pano_2048.jpg');
+    expect(backdropFile('c3', true)).toBe('backdrops/c3_pano_2048.jpg');
   });
 });
 
@@ -126,24 +129,48 @@ describe('scenery colours', () => {
 });
 
 describe('createScenery: the mode switch', () => {
-  it('inline: backdrop, fog and lamp on, props off, no scene.background', () => {
+  const tex = () => new Texture();
+
+  it('inline: the bench is up, the panorama is the background, no fog', () => {
     const scene = new Scene();
     const sc = createScenery(scene);
     sc.set(false);
     expect(sc.inline.group.visible).toBe(true);
     expect(sc.xr.group.visible).toBe(false);
     expect(scene.background).toBeNull();
-    expect(scene.fog).not.toBeNull();
+    const t = tex();
+    sc.setBackdrop('c2', t);
+    expect(scene.background).toBe(t);
+    expect(t.mapping).toBe(EquirectangularReflectionMapping);
+    expect(scene.fog).toBeNull();
+    expect(sc.state().backdrop).toBe('c2');
+  });
+
+  it('a new backdrop replaces the old and frees its texture: only one stays in memory', () => {
+    const scene = new Scene();
+    const sc = createScenery(scene);
+    const a = tex();
+    const b = tex();
+    let freed = 0;
+    a.addEventListener('dispose', () => freed++);
+    sc.setBackdrop('c2', a);
+    sc.setBackdrop('c1', b);
+    expect(scene.background).toBe(b);
+    expect(freed).toBe(1);
+    expect(sc.state().backdrop).toBe('c1');
   });
 
   it('immersive-ar: nothing opaque behind the room: no backdrop, no fog, no background', () => {
     const scene = new Scene();
     const sc = createScenery(scene);
+    sc.setBackdrop('c2', tex());
     sc.set(true);
     expect(sc.inline.group.visible).toBe(false);
     expect(scene.background).toBeNull();
     expect(scene.fog).toBeNull();
     expect(sc.state().parts.every((p) => p.startsWith('prop-'))).toBe(true);
+    sc.set(false);
+    expect(scene.background).not.toBeNull();
   });
 
   it('props show only once a table plane is found, on the table under the tray, and follow its yaw', () => {
