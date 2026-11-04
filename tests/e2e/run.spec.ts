@@ -105,7 +105,7 @@ test('desktop: Give up shows a short result card (Level 2 reached and the time) 
   expect(await page.evaluate(() => window.__chrono!.run), 'the run is over').toBeNull();
   const w = await words(page);
   expect(w).toContain('LEVEL 2 REACHED');
-  expect(w.some((x) => /^Total \d+:\d\d/.test(x)), 'the total time is on the card').toBe(true);
+  expect(w.some((x) => /^\d+:\d\d(\.\d)?$/.test(x)), 'the total time is on the card').toBe(true);
   expect(await page.evaluate(() => window.__chrono!.initials), 'no name entry for an unfinished run').toBeNull();
   expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['New Game', 'Main menu']);
   await page.screenshot({ path: `${OUT}/result.png` });

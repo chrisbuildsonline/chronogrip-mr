@@ -4,7 +4,6 @@ import { formatDate, type Entry } from './scores';
 import { C } from './palette';
 import { createStageCards } from './cards';
 import type { StageId } from './stages';
-import { PAUSE_PENALTY_MS, timeText, totalLine } from './run';
 import { ABOUT_VIEW_H } from './ui';
 import { rpmLabel, type Goal } from './goal';
 import { FAULT_WORDS } from './fault';
@@ -60,12 +59,10 @@ export type PanelCtx = {
   /** The complete card: whether this solve beat par, and the par it was held to. Absent in Relaxed mode. */
   outcome?: Outcome | null;
   par?: number | null;
-  /** The initials card: the rank this solve would take, the three letters, the slot typing fills next (3: all in), the run's total in ms and its pauses. */
-  initials?: { rank: number; letters: string; cursor: number; ms: number; pauses: number };
-  /** The result card of a run that did not finish: the level it reached, its total time in ms (pauses included) and how many pauses. */
-  result?: { level: number; ms: number; pauses: number };
-  /** In a campaign run: how many manual pauses it has taken (the pause card says what the next costs, the HUD shows what they have cost). */
-  pauses?: number;
+  /** The initials card: the rank this solve would take, the three letters, the slot typing fills next (3: all in) and the run's total in ms. */
+  initials?: { rank: number; letters: string; cursor: number; ms: number };
+  /** The result card of a run that did not finish: the level it reached and its total time in ms. */
+  result?: { level: number; ms: number };
   /** The resume countdown: 3, 2 or 1. */
   countdown?: number;
   /** The About window: how far the text is scrolled, metres. */
@@ -427,7 +424,7 @@ export const ABOUT: readonly { heading: string; lines: readonly string[] }[] = [
     lines: [
       '· Three stages of 20 levels, made fresh every time.',
       '· Each level has a time limit. No timer, in Options or on the pause menu, turns the limit off.',
-      '· Pausing hides the board and adds 0:05 to your time.',
+      '· Pausing stops the clock and hides the board; play resumes after a 3-second countdown.',
       '· Give up, or run out of time, and the run ends with no score.',
       '· Finish all 20 levels of a stage to enter three initials on that stage\'s board, on this device and global.',
       '· Random level is practice: no scores.',
@@ -535,7 +532,7 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
     case 'paused':
       head('PAUSED', ctx.level >= ctx.levels - 1 ? (ctx.random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : 'SHARED PUZZLE') : `${ctx.stage ? `${ctx.stage.toUpperCase()} · ` : ''}LEVEL ${ctx.level + 1}`);
       text(g, clock(ctx.time), left, y(l.height - 0.092), jfont(400, T.body * 0.9), C.menuMuted, 'left', 2);
-      if (ctx.pauses !== undefined) text(g, `Pausing adds ${timeText(PAUSE_PENALTY_MS)} to your time`, left, y(l.height - 0.108), jfont(400, T.body * 0.8), C.menuMuted, 'left', 0);
+      text(g, 'The board is hidden while paused', left, y(l.height - 0.108), jfont(400, T.body * 0.8), C.menuMuted, 'left', 0);
       break;
     case 'countdown':
       text(g, 'GET READY', at(0, 0)[0], y(l.height - 0.03), jfont(600, T.eyebrow), C.amber, 'center', 6);
@@ -548,15 +545,14 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
     case 'result': {
       const r = ctx.result!;
       head('RUN OVER', `LEVEL ${r.level} REACHED`, 22);
-      text(g, totalLine(r.ms, r.pauses), left, y(l.height - 0.106), jfont(400, T.body * 0.85), C.menuHi, 'left', 0);
+      text(g, clock(r.ms / 1000), left, y(l.height - 0.106), jfont(300, 24), C.logo, 'left', 3);
       break;
     }
     case 'initials': {
       const ini = ctx.initials!;
       text(g, `RUN COMPLETE · #${ini.rank}`, left, y(l.height - 0.02), jfont(600, T.eyebrow), C.amber, 'left', 6);
-      text(g, clock(ini.ms / 1000), left, y(l.height - 0.06), jfont(300, 30), C.logo, 'left', 3);
-      text(g, totalLine(ini.ms, ini.pauses), left, y(l.height - 0.083), jfont(400, T.body * 0.8), C.menuMuted, 'left', 0);
-      text(g, 'YOUR NAME', left, y(l.height - 0.108), jfont(400, T.body * 0.8), C.menuMuted, 'left', 4);
+      text(g, clock(ini.ms / 1000), left, y(l.height - 0.062), jfont(300, 30), C.logo, 'left', 3);
+      text(g, 'YOUR NAME', left, y(l.height - 0.1), jfont(400, T.body * 0.8), C.menuMuted, 'left', 4);
       break;
     }
     case 'board': {
@@ -656,7 +652,6 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
           text(g, `/ ${ctx.levels - 1}`, left(0.016) + g.measureText(level).width + mm(2), y(0.022), font(700, T.eyebrow), C.muted, 'left', 1);
         }
         text(g, 'TIME', left(timeX), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
-        if (ctx.pauses) text(g, `+${timeText(ctx.pauses * PAUSE_PENALTY_MS)}`, left(timeX) + mm(13), y(0.048), font(700, T.eyebrow), C.amber, 'left', 1); // what the pauses have cost the run so far
       }
       text(g, clock(ctx.time), left(timeX), y(0.022), font(700, T.xl), C.ink, 'left');
       if (ctx.timer) {

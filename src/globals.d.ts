@@ -118,7 +118,7 @@ interface ChronoHook {
   /** Live: seconds played on this level; runs only while playing. */
   readonly levelTime: number;
   /** Live: the campaign run in progress or saved (levels cleared, total time so far in ms), null when none. */
-  readonly run: { readonly stage: 'easy' | 'medium' | 'hard'; readonly cleared: number; readonly ms: number; readonly pauses: number } | null;
+  readonly run: { readonly stage: 'easy' | 'medium' | 'hard'; readonly cleared: number; readonly ms: number } | null;
   /** Live: the stage being played (the one of the run, else the last picked) and the HUD's words for the level, "Hard · Level 3" (just "Level 3" outside the 20 stage levels). */
   readonly stage: 'easy' | 'medium' | 'hard';
   readonly hudLabel: string;

@@ -22,7 +22,8 @@ describe('the About text', () => {
     expect(m).toContain('Three stages of 20 levels');
     expect(m).toMatch(/time limit/);
     expect(m).toContain('No timer');
-    expect(m).toContain('adds 0:05 to your time');
+    expect(m).toContain('Pausing stops the clock and hides the board');
+    expect(m).toContain('3-second countdown');
     expect(m).toMatch(/Give up, or run out of time/);
     expect(m).toMatch(/three initials on that stage/);
     expect(m).toMatch(/Random level is practice/);

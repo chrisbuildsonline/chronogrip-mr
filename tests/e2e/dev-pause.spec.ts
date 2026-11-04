@@ -9,7 +9,7 @@ import { device, enterWithHands, flow, poke, type Device } from './hands';
 const cardIs = (page: import('@playwright/test').Page, screen: string) =>
   page.waitForFunction((s) => window.__chrono!.card?.screen === s, screen, { timeout: 15_000 });
 
-test('dev server: the headset menu or taking the headset off pauses with the board hidden and no penalty; Resume counts down and brings the board back', async ({ page }) => {
+test('dev server: the headset menu or taking the headset off pauses with the board hidden and the clock stopped; Resume counts down and brings the board back', async ({ page }) => {
   const errors = await enterWithHands(page);
   await newGame(page, (id) => poke(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 15_000 });
@@ -19,7 +19,9 @@ test('dev server: the headset menu or taking the headset off pauses with the boa
   await page.evaluate((d) => (window as unknown as Record<string, Device>)[d]!.updateVisibilityState('visible-blurred'), device);
   await page.waitForFunction(() => window.__chrono!.flow === 'paused', undefined, { timeout: 10_000 });
   expect(await page.evaluate(() => window.__chrono!.boardVisible)).toBe(false);
-  expect(await page.evaluate(() => window.__chrono!.run), 'no penalty for a system pause').toMatchObject({ pauses: 0 });
+  const frozen = await page.evaluate(() => window.__chrono!.levelTime);
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => window.__chrono!.levelTime), 'the clock is stopped').toBe(frozen);
   // Back in the game: still paused (the player resumes, with the countdown).
   await page.evaluate((d) => (window as unknown as Record<string, Device>)[d]!.updateVisibilityState('visible'), device);
   await cardIs(page, 'paused');
@@ -30,12 +32,11 @@ test('dev server: the headset menu or taking the headset off pauses with the boa
   expect(await page.evaluate(() => window.__chrono!.boardVisible)).toBe(false);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 15_000 });
   expect(await page.evaluate(() => window.__chrono!.boardVisible)).toBe(true);
-  expect(await page.evaluate(() => window.__chrono!.run)).toMatchObject({ pauses: 0 });
 
-  // The in-world pause button is a manual pause: it costs 5 s.
+  // The in-world pause button pauses the same way: the board hidden again.
   await poke(page, 'pause');
   await page.waitForFunction(() => window.__chrono!.flow === 'paused', undefined, { timeout: 10_000 });
-  expect(await page.evaluate(() => window.__chrono!.run)).toMatchObject({ pauses: 1 });
+  expect(await page.evaluate(() => window.__chrono!.boardVisible)).toBe(false);
   expect(await flow(page)).toBe('paused');
   expect(errors).toEqual([]);
 });

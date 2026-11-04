@@ -26,7 +26,7 @@ import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistO
 import { createSound, loadSoundOn, saveSoundOn, tickGain, ticksBetween } from './sound';
 import { loadMusicOn, saveMusicOn } from './music';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
-import { carried, loadRun, nextIndex, pausedOnce, reached, saveRun, solvedLevel, startRun, totalMs, won, type Run } from './run';
+import { carried, loadRun, nextIndex, reached, saveRun, solvedLevel, startRun, won, type Run } from './run';
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
 import { fallbackLevel, tinkerLevel } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
@@ -122,10 +122,10 @@ type Overlay =
   | { kind: 'options'; confirm: boolean }
   | { kind: 'stages' }
   | { kind: 'picker' }
-  | { kind: 'result'; level: number; ms: number; pauses: number }
+  | { kind: 'result'; level: number; ms: number }
   | { kind: 'countdown'; at: number }
   | { kind: 'about'; scroll: number }
-  | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; pauses: number; letters: string; cursor: number };
+  | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; letters: string; cursor: number };
 let overlay: Overlay | null = null;
 // The global top tens (src/global.ts): the last good board per id, kept so a tab switch does not ask again, and how this
 // opening of the scores screen has fared per board (asking, or gave up). Opening the screen asks afresh.
@@ -524,10 +524,10 @@ function newRun(id: StageId): void {
 }
 
 /** The name entry for a completed run, over the title: the total time large, then three letters. */
-function askInitials(ms: number, board: string, pauses: number): void {
+function askInitials(ms: number, board: string): void {
   const entry = { ms, date: todayISO() };
   const q = qualifies(scores, board, { ...entry, name: scores.initials });
-  if (q.ok) overlay = { kind: 'initials', board, rank: q.rank, entry, pauses, letters: scores.initials, cursor: 0 };
+  if (q.ok) overlay = { kind: 'initials', board, rank: q.rank, entry, letters: scores.initials, cursor: 0 };
 }
 
 /**
@@ -539,10 +539,10 @@ function endRun(why: 'timeout' | 'giveup' | 'won'): void {
   run = null;
   saveRun(storage, run);
   send({ type: 'back', level: 0 });
-  if (r && why === 'won') askInitials(totalMs(r), boardOf(r.stage), r.pauses);
+  if (r && why === 'won') askInitials(r.ms, boardOf(r.stage));
   else if (r) {
     const end = reached(r, levelClock.seconds);
-    overlay = { kind: 'result', level: end.level, ms: end.ms, pauses: end.pauses };
+    overlay = { kind: 'result', level: end.level, ms: end.ms };
   }
   showPanel();
   fitView(true);
@@ -736,11 +736,6 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
     overlay = { kind: 'stages' };
     showPanel();
     return fitView(true);
-  }
-  if (id === 'pause' && (flow.name === 'playing' || flow.name === 'calibrate') && run && levelIndex < CAMPAIGN) {
-    // A manual pause (the button, Esc, P) costs 5 s on the run's total; a system pause (tab hidden, headset off) goes through send() and costs nothing.
-    run = pausedOnce(run);
-    saveRun(storage, run);
   }
   if (id === 'resume' && flow.name === 'paused') {
     // Resuming counts down 3, 2, 1 with the board still hidden; the clock restarts when the board comes back.
@@ -1381,6 +1376,14 @@ world.scene.onBeforeRender = () => {
     ghost.update(ghostAt(now / 1000, [slot.x, slot.y], [axle.x, axle.y]));
   }
 
+  // The left Touch controller's menu button (gamepad button 7 in the WebXR input profiles of the Quest controllers) pauses and resumes
+  // like Esc and P. Hands have no such button; the in-world pause button is theirs. Untested on a real headset.
+  let menuDown = false;
+  for (const src of world.renderer.xr.getSession()?.inputSources ?? []) {
+    if (src.handedness === 'left' && src.gamepad && src.gamepad.buttons.length > 7) menuDown ||= !!src.gamepad.buttons[7]?.pressed;
+  }
+  if (menuDown && !menuWas) press(flow.name === 'paused' ? 'resume' : 'pause', 'key');
+  menuWas = menuDown;
   // The resume countdown: a soft tick on each number, then the board is back and the level clock runs on.
   if (overlay?.kind === 'countdown') {
     const n = countdownNumber(overlay.at, now);
@@ -1426,14 +1429,14 @@ function updateProgress(): void {
 }
 
 let lastCount = 4;
+let menuWas = false;
 
 /** Draws the card for the current state; run every frame and after every transition, so the buttons on show never lag the flow. */
 function showPanel(now = performance.now()): void {
   const waiting = flow.name === 'complete' && now - calibratedAt < COMPLETE_DELAY_MS;
   panels.show(waiting ? null : (overlay?.kind ?? screenOf(flow)), {
-    initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms, pauses: overlay.pauses } : undefined,
-    result: overlay?.kind === 'result' ? { level: overlay.level, ms: overlay.ms, pauses: overlay.pauses } : undefined,
-    pauses: run && levelIndex < CAMPAIGN ? run.pauses : undefined,
+    initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms } : undefined,
+    result: overlay?.kind === 'result' ? { level: overlay.level, ms: overlay.ms } : undefined,
     countdown: overlay?.kind === 'countdown' ? countdownNumber(overlay.at, now) : undefined,
     aboutScroll: overlay?.kind === 'about' ? overlay.scroll : undefined,
     board: overlay?.kind === 'board' ? boardCard(overlay.board, overlay.tab) : undefined,

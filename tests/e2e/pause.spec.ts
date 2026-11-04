@@ -45,7 +45,7 @@ async function resumeAndWatch(page: Page) {
   return { seen, boardShown };
 }
 
-test('pausing hides the board, the subtitle says what it costs, and Resume counts 3, 2, 1 before the board and the clock come back', async ({ page }) => {
+test('pausing hides the board and stops the clock; Resume counts 3, 2, 1 with the board still hidden and the clock still stopped, then both come back', async ({ page }) => {
   const errors = await open(page);
   await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.levelTime > 0.5);
@@ -53,20 +53,33 @@ test('pausing hides the board, the subtitle says what it costs, and Resume count
   await click(page, 'pause');
   await cardIs(page, 'paused');
   expect(await page.evaluate(() => window.__chrono!.boardVisible), 'nothing of the puzzle is drawn while paused').toBe(false);
-  expect(await words(page)).toContain('Pausing adds 0:05 to your time');
+  expect(await words(page)).toContain('The board is hidden while paused');
   await frames(page);
   await page.screenshot({ path: `${OUT}/paused.png` });
-  const before = await page.evaluate(() => window.__chrono!.levelTime);
+  const frozen = await page.evaluate(() => window.__chrono!.levelTime);
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => window.__chrono!.levelTime), 'the clock does not run while paused').toBe(frozen);
 
-  const { seen, boardShown } = await resumeAndWatch(page);
+  await click(page, 'resume');
+  await page.waitForFunction(() => window.__chrono!.countdown !== null, undefined, { timeout: 5000 });
+  const seen: number[] = [];
+  let boardShown = false;
+  let clockMoved = false;
+  for (let k = 0; k < 400; k++) {
+    const st = await page.evaluate(() => ({ n: window.__chrono!.countdown, board: window.__chrono!.boardVisible, flow: window.__chrono!.flow, time: window.__chrono!.levelTime }));
+    if (st.n === null) break;
+    if (st.n >= 1 && seen.at(-1) !== st.n) seen.push(st.n);
+    boardShown ||= st.board;
+    clockMoved ||= st.time !== frozen;
+    expect(st.flow, 'the level stays paused while it counts').toBe('paused');
+    await page.waitForTimeout(40);
+  }
+  await playing(page);
   expect(seen, 'big numerals, in order').toEqual([3, 2, 1]);
   expect(boardShown, 'the board stays hidden through the countdown').toBe(false);
+  expect(clockMoved, 'and so does the clock').toBe(false);
   expect(await page.evaluate(() => window.__chrono!.boardVisible)).toBe(true);
-  const after = await page.evaluate(() => window.__chrono!.levelTime);
-  expect(after - before, 'the level clock was stopped for the pause and the countdown').toBeLessThan(0.6);
-  expect(await page.evaluate(() => window.__chrono!.run)).toMatchObject({ stage: 'easy', pauses: 1 });
-  // The HUD says what the pauses have cost so far.
-  await page.waitForFunction(() => window.__chrono!.labels().some((l) => l.text === '+0:05'));
+  await page.waitForFunction((t) => window.__chrono!.levelTime > t + 0.3, frozen);
   expect(errors).toEqual([]);
 });
 
@@ -84,8 +97,8 @@ test('the countdown shows 3, 2, 1 on the card', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('each manual pause (button, Esc, P) adds 5 s to the total; a finished stage puts the total and "3 pauses (+0:15)" on the name entry and the board', async ({ page }) => {
-  const errors = await open(page, { [RUN]: { stage: 'easy', cleared: 19, ms: 600_000, pauses: 0 } });
+test('the button, Esc and P all pause the same way, with no penalty: the stage total is just the time on its levels', async ({ page }) => {
+  const errors = await open(page, { [RUN]: { stage: 'easy', cleared: 19, ms: 600_000 } });
   await click(page, 'continue');
   await playing(page);
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
@@ -93,58 +106,46 @@ test('each manual pause (button, Esc, P) adds 5 s to the total; a finished stage
   const [x, y] = await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'pause')!.screen);
   await page.mouse.click(x, y);
   await cardIs(page, 'paused');
+  expect(await page.evaluate(() => window.__chrono!.boardVisible)).toBe(false);
   await resumeAndWatch(page);
   await page.keyboard.press('Escape');
   await cardIs(page, 'paused');
+  expect(await page.evaluate(() => window.__chrono!.boardVisible)).toBe(false);
   await resumeAndWatch(page);
   await page.keyboard.press('p');
   await cardIs(page, 'paused');
+  expect(await page.evaluate(() => window.__chrono!.boardVisible)).toBe(false);
   await page.keyboard.press('p');
   await playing(page);
-  expect(await page.evaluate(() => window.__chrono!.run)).toMatchObject({ pauses: 3 });
+  expect(await page.evaluate(() => window.__chrono!.run)).toEqual({ stage: 'easy', cleared: 19, ms: 600_000 });
   await solve(page);
   await click(page, 'next');
   await cardIs(page, 'initials');
-  const w = await words(page);
-  expect(w.some((t) => /^Total \d+:\d\d · 3 pauses \(\+0:15\)$/.test(t)), `the line is on the name entry: ${w.join(' | ')}`).toBe(true);
-  await page.screenshot({ path: `${OUT}/name-entry.png` });
+  expect((await words(page)).filter((t) => /pause|Total/i.test(t)), 'no penalty lines anywhere').toEqual([]);
   await page.keyboard.type('pau');
   await page.keyboard.press('Enter');
   await cardIs(page, 'title');
   const entry = (await page.evaluate(() => window.__chrono!.scores)).boards['campaign-easy']![0]!;
   expect(entry.name).toBe('PAU');
-  expect(entry.ms, 'level times plus 3 x 5 s').toBeGreaterThanOrEqual(600_000 + 15_000);
+  expect(entry.ms, 'the saved levels plus the last one, nothing for three pauses').toBeGreaterThanOrEqual(600_000);
+  expect(entry.ms).toBeLessThan(600_000 + 90_000);
   expect(errors).toEqual([]);
 });
 
-test('Give up after pauses shows "Total … · 2 pauses (+0:10)" on the result card', async ({ page }) => {
-  const errors = await open(page);
-  await newGame(page, (id) => click(page, id));
-  for (let i = 0; i < 2; i++) {
-    await click(page, 'pause');
-    await cardIs(page, 'paused');
-    if (i === 0) await resumeAndWatch(page);
-  }
-  await click(page, 'giveup');
-  await cardIs(page, 'result');
-  expect((await words(page)).some((t) => /^Total \d+:\d\d · 2 pauses \(\+0:10\)$/.test(t))).toBe(true);
-  await page.screenshot({ path: `${OUT}/result.png` });
-  expect(errors).toEqual([]);
-});
-
-test('Random level is practice: a pause costs nothing and says nothing about it', async ({ page }) => {
+test('Random level pauses the same way: the board is hidden and there is no run', async ({ page }) => {
   const errors = await open(page);
   await click(page, 'random');
   await click(page, 'easy');
   await playing(page);
   await click(page, 'pause');
   await cardIs(page, 'paused');
-  expect(await words(page)).not.toContain('Pausing adds 0:05 to your time');
+  expect(await words(page)).toContain('The board is hidden while paused');
+  expect(await page.evaluate(() => window.__chrono!.boardVisible)).toBe(false);
   expect(await page.evaluate(() => window.__chrono!.run)).toBeNull();
   expect(errors).toEqual([]);
 });
 
-test('the tab hidden pauses at once with the board hidden and no penalty; coming back shows the pause menu, and Resume counts down', async ({ page }) => {
+test('the tab hidden pauses at once with the board hidden and the clock stopped; coming back shows the pause menu, and Resume counts down', async ({ page }) => {
   const errors = await open(page);
   await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.levelTime > 0.3);
@@ -154,7 +155,9 @@ test('the tab hidden pauses at once with the board hidden and no penalty; coming
   });
   await page.waitForFunction(() => window.__chrono!.flow === 'paused');
   expect(await page.evaluate(() => window.__chrono!.boardVisible)).toBe(false);
-  expect(await page.evaluate(() => window.__chrono!.run), 'no penalty for a system pause').toMatchObject({ pauses: 0 });
+  const frozen = await page.evaluate(() => window.__chrono!.levelTime);
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(() => window.__chrono!.levelTime), 'the clock is stopped').toBe(frozen);
   await page.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
@@ -162,7 +165,6 @@ test('the tab hidden pauses at once with the board hidden and no penalty; coming
   await cardIs(page, 'paused');
   const { seen } = await resumeAndWatch(page);
   expect(seen).toEqual([3, 2, 1]);
-  expect(await page.evaluate(() => window.__chrono!.run)).toMatchObject({ pauses: 0 });
   expect(errors).toEqual([]);
 });
 
@@ -173,7 +175,7 @@ test('About opens from the start screen with the made-by line and the mechanics,
   await cardIs(page, 'about');
   const w = await words(page);
   expect(w.join(' ')).toContain('made by Chris for the Meta VR Start Developer Competition 2026');
-  for (const part of ['WHAT IT IS', 'HOW TO PLAY', 'MECHANICS', 'CREDITS', 'Three stages of 20 levels, made fresh every time.', 'adds 0:05 to your time.']) expect(w.join(' ') + w.join('')).toContain(part.replace(/ +$/, ''));
+  for (const part of ['WHAT IT IS', 'HOW TO PLAY', 'MECHANICS', 'CREDITS', 'Three stages of 20 levels, made fresh every time.', 'Pausing stops the clock and hides the board']) expect(w.join(' ') + w.join('')).toContain(part.replace(/ +$/, ''));
   expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['back', 'up-scroll', 'down-scroll']);
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
   await page.screenshot({ path: `${OUT}/about-top.png` });
