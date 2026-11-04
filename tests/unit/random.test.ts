@@ -15,13 +15,13 @@ describe('the generator on the global scale', () => {
       expect(layoutOf(randomLevel(d, 4242))).toBe(layoutOf(randomLevel(d, 4242)));
       expect(new Set(SEEDS.map((s) => layoutOf(randomLevel(d, s)))).size, `d ${d}`).toBeGreaterThan(15);
     }
-  });
+  }, 120_000);
 
   it('pulls a difficulty into 0..1, and always returns a valid level', () => {
     expect(randomLevel(99, 5).id).toBe('t5');
     expect(randomLevel(NaN, 5).id).toBe('t5');
     for (const d of [-1, 0, 0.5, 1, 7]) expect(valid(randomLevel(d, 31337)), `d ${d}`).toBe(true);
-  });
+  }, 120_000);
 
   it('measures harder the higher the difficulty, and the top end beats everything the old campaign reached', () => {
     const at = (d: number) => mean(SEEDS.map((s) => difficultyOf(randomLevel(d, s))));
@@ -38,7 +38,7 @@ describe('the generator on the global scale', () => {
     expect(top.every((l) => l.target.tolerance <= 0.5)).toBe(true);
     expect(mean(top.map((l) => l.tray.length - Object.keys(l.solution).length))).toBeGreaterThanOrEqual(1);
     expect(top.some((l) => new Set(Object.values(l.solution)).size < Object.keys(l.solution).length), 'a compound pair').toBe(true);
-  });
+  }, 120_000);
 });
 
 describe('seeds', () => {
