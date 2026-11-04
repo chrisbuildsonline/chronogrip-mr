@@ -27,6 +27,7 @@ import { firstUnsolved, loadProgress, recordOutcome, recordSolve, saveProgress, 
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
 import { dailySeed, tinkerLevel, withDaily } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
+import { fetchGlobal, submitGlobal } from './global';
 import { BOARDS, addEntry, backInitial, boardOf, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
 import { START, adapt, freshSeed, loadRandom, puzzleFor, randomLevel, saveRandom, type RandomState } from './random';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
@@ -91,10 +92,23 @@ let scores: Scores = loadScores(storage);
  * `confirm`: Reset progress is waiting for its yes.
  */
 type Overlay =
-  | { kind: 'board'; board: string }
+  | { kind: 'board'; board: string; tab: 'local' | 'global' }
   | { kind: 'options'; confirm: boolean }
   | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; letters: string; cursor: number };
 let overlay: Overlay | null = null;
+// The global top tens (src/global.ts): the last good board per id, kept so a tab switch does not ask again, and how this
+// opening of the scores screen has fared per board (asking, or gave up). Opening the screen asks afresh.
+const globalRows = new Map<string, Entry[]>();
+const globalAsk = new Map<string, 'asking' | 'offline' | 'done'>();
+function loadGlobal(board: string): void {
+  if (globalAsk.has(board)) return;
+  globalAsk.set(board, 'asking');
+  void fetchGlobal(board).then((rows) => {
+    if (rows) globalRows.set(board, rows);
+    globalAsk.set(board, rows ? 'done' : 'offline');
+    if (overlay?.kind === 'board') showPanel();
+  });
+}
 /** The board of the level last started: the board the Best times card opens on. */
 let lastBoard = BOARDS[0]!;
 /** True on the complete card when this solve beat a saved time. */
@@ -454,10 +468,17 @@ function askInitials(board: string, extra: { step?: number }): void {
 }
 
 /** The best times card's board: its name, its rows and what it says while empty. */
-function boardCard(id: string): NonNullable<PanelCtx['board']> {
+function boardCard(id: string, tab: 'local' | 'global'): NonNullable<PanelCtx['board']> {
   const n = id.slice(1);
   const random = id === 'random';
-  return { label: random ? 'Random' : `Level ${n}`, entries: scores.boards[id]!, empty: `No times yet. Solve ${random ? 'a Random puzzle' : `level ${n}`} to set one.` };
+  const label = random ? 'Random' : `Level ${n}`;
+  const local = { label, tab, entries: scores.boards[id]!, empty: `No times yet. Solve ${random ? 'a Random puzzle' : `level ${n}`} to set one.` };
+  if (tab === 'local') return local;
+  // Global: the last good rows; with none, "Loading" while asking and the local rows with a quiet note once it failed.
+  const rows = globalRows.get(id);
+  if (rows) return { ...local, entries: rows, empty: 'No global times yet. Be the first.' };
+  if (globalAsk.get(id) === 'offline') return { ...local, note: 'Global scores offline' };
+  return { ...local, entries: [], empty: 'Loading global scores' };
 }
 
 /**
@@ -496,13 +517,17 @@ function pressOverlay(id: string): void {
   } else if (o.kind === 'board') {
     if (id === 'back') overlay = null;
     else if (id === 'board-prev' || id === 'board-next') overlay = { ...o, board: BOARDS[(BOARDS.indexOf(o.board) + (id === 'board-next' ? 1 : BOARDS.length - 1)) % BOARDS.length]! };
+    else if (id === 'tab-local' || id === 'tab-global') overlay = { ...o, tab: id === 'tab-global' ? 'global' : 'local' };
     else return;
+    const now = overlay as Overlay | null;
+    if (now?.kind === 'board' && now.tab === 'global') loadGlobal(now.board);
   } else {
     const arrow = /^(up|down)-([0-2])$/.exec(id);
     if (arrow) overlay = { ...o, ...stepInitial(o, Number(arrow[2]), arrow[1] === 'up' ? 1 : -1) };
     else if (id === 'save') {
       scores = addEntry(scores, o.board, { ...o.entry, name: o.letters });
       saveScores(storage, scores);
+      void submitGlobal(o.board, scores.initials, o.entry.ms, o.entry.step); // fire and forget: the card never waits on it
       overlay = null;
     } else if (id === 'skip') overlay = null;
     else return;
@@ -586,7 +611,8 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   pressedAt = now;
   if (overlay) return pressOverlay(id);
   if ((id === 'scores' || id === 'options') && flow.name === 'title') {
-    overlay = id === 'scores' ? { kind: 'board', board: lastBoard } : { kind: 'options', confirm: false };
+    globalAsk.clear();
+    overlay = id === 'scores' ? { kind: 'board', board: lastBoard, tab: 'local' } : { kind: 'options', confirm: false };
     showPanel();
     return fitView(true);
   }
@@ -609,7 +635,7 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
 const live = () => flow.name === 'title' || flow.name === 'playing';
 /** The complete card waits while the automaton and the running train play the reward. */
 const COMPLETE_DELAY_MS = 2000;
-const shownButtons = (): Button[] => (panels.panelMesh.visible ? (panels.current?.layout.buttons ?? []) : []);
+const shownButtons = (): Button[] => (panels.panelMesh.visible ? [...(panels.current?.layout.buttons ?? []), ...(panels.current?.layout.tabs ?? [])] : []);
 
 /** The loose gear nearest a world point, if one is within reach and the board is live. */
 function gearNear(world: Vec3): string | null {
@@ -1159,7 +1185,7 @@ function showPanel(now = performance.now()): void {
   const waiting = flow.name === 'complete' && now - calibratedAt < COMPLETE_DELAY_MS;
   panels.show(waiting ? null : (overlay?.kind ?? screenOf(flow)), {
     initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor } : undefined,
-    board: overlay?.kind === 'board' ? boardCard(overlay.board) : undefined,
+    board: overlay?.kind === 'board' ? boardCard(overlay.board, overlay.tab) : undefined,
     level: levelIndex,
     levels: levels.length,
     daily: sharedSeed === null, // a shared puzzle in the last slot is not today's daily: it is named "Shared puzzle"

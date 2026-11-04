@@ -62,7 +62,7 @@ The same scene and cards run in any desktop browser with WebGL. Where the browse
 ## Saved progress
 
 - Best times are saved in the browser's localStorage (key `chronogrip.progress.v1`); corrupt or blocked storage starts clean.
-- A top ten for each of levels 1-8 and for Random (key `chronogrip.scores.v1`) is kept on this device only: a solve that makes it asks for three initials, and **High scores** on the start panel shows the boards.
+- A top ten for each of levels 1-8 and for Random (key `chronogrip.scores.v1`) is kept on this device only: a solve that makes it asks for three initials, and **High scores** on the start panel shows the boards. Its GLOBAL tab shows the shared top ten: global scores are public and shared, and only 3 initials, a level and a time are stored. Offline, the local board stays.
 - The tray's spot in MR is saved under `chronogrip.tray.v1`; a corrupt, old or out-of-reach value is ignored and the game looks for a table as usual.
 - The title card says **Continue** once any level is solved, and it starts the first level you have not solved.
 - **Levels** shows nine tiles: levels 1-8 and **Daily**. Solved tiles show your best time and a check. Beating a saved time shows **New best**.

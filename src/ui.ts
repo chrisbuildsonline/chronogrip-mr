@@ -7,12 +7,13 @@ export const SCREENS: readonly Screen[] = ['title', 'select', 'hud', 'complete',
 /** Cards laid over the title or the complete card: the initials entry, the high scores board and the options. */
 export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options'];
 
-export type ButtonKind = 'primary' | 'secondary' | 'tile' | 'icon' | 'toggle' | 'arrow';
+export type ButtonKind = 'primary' | 'secondary' | 'tile' | 'icon' | 'toggle' | 'arrow' | 'tab';
 /** A button rectangle in panel space; x, y is its centre. */
 export type Button = { id: string; label: string; kind: ButtonKind; x: number; y: number; w: number; h: number };
 /** A display slot (not a target) in panel space; x, y is its centre. */
 export type Slot = { x: number; y: number; w: number; h: number };
-export type Layout = { width: number; height: number; buttons: Button[]; slots?: Slot[] };
+/** `tabs`: on a phone the high scores tabs sit on the heading line, apart from the buttons (a hand never reaches that high; a thumb does). */
+export type Layout = { width: number; height: number; buttons: Button[]; slots?: Slot[]; tabs?: Button[] };
 
 /** Smallest side of any button: a fingertip target. */
 export const BUTTON_MIN_M = 0.04;
@@ -24,6 +25,9 @@ export const PANEL_ZONE = { ...COMFORT, maxPitch: 18 } as const;
 const PAD = 0.016;
 const GAP = 0.012;
 const BH = 0.046;
+const WIDE_TAB = 0.05;
+/** A high scores tab. */
+const tabBtn = (id: string, label: string, x: number, y: number, w = WIDE_TAB, h = BH): Button => ({ id, label, kind: 'tab', x, y, w, h });
 
 /** Buttons side by side, centred on the panel, on one row at height y. */
 function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: number][]): Button[] {
@@ -240,14 +244,17 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       const backW = narrow ? 0.07 : 0.076;
       const next = right - BH / 2;
       const prev = right - BH - GAP - g.labelW - GAP - BH / 2;
+      const tabAt = -g.width / 2 + PAD + backW + GAP + WIDE_TAB / 2;
       return {
         width: g.width,
         height: g.height,
         buttons: [
           { id: 'back', label: 'Back', kind: 'secondary', x: -g.width / 2 + PAD + backW / 2, y: low, w: backW, h: BH },
+          ...(g.tabs ? [] : [tabBtn('tab-local', 'LOCAL', tabAt, low), tabBtn('tab-global', 'GLOBAL', tabAt + WIDE_TAB + GAP, low)]),
           { id: 'board-prev', label: 'Previous', kind: 'arrow', x: prev, y: low, w: BH, h: BH },
           { id: 'board-next', label: 'Next', kind: 'arrow', x: next, y: low, w: BH, h: BH },
         ],
+        ...(g.tabs ? { tabs: [tabBtn('tab-local', 'LOCAL', g.tabs.x0 + g.tabs.local.w / 2, g.tabs.y, g.tabs.local.w, g.tabs.h), tabBtn('tab-global', 'GLOBAL', g.tabs.x0 + g.tabs.local.w + GAP + g.tabs.global.w / 2, g.tabs.y, g.tabs.global.w, g.tabs.h)] } : {}),
       };
     }
   }
@@ -265,9 +272,8 @@ export function boardGrid(narrow: boolean) {
   const pitch = narrow ? 0.0165 : 0.0185;
   const y0 = PAD + BH + GAP + pitch / 2 + (rows - 1) * pitch;
   const headY = y0 + pitch / 2 + 0.024;
-  // The tab strip on the heading's line, just after "High scores": "Local" first, and the rest of the strip is kept free for the global board's tab.
-  const tabW = narrow ? 0.13 : 0.16;
-  const tabs = { x0: -width / 2 + PAD + 0.125, y: headY, w: tabW, h: 0.026, local: { w: narrow ? 0.06 : 0.066 } };
+  // On a phone the tab strip sits on the heading's line, just after "High scores" (44 px tall, 12 mm apart); a wide card keeps both tabs in its button row, inside the reach of a hand.
+  const tabs = narrow ? { x0: -width / 2 + PAD + 0.125, y: headY - 0.002, w: 0.13, h: 0.04, local: { w: 0.058 }, global: { w: 0.06 } } : null;
   return { width, cols, rows, gap, pitch, y0, headY, tabs, height: headY + 0.027, colW: (width - 2 * PAD - (cols - 1) * gap) / cols, labelW: narrow ? 0.066 : 0.12 };
 }
 

@@ -64,7 +64,8 @@ export type PanelCtx = {
   /** The initials card: the rank this solve would take, the three letters, and the slot typing fills next (3: all in). */
   initials?: { rank: number; letters: string; cursor: number };
   /** The best times card: the board's name, its rows, and the muted line shown while it is empty. */
-  board?: { label: string; entries: readonly Entry[]; empty: string };
+  /** `tab` is the board shown; `note` is a quiet line over the rows (the global board is offline). */
+  board?: { label: string; entries: readonly Entry[]; empty: string; tab: 'local' | 'global'; note?: string };
 };
 
 /** Levels that count towards "N of M solved": Random is endless, so it is not one of them. */
@@ -361,6 +362,22 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
   const [x, y] = at(b.x, b.y);
   const [w, h] = [b.w * PX, b.h * PX];
   const hover = ctx.hover === b.id;
+  if (b.kind === 'tab') {
+    // The selected tab is the amber tint pill (as the status pills); the other is muted words with no fill.
+    const picked = ctx.board?.tab === (b.id === 'tab-global' ? 'global' : 'local');
+    pill(g, x, y, w, h);
+    if (picked) {
+      g.fillStyle = C.tint;
+      g.fill();
+    }
+    if (hover) {
+      g.lineWidth = mm(3);
+      g.strokeStyle = C.amber;
+      g.stroke();
+    }
+    const snug = b.w <= 0.05; // the button row's 50 mm tabs: a size down so GLOBAL fits
+    return text(g, b.label, x, y + 1, font(700, snug ? T.eyebrow : T.eyebrow + 1.5), picked ? C.tintInk : C.muted, 'center', snug ? 0.3 : 1);
+  }
   // A pill where it is wider than tall; a cell taller than wide (a tile, the phone's Back) gets the tile's corners.
   const tall = b.h > b.w;
   if (b.kind === 'tile' || tall) pill(g, x, y, w, h, mm(12));
@@ -466,12 +483,12 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       const b = ctx.board!;
       const grid = boardGrid(!!ctx.narrow);
       text(g, 'High scores', left(0.016), y(grid.headY), font(600, T.heading, SERIF), C.ink, 'left');
-      // The tab strip: Local, selected (amber tint pill, as the status pills); a Global tab will take the free room to its right.
-      const [tx, ty] = at(grid.tabs.x0 + grid.tabs.local.w / 2, grid.tabs.y);
-      pill(g, tx, ty, grid.tabs.local.w * PX, grid.tabs.h * PX);
-      g.fillStyle = C.tint;
-      g.fill();
-      text(g, 'LOCAL', tx, ty + 1, font(700, T.eyebrow + 1.5), C.tintInk, 'center', 1);
+      // The tab strip (Local, Global) is two buttons, drawn with the rest. A quiet note says when the global board is not there:
+      // on the heading's line at the right, or on a phone in the free half of the first row.
+      if (b.note) {
+        const ny = y(ctx.narrow ? grid.y0 : grid.headY);
+        text(g, b.note, right(0.016), ny, font(500, ctx.narrow ? 10.5 : 11.5), C.muted, 'right');
+      }
       // The level switcher's name, between its arrows, shrunk to fit.
       const [prev, next] = ['board-prev', 'board-next'].map((id) => l.buttons.find((x) => x.id === id)!) as [Button, Button];
       g.font = font(600, T.heading, SERIF);
@@ -571,7 +588,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       text(g, `${name}  ·  ${clock(ctx.time)}`, cx, y(0.087), font(500, T.body), C.muted);
       break;
   }
-  for (const b of l.buttons) button(g, b, at, ctx);
+  for (const b of [...l.buttons, ...(l.tabs ?? [])]) button(g, b, at, ctx);
   T = WIDE;
 }
 

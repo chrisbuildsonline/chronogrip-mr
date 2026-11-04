@@ -100,8 +100,13 @@ The first card on desktop, phone and in XR, over the live board and the workshop
 
 ### High scores
 The best times board (see Best times) reached from the start panel's High scores button, headed "High scores". Just after
-the heading is a tab strip: "LOCAL" as the selected tab (an Amber tint pill, 66 mm x 26 mm; 60 mm on a phone), and the rest of the strip's 160 mm
-(130 mm on a phone) left free, so the global board's tab can slot in beside it with no relayout. Back returns to the start panel.
+the heading, on a phone only, is a tab strip (130 mm wide). On a phone the strip holds both tabs, LOCAL 58 mm and GLOBAL 60 mm, 40 mm tall (44 px), 12 mm apart.
+On a wide card (desktop and XR) both tabs are 50 mm x 46 mm buttons in the bottom row between Back and the level arrows, 12 mm apart, so every tab is
+inside the hand's reach like any other button (the heading line is above the panel zone). Selected: Amber tint pill; unselected: muted words, no fill.
+Both are buttons (`tab-local`, `tab-global`), so mouse, tap, poke and ray work as on any other. The card keeps its size.
+GLOBAL shows the shared top ten in the same rows as LOCAL (src/global.ts): "Loading global scores" in the middle while it asks; when the
+backend is offline, errors or takes over 4 s, the local rows with one muted line, "Global scores offline" (at the right of the heading's line; on a
+phone in the free half of the first row). Never an error card. Back returns to the start panel.
 
 ## Time limit (src/timer.ts, tests/e2e/timer.spec.ts)
 Every level, the daily and a shared puzzle has a par time: 60 s plus 25 s per gear to place, 20 s per compound pair and

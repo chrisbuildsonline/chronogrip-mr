@@ -118,15 +118,23 @@ describe('options panel layout', () => {
 });
 
 describe('high scores board', () => {
-  it('reserves a tab strip on the heading line, just after the heading, with a Local tab first and room for a Global one', () => {
-    for (const narrow of [false, true]) {
-      const g = boardGrid(narrow);
-      expect(g.tabs.local.w).toBeGreaterThan(0.05);
-      expect(g.tabs.w).toBeGreaterThanOrEqual(2 * g.tabs.local.w);
-      expect(g.tabs.x0, 'after the 18 mm serif heading').toBeGreaterThanOrEqual(-g.width / 2 + 0.016 + 0.12);
-      expect(g.tabs.x0 + g.tabs.w, 'inside the padding').toBeLessThanOrEqual(g.width / 2 - 0.016 + 1e-9);
-      expect(g.tabs.y + g.tabs.h / 2).toBeLessThanOrEqual(g.height - 0.008);
-    }
+  it('puts a Local and a Global tab on the heading line of a phone card, 44 px tall, after the heading and inside the padding', () => {
+    const g = boardGrid(true);
+    expect(g.tabs!.local.w + 0.012 + g.tabs!.global.w).toBeLessThanOrEqual(g.tabs!.w + 1e-9);
+    expect(g.tabs!.h, '44 px at about 1143 px per metre').toBeGreaterThanOrEqual(0.0385);
+    expect(g.tabs!.x0, 'after the 18 mm serif heading').toBeGreaterThanOrEqual(-g.width / 2 + 0.016 + 0.12);
+    expect(g.tabs!.x0 + g.tabs!.w, 'inside the padding').toBeLessThanOrEqual(g.width / 2 - 0.016 + 1e-9);
+    expect(g.tabs!.y + g.tabs!.h / 2).toBeLessThanOrEqual(g.height - 0.008);
+  });
+
+  it('keeps both tabs of a wide card in its button row, 4 cm or more and 12 mm from their neighbours', () => {
+    expect(boardGrid(false).tabs).toBeNull();
+    const row = layout('board', { level: 0, levels: 10, daily: true, random: true }).buttons;
+    const at = row.filter((b) => b.id !== 'board-prev' && b.id !== 'board-next').sort((a, b) => a.x - b.x);
+    expect(at.map((b) => b.id)).toEqual(['back', 'tab-local', 'tab-global']);
+    for (const b of at) expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(0.04);
+    const prev = row.find((b) => b.id === 'board-prev')!;
+    for (const [a, b] of [[at[0]!, at[1]!], [at[1]!, at[2]!], [at[2]!, prev]] as const) expect(b.x - b.w / 2 - (a.x + a.w / 2)).toBeGreaterThanOrEqual(0.012 - 1e-9);
   });
 });
 

@@ -342,7 +342,10 @@ describe('best times and initials cards', () => {
   it('has the buttons each card needs, in the same order on a phone', () => {
     for (const narrow of [false, true]) {
       expect(layout('initials', { ...ctx, narrow }).buttons.map((b) => b.id)).toEqual(['up-0', 'down-0', 'up-1', 'down-1', 'up-2', 'down-2', 'save', 'skip']);
-      expect(layout('board', { ...ctx, narrow }).buttons.map((b) => b.id)).toEqual(['back', 'board-prev', 'board-next']);
+      // The tabs are in the button row on a wide card (in a hand's reach); on a phone they are on the heading line, apart.
+      const board = layout('board', { ...ctx, narrow });
+      expect(board.buttons.map((b) => b.id)).toEqual(narrow ? ['back', 'board-prev', 'board-next'] : ['back', 'tab-local', 'tab-global', 'board-prev', 'board-next']);
+      expect((board.tabs ?? []).map((b) => b.id)).toEqual(narrow ? ['tab-local', 'tab-global'] : []);
       expect(layout('initials', { ...ctx, narrow }).buttons.filter((b) => b.kind === 'primary').map((b) => b.id), 'one primary').toEqual(['save']);
     }
     expect(OVERLAY_SCREENS).toEqual(['initials', 'board', 'options']);
