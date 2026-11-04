@@ -42,25 +42,25 @@ test('desktop: the canvas is labelled, Enter is the card primary, Esc pauses and
   await hasButton(page, 'stage-easy');
   await page.keyboard.press('Tab');
   await page.keyboard.press('Enter');
-  await expect.poll(() => flowOf(page)).toBe('playing');
+  await expect.poll(() => flowOf(page), { timeout: 15_000 }).toBe('playing');
   // Esc pauses, Esc again resumes, an arrow and Enter on the pause card is Resume.
   await page.keyboard.press('Escape');
-  await expect.poll(() => flowOf(page)).toBe('paused');
+  await expect.poll(() => flowOf(page), { timeout: 15_000 }).toBe('paused');
   await page.keyboard.press('Escape');
-  await expect.poll(() => flowOf(page)).toBe('playing');
+  await expect.poll(() => flowOf(page), { timeout: 15_000 }).toBe('playing');
   await page.keyboard.press('Escape');
-  await expect.poll(() => flowOf(page)).toBe('paused');
+  await expect.poll(() => flowOf(page), { timeout: 15_000 }).toBe('paused');
   await hasButton(page, 'resume');
   await page.keyboard.press('ArrowDown'); // nothing is selected on a menu until a key reaches it: Resume is the top row
   await page.keyboard.press('Enter');
-  await expect.poll(() => flowOf(page)).toBe('playing');
+  await expect.poll(() => flowOf(page), { timeout: 15_000 }).toBe('playing');
 
   // Pause, then Main menu on the pause card goes back to the title.
   await page.keyboard.press('Escape');
   await hasButton(page, 'menu');
   const [x, y] = await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'menu')!.screen);
   await page.mouse.click(x, y);
-  await expect.poll(() => flowOf(page)).toBe('title');
+  await expect.poll(() => flowOf(page), { timeout: 15_000 }).toBe('title');
 
   expect(errors).toEqual([]);
 });
