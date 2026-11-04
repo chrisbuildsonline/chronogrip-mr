@@ -73,6 +73,12 @@ interface ChronoHook {
   readonly audio: { readonly state: 'none' | 'suspended' | 'running' | 'closed'; readonly ticks: number; readonly clicks: number; readonly grinds: number; readonly chimes: number };
   /** Live: draw calls and triangles of the last rendered frame. */
   readonly render: { readonly calls: number; readonly triangles: number };
+  /**
+   * Live: the scenery (src/scenery.ts). `mode`: 'inline' (workshop backdrop) or 'xr' (a few props on the real table);
+   * `parts`: names of the scenery meshes drawn now; `tris`: their triangles; `background`: scene.background is set;
+   * `fog`: scene.fog is set; `clearAlpha`: the renderer's clear alpha.
+   */
+  readonly scenery: { readonly mode: 'inline' | 'xr'; readonly parts: readonly string[]; readonly tris: number; readonly background: boolean; readonly fog: boolean; readonly clearAlpha: number };
   /** Live: true once the escapement is calibrated and the automaton runs. */
   readonly automatonRunning: boolean;
   /** Live: the escapement's tick count so far (fractional); the bird's wings snap up at each whole tick. */

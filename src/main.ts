@@ -8,6 +8,7 @@ import { grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle, typ
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
 import { buildScene } from './scene';
+import { createScenery } from './scenery';
 import { trackMr } from './mr';
 import { tuneForSoftwareGl } from './render';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
@@ -110,6 +111,10 @@ let level: Level = levels[levelIndex]!;
 par = parFor(level);
 tuneForSoftwareGl(world.renderer);
 const built = buildScene(level, world.scene, world.renderer);
+// The workshop behind the tray on desktop and phone; in immersive-ar only a few props on the real table (src/scenery.ts).
+const scenery = createScenery(world.scene);
+world.renderer.xr.addEventListener('sessionstart', () => scenery.set(true));
+world.renderer.xr.addEventListener('sessionend', () => scenery.set(false));
 
 // Desktop preview: from above, behind and a little right of the seated head, so the board reads in depth (bevel,
 // gear thickness, the bird standing up) and the panel above it stays in frame. A narrow window backs it off (fitView).
@@ -852,6 +857,7 @@ trackMr(world.renderer, {
     const [x, y, z] = toHeadFrame(next.pose.position, head);
     placedPose = { position: [x, y, z], tilt: next.pose.tilt, yaw: (next.pose.yaw ?? 0) - head.yaw };
     built.place(next);
+    scenery.place(next);
     placePanels();
     panels.showNote(next.fit === 'small');
     trayRestored = why === 'saved' || why === 'anchor' ? why : null;
@@ -944,6 +950,7 @@ world.renderer.xr.addEventListener('sessionend', () => {
     occluders[hand].update(null);
   }
   built.place(DEFAULT_PLACEMENT);
+  scenery.place(DEFAULT_PLACEMENT);
   placePanels();
   panels.showHint(false);
 });
@@ -1365,6 +1372,9 @@ window.__chrono = Object.freeze({
   get render() {
     const { calls, triangles } = world.renderer.info.render;
     return { calls, triangles };
+  },
+  get scenery() {
+    return { ...scenery.state(), clearAlpha: world.renderer.getClearAlpha() };
   },
   get automatonRunning() {
     return regulator.calibrated;

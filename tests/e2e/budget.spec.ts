@@ -27,7 +27,9 @@ test('every level and the daily stay inside the render budget while playing', as
     await click(page, `level-${i + 1}`);
     await page.waitForFunction((n) => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === n, i);
     await frames(page);
-    const r = await page.evaluate(() => ({ id: window.__chrono!.levelId, ...window.__chrono!.render }));
+    const r = await page.evaluate(() => ({ id: window.__chrono!.levelId, ...window.__chrono!.render, workshop: window.__chrono!.scenery.parts.includes('workbench') }));
+    // The workshop backdrop (src/scenery.ts) is up, so its cost is inside the numbers below.
+    expect(r.workshop, `${r.id} workshop drawn`).toBe(true);
     expect(r.calls, `${r.id} draw calls`).toBeGreaterThan(0);
     expect(r.calls, `${r.id} draw calls`).toBeLessThanOrEqual(RENDER_BUDGET.calls);
     expect(r.triangles, `${r.id} triangles`).toBeLessThanOrEqual(RENDER_BUDGET.triangles);
