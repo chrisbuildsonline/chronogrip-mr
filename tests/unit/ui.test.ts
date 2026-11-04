@@ -234,7 +234,7 @@ describe('best times and initials cards', () => {
       expect(board.buttons.map((b) => b.id)).toEqual(['back', 'tab-local', 'tab-global']);
       expect(layout('initials', { ...ctx, narrow }).buttons.filter((b) => b.kind === 'primary').map((b) => b.id), 'one primary').toEqual(['save']);
     }
-    expect(OVERLAY_SCREENS).toEqual(['initials', 'board', 'options', 'picker']);
+    expect(OVERLAY_SCREENS).toEqual(['initials', 'board', 'options', 'picker', 'result']);
   });
 
   it('shows every best time as m:ss.t, tenths included from 10 s up', () => {
