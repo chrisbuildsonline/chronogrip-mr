@@ -28,6 +28,8 @@ const TEXT: [string, string, string][] = [
   ['muted best times on cream-deep tiles', C.muted, C.deep],
   ['muted best times on a hovered tile', C.muted, C.deepHover],
   ['status pill text on amber tint', C.tintInk, C.tint],
+  ['the selected tab: tint ink on the amber tint segment', C.tintInk, C.tint],
+  ['the unselected tab: muted words on the segmented track', C.muted, C.deep],
   ['ink goal text on the matched (amber) goal badge', C.ink, C.amber],
   ['red "Jammed:" and "Wrong way:" on the cream HUD', C.jamInk, C.cream],
   ['the cream "!" on the red fault disc', C.cream, C.jamInk],

@@ -477,7 +477,7 @@ function boardCard(id: string, tab: 'local' | 'global'): NonNullable<PanelCtx['b
   // Global: the last good rows; with none, "Loading" while asking and the local rows with a quiet note once it failed.
   const rows = globalRows.get(id);
   if (rows) return { ...local, entries: rows, empty: 'No global times yet. Be the first.' };
-  if (globalAsk.get(id) === 'offline') return { ...local, note: 'Global scores offline' };
+  if (globalAsk.get(id) === 'offline') return { ...local, note: 'Global scores offline · your times' };
   return { ...local, entries: [], empty: 'Loading global scores' };
 }
 

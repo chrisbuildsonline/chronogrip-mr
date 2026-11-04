@@ -394,7 +394,7 @@ describe('best times and initials cards', () => {
           expect(b.y + b.h / 2, `${s} ${b.id}`).toBeLessThanOrEqual(l.height);
         }
         for (const a of l.buttons) for (const b of l.buttons) {
-          if (a === b) continue;
+          if (a === b || (a.kind === 'tab' && b.kind === 'tab')) continue; // the two segments of one control touch
           const apart = Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= 0.012 - 1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= 0.012 - 1e-9;
           expect(apart, `${s} ${narrow} ${a.id} ${b.id}`).toBe(true);
         }

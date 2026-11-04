@@ -375,8 +375,7 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
       g.strokeStyle = C.amber;
       g.stroke();
     }
-    const snug = b.w <= 0.05; // the button row's 50 mm tabs: a size down so GLOBAL fits
-    return text(g, b.label, x, y + 1, font(700, snug ? T.eyebrow : T.eyebrow + 1.5), picked ? C.tintInk : C.muted, 'center', snug ? 0.3 : 1);
+    return text(g, b.label, x, y + 1, font(600, T.button), picked ? C.tintInk : C.muted); // the size of Back's label
   }
   // A pill where it is wider than tall; a cell taller than wide (a tile, the phone's Back) gets the tile's corners.
   const tall = b.h > b.w;
@@ -485,9 +484,11 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       text(g, 'High scores', left(0.016), y(grid.headY), font(600, T.heading, SERIF), C.ink, 'left');
       // The tab strip (Local, Global) is two buttons, drawn with the rest. A quiet note says when the global board is not there:
       // on the heading's line at the right, or on a phone in the free half of the first row.
+      // On a phone it is a line of its own over the rows (they start one lower, and the tenth waits); wide, it is on the heading's line at the right.
+      const lowered = !!b.note && !!ctx.narrow;
       if (b.note) {
-        const ny = y(ctx.narrow ? grid.y0 : grid.headY);
-        text(g, b.note, right(0.016), ny, font(500, ctx.narrow ? 10.5 : 11.5), C.muted, 'right');
+        const [nx, ny] = lowered ? at(-l.width / 2 + 0.016, grid.y0) : [right(0.016), y(grid.headY)];
+        text(g, b.note, nx, ny + 1, font(500, ctx.narrow ? 10.5 : 11.5), C.muted, lowered ? 'left' : 'right');
       }
       // The level switcher's name, between its arrows, shrunk to fit.
       const [prev, next] = ['board-prev', 'board-next'].map((id) => l.buttons.find((x) => x.id === id)!) as [Button, Button];
@@ -505,14 +506,15 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       const [size, small] = phone ? [11.5, 11] : [12.5, 12];
       // Offsets from a column's left edge, wide enough for a wide system font (DejaVu) too.
       const cols = phone ? { name: 0.021, step: 0.058, level: 0.105, random: 0.17 } : { name: 0.024, step: 0.058, level: 0.11, random: 0.166 };
-      b.entries.forEach((e, i) => {
+      (lowered ? b.entries.slice(0, grid.rows - 1) : b.entries).forEach((e, n) => {
+        const i = n + (lowered ? 1 : 0);
         const rowY = grid.y0 - (i % grid.rows) * grid.pitch;
         const x0 = -l.width / 2 + 0.016 + Math.floor(i / grid.rows) * (grid.colW + grid.gap);
         const put = (s: string, dx: number, f: string, color: string, align: CanvasTextAlign) => {
           const [px, py] = at(x0 + dx, rowY);
           text(g, s, px, py + 1, f, color, align);
         };
-        put(String(i + 1), 0, font(600, small), C.muted, 'left');
+        put(String(n + 1), 0, font(600, small), C.muted, 'left');
         put(e.name, cols.name, font(700, size), C.ink, 'left');
         if (e.step === undefined) put(clockTenths(e.ms / 1000), cols.level, font(600, size), C.ink, 'right');
         else {
@@ -587,6 +589,12 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       text(g, 'Paused', cx, y(0.118), font(600, T.heading, SERIF), C.ink);
       text(g, `${name}  ·  ${clock(ctx.time)}`, cx, y(0.087), font(500, T.body), C.muted);
       break;
+  }
+  if (l.track) {
+    const [kx, ky] = at(l.track.x, l.track.y);
+    pill(g, kx, ky, l.track.w * PX, l.track.h * PX);
+    g.fillStyle = C.deep;
+    g.fill();
   }
   for (const b of [...l.buttons, ...(l.tabs ?? [])]) button(g, b, at, ctx);
   T = WIDE;

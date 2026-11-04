@@ -31,6 +31,26 @@ async function click(page: Page, id: string) {
 const frames = (page: Page) => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 const words = (page: Page) => page.evaluate(() => window.__chrono!.labels().map((l) => l.text));
 
+/** The named line's box meets no other word's box on the card. */
+async function noOverlap(page: Page, text: string) {
+  const labels = await page.evaluate(() => window.__chrono!.labels());
+  const note = labels.find((l) => l.text === text)!;
+  expect(note, text).toBeTruthy();
+  for (const o of labels) {
+    if (o === note) continue;
+    const apart = o.right <= note.left || o.left >= note.right || Math.abs(o.y - note.y) >= (o.height + note.height) / 2;
+    expect(apart, `"${text}" clear of "${o.text}"`).toBe(true);
+  }
+}
+
+/** Both tab labels are at least as big as Back's, and the segments are pills. */
+async function tabsReadable(page: Page) {
+  const labels = await page.evaluate(() => window.__chrono!.labels());
+  const back = labels.find((l) => l.text === 'Back')!;
+  for (const w of ['Local', 'Global']) expect(labels.find((l) => l.text === w)!.size, w).toBeGreaterThanOrEqual(back.size - 1e-6);
+  for (const b of (await page.evaluate(() => window.__chrono!.buttons())).filter((b) => b.id.startsWith('tab-'))) expect(b.rect[2] - b.rect[0], b.id).toBeGreaterThan(b.rect[3] - b.rect[1]);
+}
+
 async function openGlobal(page: Page) {
   await click(page, 'scores');
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'board');
@@ -43,11 +63,12 @@ test('the GLOBAL tab shows the rows the backend sends', async ({ page }) => {
   await page.route(URL, (r) => r.fulfill({ json: GOOD }));
   const errors = await open(page);
   await openGlobal(page);
-  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['LOCAL', 'GLOBAL', 'AAB', 'BOB', 'CAT', '0:08.5', '0:12.3', '1:01.5', '3 Nov']));
+  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['Local', 'Global', 'AAB', 'BOB', 'CAT', '0:08.5', '0:12.3', '1:01.5', '3 Nov']));
+  await tabsReadable(page);
   await page.screenshot({ path: `${OUT}/desktop-global.png` });
   await page.setViewportSize({ width: 375, height: 812 });
   await frames(page);
-  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['GLOBAL', 'AAB']));
+  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['Global', 'AAB']));
   await page.screenshot({ path: `${OUT}/phone-global.png` });
   expect(errors).toEqual([]);
 });
@@ -115,11 +136,13 @@ test('a backend failure shows the local rows and one quiet line', async ({ page 
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);
   await openGlobal(page);
-  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['ZED', '0:09.0', 'Global scores offline']));
+  await expect.poll(() => words(page)).toEqual(expect.arrayContaining(['ZED', '0:09.0', 'Global scores offline · your times']));
   expect(await words(page)).not.toContain('Loading global scores');
+  await noOverlap(page, 'Global scores offline · your times');
   await page.screenshot({ path: `${OUT}/desktop-offline.png` });
   await page.setViewportSize({ width: 375, height: 812 });
   await frames(page);
+  await noOverlap(page, 'Global scores offline · your times');
   await page.screenshot({ path: `${OUT}/phone-offline.png` });
   expect(errors).toEqual([]);
 });

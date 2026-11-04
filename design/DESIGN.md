@@ -100,13 +100,15 @@ The first card on desktop, phone and in XR, over the live board and the workshop
 
 ### High scores
 The best times board (see Best times) reached from the start panel's High scores button, headed "High scores". Just after
-the heading, on a phone only, is a tab strip (130 mm wide). On a phone the strip holds both tabs, LOCAL 58 mm and GLOBAL 60 mm, 40 mm tall (44 px), 12 mm apart.
-On a wide card (desktop and XR) both tabs are 50 mm x 46 mm buttons in the bottom row between Back and the level arrows, 12 mm apart, so every tab is
-inside the hand's reach like any other button (the heading line is above the panel zone). Selected: Amber tint pill; unselected: muted words, no fill.
+the heading, on a phone only, is the tab control (130 mm wide, 40 mm / 44 px tall).
+The tabs are one segmented control: a rounded cream-deep track holding two pill segments, "Local" and "Global", in Back's label size (button type, 600).
+Selected: filled Amber tint pill, tint-ink words. Unselected: muted words on the track (both pairs pass the palette check). On a wide card (desktop and XR) the
+control sits in the bottom row between Back and the level arrows, 12 mm from each: a 142 mm x 46 mm track, two 68 mm x 40 mm segments, so every
+segment is inside the hand's reach like any other button (the heading line is above the panel zone); the level name between the arrows has 90 mm.
 Both are buttons (`tab-local`, `tab-global`), so mouse, tap, poke and ray work as on any other. The card keeps its size.
 GLOBAL shows the shared top ten in the same rows as LOCAL (src/global.ts): "Loading global scores" in the middle while it asks; when the
-backend is offline, errors or takes over 4 s, the local rows with one muted line, "Global scores offline" (at the right of the heading's line; on a
-phone in the free half of the first row). Never an error card. Back returns to the start panel.
+backend is offline, errors or takes over 4 s, the local rows with one muted line, "Global scores offline · your times" (at the right of the heading's line; on a
+phone a line of its own over the rows, which start one lower, so the tenth waits). Never an error card. Back returns to the start panel.
 
 ## Time limit (src/timer.ts, tests/e2e/timer.spec.ts)
 Every level, the daily and a shared puzzle has a par time: 60 s plus 25 s per gear to place, 20 s per compound pair and

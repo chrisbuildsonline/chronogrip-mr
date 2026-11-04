@@ -118,23 +118,37 @@ describe('options panel layout', () => {
 });
 
 describe('high scores board', () => {
-  it('puts a Local and a Global tab on the heading line of a phone card, 44 px tall, after the heading and inside the padding', () => {
+  it('puts one segmented control on the heading line of a phone card: a track of two pill segments, 44 px tall, after the heading and inside the padding', () => {
     const g = boardGrid(true);
-    expect(g.tabs!.local.w + 0.012 + g.tabs!.global.w).toBeLessThanOrEqual(g.tabs!.w + 1e-9);
-    expect(g.tabs!.h, '44 px at about 1143 px per metre').toBeGreaterThanOrEqual(0.0385);
-    expect(g.tabs!.x0, 'after the 18 mm serif heading').toBeGreaterThanOrEqual(-g.width / 2 + 0.016 + 0.12);
-    expect(g.tabs!.x0 + g.tabs!.w, 'inside the padding').toBeLessThanOrEqual(g.width / 2 - 0.016 + 1e-9);
-    expect(g.tabs!.y + g.tabs!.h / 2).toBeLessThanOrEqual(g.height - 0.008);
+    const l = layout('board', { level: 0, levels: 10, daily: true, random: true, narrow: true });
+    const [a, b] = l.tabs!;
+    expect([a!.id, b!.id]).toEqual(['tab-local', 'tab-global']);
+    for (const s of [a!, b!]) {
+      expect(s.w, 'a pill, not a circle').toBeGreaterThan(s.h);
+      expect(s.h, '44 px at about 1143 px per metre').toBeGreaterThanOrEqual(0.0385);
+      expect(s.x - s.w / 2).toBeGreaterThanOrEqual(l.track!.x - l.track!.w / 2 - 1e-9);
+      expect(s.x + s.w / 2).toBeLessThanOrEqual(l.track!.x + l.track!.w / 2 + 1e-9);
+    }
+    expect(l.track!.x - l.track!.w / 2, 'after the 18 mm serif heading').toBeGreaterThanOrEqual(-g.width / 2 + 0.016 + 0.12);
+    expect(l.track!.x + l.track!.w / 2, 'inside the padding').toBeLessThanOrEqual(g.width / 2 - 0.016 + 1e-9);
+    expect(l.track!.y + l.track!.h / 2).toBeLessThanOrEqual(g.height - 0.008);
   });
 
-  it('keeps both tabs of a wide card in its button row, 4 cm or more and 12 mm from their neighbours', () => {
+  it('keeps one segmented control in the button row of a wide card: pill segments of 4 cm or more, 12 mm from Back and the arrow', () => {
     expect(boardGrid(false).tabs).toBeNull();
-    const row = layout('board', { level: 0, levels: 10, daily: true, random: true }).buttons;
-    const at = row.filter((b) => b.id !== 'board-prev' && b.id !== 'board-next').sort((a, b) => a.x - b.x);
-    expect(at.map((b) => b.id)).toEqual(['back', 'tab-local', 'tab-global']);
-    for (const b of at) expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(0.04);
-    const prev = row.find((b) => b.id === 'board-prev')!;
-    for (const [a, b] of [[at[0]!, at[1]!], [at[1]!, at[2]!], [at[2]!, prev]] as const) expect(b.x - b.w / 2 - (a.x + a.w / 2)).toBeGreaterThanOrEqual(0.012 - 1e-9);
+    const l = layout('board', { level: 0, levels: 10, daily: true, random: true });
+    const by = (id: string) => l.buttons.find((b) => b.id === id)!;
+    const [back, a, b, prev] = [by('back'), by('tab-local'), by('tab-global'), by('board-prev')];
+    for (const s of [a, b]) {
+      expect(s.w, 'a pill, not a circle').toBeGreaterThan(s.h);
+      expect(Math.min(s.w, s.h)).toBeGreaterThanOrEqual(0.04);
+      expect(s.x - s.w / 2).toBeGreaterThanOrEqual(l.track!.x - l.track!.w / 2 - 1e-9);
+      expect(s.x + s.w / 2).toBeLessThanOrEqual(l.track!.x + l.track!.w / 2 + 1e-9);
+    }
+    expect(l.track!.x - l.track!.w / 2 - (back.x + back.w / 2)).toBeGreaterThanOrEqual(0.012 - 1e-9);
+    expect(prev.x - prev.w / 2 - (l.track!.x + l.track!.w / 2)).toBeGreaterThanOrEqual(0.012 - 1e-9);
+    expect(l.track!.h, 'no taller than the button row').toBeLessThanOrEqual(0.046 + 1e-9);
+    expect(a.x).toBeLessThan(b.x);
   });
 });
 

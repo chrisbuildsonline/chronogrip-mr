@@ -57,7 +57,7 @@ async function phoneFits(page: Page, at: string) {
     expect(b.rect[3], `${at} ${b.id} on screen`).toBeLessThanOrEqual(PHONE.height);
   }
   for (const a of buttons) for (const b of buttons) {
-    if (a === b) continue;
+    if (a === b || (a.id.startsWith('tab-') && b.id.startsWith('tab-'))) continue; // the two segments of one control touch
     expect(a.rect[2] <= b.rect[0] || b.rect[2] <= a.rect[0] || a.rect[3] <= b.rect[1] || b.rect[3] <= a.rect[1], `${at} ${a.id} and ${b.id} do not overlap`).toBe(true);
   }
   const corners = await page.evaluate(() => window.__chrono!.panelCorners());
@@ -98,7 +98,7 @@ test('desktop 1440x900: the start panel has three buttons, and each reaches its 
   // High scores: the existing board, with a Local tab and room beside it.
   await click(page, 'scores');
   await cardIs(page, 'board');
-  expect(await words(page)).toEqual(expect.arrayContaining(['High scores', 'LOCAL', 'Level 1']));
+  expect(await words(page)).toEqual(expect.arrayContaining(['High scores', 'Local', 'Level 1']));
   await page.screenshot({ path: `${OUT}/scores-1440.png` });
   await click(page, 'back');
   await cardIs(page, 'title');
@@ -134,7 +134,7 @@ test('phone 375x812: the start panel is a bottom sheet with Start game under the
   await click(page, 'scores');
   await cardIs(page, 'board');
   await phoneFits(page, 'scores');
-  expect(await words(page)).toContain('LOCAL');
+  expect(await words(page)).toContain('Local');
   await page.screenshot({ path: `${OUT}/scores-375.png` });
   await click(page, 'back');
   await cardIs(page, 'title');

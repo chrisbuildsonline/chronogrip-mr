@@ -153,7 +153,7 @@ test('desktop: a first solve asks for initials (#1), Save writes them, and Best 
   const row = saved.boards.l1![0]!;
   const shown = await words(page);
   expect(shown).toContain('High scores');
-  expect(shown).toContain('LOCAL'); // the tab strip: Local now, room beside it for the global board
+  expect(shown).toContain('Local'); // the tab strip: Local now, room beside it for the global board
   expect(shown).toContain('Level 1');
   expect(shown).toContain('KIX');
   expect(shown).toContain(clockTenths(row.ms / 1000));
