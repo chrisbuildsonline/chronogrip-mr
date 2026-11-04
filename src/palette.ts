@@ -23,3 +23,35 @@ export const C = {
   note: '#c9bba6',
   vignette: '#3a2a1c',
 } as const;
+
+/**
+ * World only, never text: the clockmaker's workshop behind and around the tray (src/scenery.ts). Walnut and plaster stay
+ * dark and warm so the cream panels and brass gears read first; the lamp, brass and cream props carry the highlights.
+ */
+export const SCENE = {
+  benchTop: '#6c4730',
+  benchPlank: '#5e3c28',
+  benchGrain: '#533523',
+  benchEdge: '#3f281a',
+  wall: '#41301f',
+  wallPlank: '#4a3524',
+  wallLow: '#392819',
+  rail: '#6b4a2e',
+  shelf: '#7a5233',
+  shelfEdge: '#5a3b24',
+  steel: '#9aa3ab',
+  steelDark: '#5c6269',
+  glass: '#a9c4b8',
+  honey: '#c98a24',
+  bookRed: '#9a4430',
+  bookGreen: '#566e4c',
+  bookBlue: '#476580',
+  bookMustard: '#bf8c2f',
+  lampMetal: '#3a342e',
+  lampShade: '#cf7a2e',
+  bulb: '#ffe2b0',
+  glow: '#ffcf8a',
+  canRed: '#b5432c',
+  handleTeal: '#2f5a63',
+  woodLight: '#b98b5a',
+} as const;
