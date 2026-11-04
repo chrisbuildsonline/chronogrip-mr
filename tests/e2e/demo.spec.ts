@@ -27,7 +27,7 @@ test('demo story (desktop): click Start, drag the escapement gear onto its axle,
     await shot(page, '1-title');
   });
 
-  await test.step('When the player clicks New Game, which plays level 1 at once', async () => {
+  await test.step('When the player clicks New Game and picks Easy, which plays level 1', async () => {
     await begin(page, async (id) => {
       await page.waitForFunction((b) => !window.__chrono!.cameraMoving && window.__chrono!.buttons().some((x) => x.id === b), id);
       const [x, y] = await page.evaluate((b) => window.__chrono!.buttons().find((x) => x.id === b)!.screen, id);

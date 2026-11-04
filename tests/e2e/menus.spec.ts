@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { newGame } from './start';
 
 
 /** Screenshots land here for a look by eye (gitignored). */
@@ -98,6 +99,8 @@ for (const size of SIZES) {
     expect((centreX(by('tab-local')) + centreX(by('tab-global'))) / 2, 'the control is centred').toBeCloseTo(centreX(card), -1);
     expect(centreX(by('tab-local'))).toBeLessThan(centreX(by('tab-global')));
     expect(centreY(by('tab-local')), 'the control is on top').toBeLessThan(centreY(by('back')));
+    expect((centreX(by('tab-easy')) + centreX(by('tab-hard'))) / 2, 'the stage tabs are centred').toBeCloseTo(centreX(card), -1);
+    expect(centreY(by('tab-easy')), 'the stage tabs are over the control').toBeLessThan(centreY(by('tab-local')));
     await column(page, ['back'], 'board');
     expect(Math.abs(centreX(by('back')) - centreX(card))).toBeLessThanOrEqual(1);
     await centred(page, size, 'board');
@@ -125,8 +128,18 @@ for (const size of SIZES) {
     await click(page, 'back');
     await cardIs(page, 'title');
 
-    // New Game plays at once: the layer is gone; Pause is a menu on the layer; Main menu brings the title, and the layer, back.
+    // New Game opens the stage picker: a menu on the layer, one centred column; a stage plays at once.
     await click(page, 'start');
+    await cardIs(page, 'stages');
+    await dark(page, 'stages');
+    await column(page, ['stage-easy', 'stage-medium', 'stage-hard', 'back'], 'stages');
+    await centred(page, size, 'stages');
+    await page.screenshot({ path: `${OUT}/stages-${size.name}.png` });
+    await click(page, 'back');
+    await cardIs(page, 'title');
+
+    // New Game plays at once: the layer is gone; Pause is a menu on the layer; Main menu brings the title, and the layer, back.
+    await newGame(page, (id) => click(page, id));
     await page.waitForFunction(() => window.__chrono!.flow === 'playing');
     await page.waitForFunction(() => !window.__chrono!.cameraMoving);
     expect((await scrim(page)).mode, 'no layer in play').toBeNull();

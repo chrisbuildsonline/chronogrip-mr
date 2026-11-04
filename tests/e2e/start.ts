@@ -5,16 +5,26 @@ const settle = async (page: Page) => {
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
 };
 
+/** New Game from the start panel: opens the stage picker, picks a stage (Easy by default) and waits for its level 1 to be on the board. `press` clicks (desktop) or pokes (XR) a panel button by id. */
+export async function newGame(page: Page, press: (id: string) => Promise<unknown>, stage: 'easy' | 'medium' | 'hard' = 'easy') {
+  await press('start');
+  await page.waitForFunction((id) => window.__chrono!.buttons().some((b) => b.id === id), `stage-${stage}`);
+  await press(`stage-${stage}`);
+  await page.waitForFunction(() => window.__chrono!.flow !== 'title');
+  await settle(page);
+}
+
 /**
- * From the start panel into the level it shows: Continue (when there is progress) or New Game plays straight into a level,
- * no list. `press` clicks (desktop) or pokes (XR) a panel button by id.
+ * From the start panel into the level it shows: Continue (when there is progress) plays straight into it; New Game goes
+ * through the stage picker (Easy). `press` clicks (desktop) or pokes (XR) a panel button by id.
  */
 export async function begin(page: Page, press: (id: string) => Promise<unknown>) {
   await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'start'));
-  const id = await page.evaluate(() => (window.__chrono!.buttons().some((b) => b.id === 'continue') ? 'continue' : 'start'));
-  await press(id);
-  await page.waitForFunction(() => window.__chrono!.flow !== 'title');
-  await settle(page);
+  if (await page.evaluate(() => window.__chrono!.buttons().some((b) => b.id === 'continue'))) {
+    await press('continue');
+    await page.waitForFunction(() => window.__chrono!.flow !== 'title');
+    await settle(page);
+  } else await newGame(page, press);
 }
 
 /** `begin` with the mouse: for a spec that opens the page and wants a level on the board to drag at. */

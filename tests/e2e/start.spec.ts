@@ -99,7 +99,7 @@ test('desktop 1440x900: the start panel has three buttons, and each reaches its 
   // High scores: the existing board, with a Local tab and room beside it.
   await click(page, 'scores');
   await cardIs(page, 'board');
-  expect(await words(page)).toEqual(expect.arrayContaining(['HIGH SCORES', 'LOCAL', 'CAMPAIGN · FASTEST RUNS']));
+  expect(await words(page)).toEqual(expect.arrayContaining(['HIGH SCORES', 'LOCAL', 'EASY · FASTEST RUNS']));
   await page.screenshot({ path: `${OUT}/scores-1440.png` });
   await click(page, 'back');
   await cardIs(page, 'title');
@@ -192,8 +192,8 @@ test('desktop: No timer and Sound persist after a reload, and sound off keeps th
 });
 
 test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now forgets the saved run but keeps the high scores', async ({ page }) => {
-  const board = { version: 1, initials: 'KIM', boards: { campaign: [{ name: 'KIM', ms: 590000, date: '2026-10-01' }] } };
-  await seed(page, { [RUN]: { cleared: 2, ms: 85000 }, [SCORES]: board });
+  const board = { version: 1, initials: 'KIM', boards: { 'campaign-medium': [{ name: 'KIM', ms: 590000, date: '2026-10-01' }] } };
+  await seed(page, { [RUN]: { stage: 'medium', cleared: 2, ms: 85000 }, [SCORES]: board });
   const errors = await open(page);
   expect(await labelsOf(page)).toEqual(['Continue', 'New Game', 'Random level', 'Options', 'High scores']);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l3'); // the board is the level Continue plays (two cleared)
@@ -207,7 +207,7 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   expect(await labelsOf(page)).toEqual(['Reset now', 'Keep it', 'Back']);
   expect(await words(page)).toEqual(expect.arrayContaining(['RESET?', 'Clears the saved run. Best times stay.']));
   // Nothing is gone yet.
-  expect(await page.evaluate(() => window.__chrono!.run)).toEqual({ cleared: 2, ms: 85000 });
+  expect(await page.evaluate(() => window.__chrono!.run)).toEqual({ stage: 'medium', cleared: 2, ms: 85000 });
   await page.screenshot({ path: `${OUT}/options-confirm-1440.png` });
 
   // Keep it: back to the options as they were, progress untouched.
@@ -215,7 +215,7 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   await cardIs(page, 'options');
   expect(await page.evaluate(() => window.__chrono!.options)).toMatchObject({ confirm: false });
   expect(await ids(page)).toEqual(['relaxed', 'sound', 'music', 'reset', 'back']);
-  expect(await page.evaluate(() => window.__chrono!.run)).toEqual({ cleared: 2, ms: 85000 });
+  expect(await page.evaluate(() => window.__chrono!.run)).toEqual({ stage: 'medium', cleared: 2, ms: 85000 });
 
   // Back leaves the confirm too: opening Options again starts from the plain card.
   await click(page, 'reset');
@@ -237,13 +237,13 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1');
   expect(await page.evaluate(() => localStorage.getItem('chronogrip.run.v1'))).toBeNull();
   // The high scores are a separate store and stay.
-  expect((await page.evaluate(() => window.__chrono!.scores)).boards.campaign).toEqual(board.boards.campaign);
+  expect((await page.evaluate(() => window.__chrono!.scores)).boards['campaign-medium']).toEqual(board.boards['campaign-medium']);
   await page.screenshot({ path: `${OUT}/start-after-reset-1440.png` });
 
   expect(errors).toEqual([]);
 });
 
-test('desktop: Enter on the start panel plays the level it shows; Esc leaves Options and High scores', async ({ page }) => {
+test('desktop: Enter on the start panel opens the stage picker and Enter there plays Easy; Esc leaves Options and High scores', async ({ page }) => {
   const errors = await open(page);
   await cardIs(page, 'title');
   await click(page, 'options');
@@ -255,6 +255,39 @@ test('desktop: Enter on the start panel plays the level it shows; Esc leaves Opt
   await page.keyboard.press('Escape');
   await cardIs(page, 'title');
   await page.keyboard.press('Enter');
+  await cardIs(page, 'stages');
+  await page.keyboard.press('Escape');
+  await cardIs(page, 'title');
+  await page.keyboard.press('Enter');
+  await cardIs(page, 'stages');
+  await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
+  expect(await page.evaluate(() => window.__chrono!.hudLabel)).toBe('Easy · Level 1');
+  expect(errors).toEqual([]);
+});
+
+test('desktop 1440x900: New Game opens the stage picker, a vertical design C list with a hint on each row; Back returns', async ({ page }) => {
+  const errors = await open(page);
+  await click(page, 'start');
+  await cardIs(page, 'stages');
+  expect(await ids(page)).toEqual(['stage-easy', 'stage-medium', 'stage-hard', 'back']);
+  expect(await labelsOf(page)).toEqual(['Easy', 'Medium', 'Hard', 'Back']);
+  expect(await words(page)).toEqual(expect.arrayContaining(['A gentle climb', 'Starts where Easy ends', 'For clockmakers', 'CHOOSE A STAGE']));
+  const xs = await page.evaluate(() => window.__chrono!.buttons().map((b) => Math.round(b.screen[0])));
+  expect(new Set(xs).size, 'one column').toBe(1);
+  const ys = await page.evaluate(() => window.__chrono!.buttons().map((b) => b.screen[1]));
+  ys.forEach((y, i) => i && expect(y).toBeGreaterThan(ys[i - 1]!));
+  await page.screenshot({ path: `${OUT}/stages-1440.png` });
+  await click(page, 'back');
+  await cardIs(page, 'title');
+  expect(errors).toEqual([]);
+});
+
+test('phone 375x812: the stage picker fits, 44 px rows, every word 12 px or more', async ({ page }) => {
+  const errors = await open(page, PHONE);
+  await click(page, 'start');
+  await cardIs(page, 'stages');
+  await phoneFits(page, 'stages');
+  await page.screenshot({ path: `${OUT}/stages-375.png` });
   expect(errors).toEqual([]);
 });

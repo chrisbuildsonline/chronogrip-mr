@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { newGame } from './start';
 
 import { LEVELS } from '../../src/levels';
 import { DESKTOP_EYE, DESKTOP_TARGET, faceView } from '../../src/fit';
@@ -126,7 +127,7 @@ for (const [w, h] of [[375, 812], [390, 844]] as const) {
     await click(page, 'back');
     await page.waitForFunction(() => window.__chrono!.card?.screen === 'title');
 
-    await click(page, 'start');
+    await newGame(page, (id) => click(page, id));
     await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 0);
     const hud = await phoneCard(page, w, h, 'hud');
     expect(hud.map((l) => l.text), 'the goal line is on the HUD').toContain('Turn the marked gear');
@@ -196,7 +197,7 @@ test('desktop 1440x900: the cards are the wide ones, placed and sized as before'
   await check('picker');
   await click(page, 'back');
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'title');
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await check('hud');
   await click(page, 'pause');

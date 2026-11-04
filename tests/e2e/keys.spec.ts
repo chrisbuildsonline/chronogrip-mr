@@ -26,7 +26,13 @@ test('desktop: the canvas is labelled, Enter is the card primary, Esc pauses and
   await page.keyboard.press('Escape');
   expect(await flowOf(page)).toBe('title');
 
-  // Enter on the start panel plays the level it shows (Continue), no list.
+  // Enter on the start panel presses its primary (New Game: the stage picker, Esc goes back); Enter on the picker plays Easy.
+  await page.keyboard.press('Enter');
+  await hasButton(page, 'stage-easy');
+  await page.keyboard.press('Escape');
+  await hasButton(page, 'start');
+  await page.keyboard.press('Enter');
+  await hasButton(page, 'stage-easy');
   await page.keyboard.press('Enter');
   await expect.poll(() => flowOf(page)).toBe('playing');
   // Esc pauses, Esc again resumes, Enter on the pause card is Resume.

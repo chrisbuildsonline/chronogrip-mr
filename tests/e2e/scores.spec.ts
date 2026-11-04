@@ -102,18 +102,18 @@ async function finishRun(page: Page) {
 const seedRun = (page: Page) =>
   page.addInitScript(([k, v]) => {
     if (!localStorage.getItem(k!)) localStorage.setItem(k!, v!);
-  }, [RUN, JSON.stringify({ cleared: 19, ms: 700_000 })] as const);
+  }, [RUN, JSON.stringify({ stage: 'medium', cleared: 19, ms: 700_000 })] as const);
 
 const full = (ms0: number, step = 1000) => Array.from({ length: 10 }, (_, i) => entry('AAA', ms0 + i * step));
 
 test.use({ classic: false });
 
 test('desktop: the name entry is arcade style: three slots, up and down cycle A-Z, tapping a slot or left and right moves, it starts on the last initials, OK saves the time', async ({ page }) => {
-  await seed(page, { version: 1, initials: 'ZED', boards: { campaign: [] } });
+  await seed(page, { version: 1, initials: 'ZED', boards: { 'campaign-medium': [] } });
   await seedRun(page);
   const errors = await open(page);
   await finishRun(page);
-  expect(await initials(page)).toMatchObject({ board: 'campaign', rank: 1, letters: 'ZED', cursor: 0 });
+  expect(await initials(page)).toMatchObject({ board: 'campaign-medium', rank: 1, letters: 'ZED', cursor: 0 });
   const w = await words(page);
   expect(w.some((x) => /^RUN COMPLETE · #1$/.test(x))).toBe(true);
   expect(w.some((x) => /^1\d:\d\d(\.\d)?$/.test(x)), 'the total time, large').toBe(true);
@@ -138,7 +138,7 @@ test('desktop: the name entry is arcade style: three slots, up and down cycle A-
   expect((await initials(page))!.letters).toBe('ACX');
   await page.keyboard.press('Enter');
   await cardIs(page, 'title');
-  const board = (await scores(page)).boards.campaign!;
+  const board = (await scores(page)).boards['campaign-medium']!;
   expect(board).toHaveLength(1);
   expect(board[0]).toMatchObject({ name: 'ACX' });
   expect((await scores(page)).initials).toBe('ACX');
@@ -152,12 +152,12 @@ test('desktop: Skip on the name entry saves nothing', async ({ page }) => {
   expect(await initials(page)).toMatchObject({ letters: 'AAA' });
   await click(page, 'skip');
   await cardIs(page, 'title');
-  expect((await scores(page)).boards.campaign).toEqual([]);
+  expect((await scores(page)).boards['campaign-medium']).toEqual([]);
   expect(errors).toEqual([]);
 });
 
 test('desktop: against a full board a slower finished run asks for nothing; a faster one takes its rank and Save pushes the last off', async ({ page }) => {
-  await seed(page, { version: 1, initials: 'ZED', boards: { campaign: full(1_000, 1) } });
+  await seed(page, { version: 1, initials: 'ZED', boards: { 'campaign-medium': full(1_000, 1) } });
   await seedRun(page);
   const errors = await open(page);
   await click(page, 'continue');
@@ -166,18 +166,18 @@ test('desktop: against a full board a slower finished run asks for nothing; a fa
   await click(page, 'next');
   await cardIs(page, 'title'); // 11+ minutes against ten runs of 1 s: not on the board, no name entry
   expect(await initials(page)).toBeNull();
-  expect((await scores(page)).boards.campaign).toEqual(full(1_000, 1));
+  expect((await scores(page)).boards['campaign-medium']).toEqual(full(1_000, 1));
   expect(errors).toEqual([]);
 });
 
 test('desktop: the board shows the ten fastest finished runs in one column, ranked, with the date; and says so when empty', async ({ page }) => {
   const rows = [entry('AAA', 900_000), entry('BBB', 400_000), entry('CCC', 410_000), entry('DDD', 100_000), ...Array.from({ length: 6 }, (_, i) => entry('EEE', 500_000 + i * 1000))];
-  await seed(page, { version: 1, initials: 'ZED', boards: { campaign: rows } });
+  await seed(page, { version: 1, initials: 'ZED', boards: { 'campaign-easy': rows } });
   const errors = await open(page);
   await click(page, 'scores');
   await cardIs(page, 'board');
   const labels = await page.evaluate(() => window.__chrono!.labels());
-  expect(labels.map((l) => l.text)).toEqual(expect.arrayContaining(['HIGH SCORES', 'CAMPAIGN · FASTEST RUNS']));
+  expect(labels.map((l) => l.text)).toEqual(expect.arrayContaining(['HIGH SCORES', 'EASY · FASTEST RUNS']));
   expect(labels.filter((l) => /^(AAA|BBB|CCC|DDD|EEE)$/.test(l.text)).map((l) => l.text)).toEqual(['DDD', 'BBB', 'CCC', 'EEE', 'EEE', 'EEE', 'EEE', 'EEE', 'EEE', 'AAA']);
   const ranks = labels.filter((l) => /^(10|[1-9])$/.test(l.text));
   expect(ranks.map((l) => l.text).sort()).toEqual(['1', '10', '2', '3', '4', '5', '6', '7', '8', '9']);
@@ -190,7 +190,7 @@ test('desktop: the board shows the ten fastest finished runs in one column, rank
   const times = labels.filter((l) => /^\d+:\d\d\.\d$/.test(l.text));
   expect(times).toHaveLength(10);
   expect(new Set(times.map((l) => Math.round(l.right))).size, 'times right-aligned, one edge').toBe(1);
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['back', 'tab-local', 'tab-global']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['back', 'tab-local', 'tab-global', 'tab-easy', 'tab-medium', 'tab-hard']);
   await wordsClear(page, 'board 1440', 9, 4);
   await page.screenshot({ path: `${OUT}/board-1440.png` });
   expect(errors).toEqual([]);
@@ -207,7 +207,7 @@ test('desktop: an empty board says no finished runs yet; Esc is Back', async ({ 
 });
 
 test('phone 375 x 812: the start panel and the board are legible, 44 px rows, Back under the thumb', async ({ page }) => {
-  await seed(page, { version: 1, initials: 'ZED', boards: { campaign: full(480_000, 8000) } });
+  await seed(page, { version: 1, initials: 'ZED', boards: { 'campaign-easy': full(480_000, 8000) } });
   const errors = await open(page, '/', PHONE);
   await cardIs(page, 'title');
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
@@ -252,6 +252,6 @@ test('phone 375 x 812: the name entry fits, arrows are 44 px, OK and Skip are un
   expect((await initials(page))!.letters).toBe('CAA');
   await click(page, 'save');
   await cardIs(page, 'title');
-  expect((await scores(page)).boards.campaign![0]).toMatchObject({ name: 'CAA' });
+  expect((await scores(page)).boards['campaign-medium']![0]).toMatchObject({ name: 'CAA' });
   expect(errors).toEqual([]);
 });

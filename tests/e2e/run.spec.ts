@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { newGame } from './start';
 import { calibrateByMouse } from './calibrate';
 
 /** The campaign as shipped: every level generated fresh. */
@@ -63,9 +64,9 @@ async function pauseThen(page: Page, id: string) {
 
 test('desktop: solving level 1 shows no initials card, only Next; the run has cleared one', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  expect(await runOf(page)).toEqual({ cleared: 0, ms: 0 });
+  expect(await runOf(page)).toEqual({ stage: 'easy', cleared: 0, ms: 0 });
   await solve(page);
   expect(await page.evaluate(() => window.__chrono!.card!.screen)).toBe('complete');
   expect(await page.evaluate(() => window.__chrono!.initials)).toBeNull();
@@ -87,7 +88,7 @@ test('desktop: Give up shows a short result card (Level 2 reached and the time) 
     return r.fulfill({ json: [] });
   });
   const errors = await open(page);
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await solve(page);
   await click(page, 'next');
@@ -110,27 +111,27 @@ test('desktop: Give up shows a short result card (Level 2 reached and the time) 
   await page.screenshot({ path: `${OUT}/result.png` });
   await click(page, 'menu');
   await cardIs(page, 'title');
-  expect((await page.evaluate(() => window.__chrono!.scores)).boards.campaign).toEqual([]);
+  expect((await page.evaluate(() => window.__chrono!.scores)).boards['campaign-easy']).toEqual([]);
   expect(posts).toEqual([]);
   expect(errors).toEqual([]);
 });
 
 test('desktop: the result card New Game starts a fresh run at level 1', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await pauseThen(page, 'giveup');
   await cardIs(page, 'result');
   expect(await words(page)).toContain('LEVEL 1 REACHED');
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 0);
-  expect(await runOf(page)).toEqual({ cleared: 0, ms: 0 });
+  expect(await runOf(page)).toEqual({ stage: 'easy', cleared: 0, ms: 0 });
   expect(errors).toEqual([]);
 });
 
 test('desktop: the time limit running out ends the run with the result card, no name entry', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await solve(page);
   await click(page, 'next');
@@ -147,7 +148,7 @@ test('desktop: the time limit running out ends the run with the result card, no 
 
 test('desktop: with No timer the clock never ends the run', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await click(page, 'pause');
   await cardIs(page, 'paused');
@@ -163,7 +164,7 @@ test('desktop: with No timer the clock never ends the run', async ({ page }) => 
 
 test('desktop: Main menu leaves the run saved with the time spent; Continue resumes it on the next level; Restart is a new puzzle and keeps the clock counting', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await solve(page);
   const afterOne = (await runOf(page))!;
@@ -211,7 +212,7 @@ test('desktop: Random level is practice: no run, no score; Next gives another pu
   await pauseThen(page, 'giveup');
   await cardIs(page, 'title'); // no result card for practice
   expect(await page.evaluate(() => window.__chrono!.initials)).toBeNull();
-  expect((await page.evaluate(() => window.__chrono!.scores)).boards).toEqual({ campaign: [] });
+  expect((await page.evaluate(() => window.__chrono!.scores)).boards).toEqual({ 'campaign-easy': [], 'campaign-medium': [], 'campaign-hard': [] });
   expect(errors).toEqual([]);
 });
 
@@ -224,7 +225,7 @@ test('desktop: finishing level 20 is the only way to a name: Finish asks for thr
     }
     return r.fulfill({ json: [] });
   });
-  const errors = await open(page, { cleared: 19, ms: 600_000 });
+  const errors = await open(page, { stage: 'medium', cleared: 19, ms: 600_000 });
   await click(page, 'continue');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 19);
   await solve(page);
@@ -240,19 +241,19 @@ test('desktop: finishing level 20 is the only way to a name: Finish asks for thr
   await page.keyboard.type('zed');
   await page.keyboard.press('Enter');
   await cardIs(page, 'title');
-  const board = (await page.evaluate(() => window.__chrono!.scores)).boards.campaign!;
+  const board = (await page.evaluate(() => window.__chrono!.scores)).boards['campaign-medium']!;
   expect(board).toHaveLength(1);
   expect(board[0]).toMatchObject({ name: 'ZED' });
   expect(board[0]!.ms).toBeGreaterThanOrEqual(600_000);
   await expect.poll(() => posts.length).toBe(1);
-  expect(posts[0]).toMatchObject({ level: 'campaign', initials: 'ZED', step: 20 });
+  expect(posts[0]).toMatchObject({ level: 'campaign-medium', initials: 'ZED', step: 20 });
   expect(errors).toEqual([]);
 });
 
 test('phone 375x812: the pause card, the result card and the name entry fit', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   const errors = await open(page);
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await solve(page);
   await click(page, 'next');

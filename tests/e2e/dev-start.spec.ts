@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { newGame } from './start';
 
 import { PANEL_ZONE } from '../../src/ui';
 import { inZone } from '../../src/seat';
@@ -55,7 +56,7 @@ test('dev server: the start panel shows its three buttons inside the comfort zon
   await poke(page, 'back');
   await cardIs(page, 'title');
 
-  // Random level opens the difficulty picker, in the zone; New Game plays level 1 at once.
+  // Random level opens the difficulty picker, in the zone; New Game opens the stage picker.
   await poke(page, 'random');
   await cardIs(page, 'picker');
   const picker = await page.evaluate(() => window.__chrono!.buttons());
@@ -63,7 +64,15 @@ test('dev server: the start panel shows its three buttons inside the comfort zon
   for (const b of picker) expect(inZone(b.world, PANEL_ZONE), `${b.id} in the panel zone`).toBe(true);
   await poke(page, 'back');
   await cardIs(page, 'title');
+  // New Game opens the stage picker, in the zone; a stage plays its level 1.
   await poke(page, 'start');
+  await cardIs(page, 'stages');
+  const stages = await page.evaluate(() => window.__chrono!.buttons());
+  expect(stages.map((b) => b.id)).toEqual(['stage-easy', 'stage-medium', 'stage-hard', 'back']);
+  for (const b of stages) expect(inZone(b.world, PANEL_ZONE), `${b.id} in the panel zone`).toBe(true);
+  await poke(page, 'back');
+  await cardIs(page, 'title');
+  await newGame(page, (id) => poke(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
   expect(await card(page)).toBe('hud');
   expect(errors).toEqual([]);

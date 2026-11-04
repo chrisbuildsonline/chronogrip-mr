@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { newGame } from './start';
 import { enterWithHands, poke } from './hands';
 
 
@@ -38,7 +39,7 @@ test('dev server: in a headset every menu has a 90% backing panel behind its car
   expect(xs.length).toBe(1);
   await poke(page, 'back');
   await cardIs(page, 'title');
-  await poke(page, 'start');
+  await newGame(page, (id) => poke(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
   expect(await scrim(page)).toMatchObject({ mode: null });
   expect(errors).toEqual([]);

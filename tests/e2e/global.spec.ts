@@ -95,7 +95,7 @@ test('a completed run is posted with its total time and step 20, and appears on 
   });
   await page.addInitScript(([k, v]) => {
     if (!localStorage.getItem(k!)) localStorage.setItem(k!, v!);
-  }, ['chronogrip.run.v1', JSON.stringify({ cleared: 19, ms: 400_000 })] as const);
+  }, ['chronogrip.run.v1', JSON.stringify({ stage: 'medium', cleared: 19, ms: 400_000 })] as const);
   const errors = await open(page);
   await click(page, 'continue');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 19);
@@ -119,7 +119,7 @@ test('a completed run is posted with its total time and step 20, and appears on 
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'initials');
   await click(page, 'save');
   await expect.poll(() => posts.length).toBe(1);
-  expect(posts[0]).toMatchObject({ level: 'campaign', initials: 'AAA', seconds: expect.any(Number), step: 20 });
+  expect(posts[0]).toMatchObject({ level: 'campaign-medium', initials: 'AAA', seconds: expect.any(Number), step: 20 });
   expect(Object.keys(posts[0]!).sort()).toEqual(['initials', 'level', 'seconds', 'step']);
   expect((posts[0] as { seconds: number }).seconds).toBeGreaterThan(400);
   // A fresh load opens on the title; the new row is on the GLOBAL board.
@@ -135,7 +135,7 @@ test('a backend failure shows the local rows and one quiet line', async ({ page 
   await page.route(URL, (r) => r.fulfill({ status: 500, body: '{"message":"boom"}' }));
   const errors = await open(page);
   await page.evaluate(() =>
-    localStorage.setItem('chronogrip.scores.v1', JSON.stringify({ version: 1, initials: 'ZZZ', boards: { campaign: [{ name: 'ZED', ms: 509000, date: '2026-11-01' }] } })),
+    localStorage.setItem('chronogrip.scores.v1', JSON.stringify({ version: 1, initials: 'ZZZ', boards: { 'campaign-easy': [{ name: 'ZED', ms: 509000, date: '2026-11-01' }] } })),
   );
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);

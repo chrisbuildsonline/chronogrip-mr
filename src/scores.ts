@@ -1,9 +1,11 @@
 
 /**
- * High score boards: just the campaign. Only a completed run (all 20 levels) is scored: its total time, with three initials.
+ * High score boards: one per stage. Only a completed run (all 20 levels of a stage) is scored: its total time, with three initials.
  * Ranked fastest first; the earlier date wins a tie, and the board keeps its top ten. Everything here is pure.
  */
-export const BOARDS: readonly string[] = ['campaign'];
+export const BOARDS: readonly string[] = ['campaign-easy', 'campaign-medium', 'campaign-hard'];
+/** The board a stage's finished runs go on. The single campaign board of before the stages is dropped (its times were for a different ramp). */
+export const boardOf = (stage: string): string => `campaign-${stage}`;
 export const TOP = 10;
 export const DEFAULT_INITIALS = 'AAA';
 

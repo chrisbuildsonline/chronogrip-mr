@@ -118,7 +118,10 @@ interface ChronoHook {
   /** Live: seconds played on this level; runs only while playing. */
   readonly levelTime: number;
   /** Live: the campaign run in progress or saved (levels cleared, total time so far in ms), null when none. */
-  readonly run: { readonly cleared: number; readonly ms: number } | null;
+  readonly run: { readonly stage: 'easy' | 'medium' | 'hard'; readonly cleared: number; readonly ms: number } | null;
+  /** Live: the stage being played (the one of the run, else the last picked) and the HUD's words for the level, "Hard · Level 3" (just "Level 3" outside the 20 stage levels). */
+  readonly stage: 'easy' | 'medium' | 'hard';
+  readonly hudLabel: string;
   /**
    * Live: the level timer. `relaxed`: the Relaxed (no timer) setting; `par`: this level's time limit in seconds; `left`,
    * `over`: whole seconds left (0 once out) and past par; `fraction`: share of par left, 0..1; `ring`: the HUD up now carries the countdown ring.
@@ -137,7 +140,7 @@ interface ChronoHook {
   /** Live: the black layer behind the menus: `full` over a flat view, `backing` panel behind the card in XR, null in play. */
   readonly scrim: { readonly mode: 'full' | 'backing' | null; readonly opacity: number; readonly backingOpacity: number };
   /** Live: the card now up (its screen and panel-space size in metres), null when none is shown. */
-  readonly card: { readonly screen: 'title' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options' | 'result'; readonly width: number; readonly height: number } | null;
+  readonly card: { readonly screen: 'title' | 'stages' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options' | 'result'; readonly width: number; readonly height: number } | null;
   /** The words on the card now up: text, font size in panel metres, and that size in page pixels as seen now. */
   labels(): { text: string; size: number; height: number; y: number; left: number; right: number }[];
   /** Live: the puzzle code of the loaded level (a tinker level), null for a hand-made one. */

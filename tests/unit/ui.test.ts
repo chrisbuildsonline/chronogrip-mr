@@ -231,10 +231,10 @@ describe('best times and initials cards', () => {
     for (const narrow of [false, true]) {
       expect(layout('initials', { ...ctx, narrow }).buttons.map((b) => b.id)).toEqual(['up-0', 'slot-0', 'down-0', 'up-1', 'slot-1', 'down-1', 'up-2', 'slot-2', 'down-2', 'save', 'skip']);
       const board = layout('board', { ...ctx, narrow });
-      expect(board.buttons.map((b) => b.id)).toEqual(['back', 'tab-local', 'tab-global']);
+      expect(board.buttons.map((b) => b.id)).toEqual(['back', 'tab-local', 'tab-global', 'tab-easy', 'tab-medium', 'tab-hard']);
       expect(layout('initials', { ...ctx, narrow }).buttons.filter((b) => b.kind === 'primary').map((b) => b.id), 'one primary').toEqual(['save']);
     }
-    expect(OVERLAY_SCREENS).toEqual(['initials', 'board', 'options', 'picker', 'result']);
+    expect(OVERLAY_SCREENS).toEqual(['initials', 'board', 'options', 'stages', 'picker', 'result']);
   });
 
   it('shows every best time as m:ss.t, tenths included from 10 s up', () => {
@@ -343,6 +343,40 @@ describe('best times and initials cards', () => {
       expect(g.headY + 0.009).toBeLessThanOrEqual(g.height - 0.016);
       expect(g.cols * g.colW + (g.cols - 1) * g.gap + 0.032).toBeCloseTo(g.width, 9);
       expect(g.pitch, 'rows clear of each other').toBeGreaterThanOrEqual(narrow ? 0.0165 : 0.0185);
+    }
+  });
+});
+
+describe('the stage picker (New Game)', () => {
+  const l = layout('stages', { level: 0, levels: 21 });
+  const rows = l.buttons.filter((b) => b.id.startsWith('stage-'));
+
+  it('is a vertical column, left-aligned design C: Easy, Medium, Hard, each with its hint, then Back', () => {
+    expect(rows.map((b) => [b.id, b.label, b.hint])).toEqual([
+      ['stage-easy', 'Easy', 'A gentle climb'],
+      ['stage-medium', 'Medium', 'Starts where Easy ends'],
+      ['stage-hard', 'Hard', 'For clockmakers'],
+    ]);
+    expect(l.buttons.map((b) => b.id)).toEqual(['stage-easy', 'stage-medium', 'stage-hard', 'back']);
+    const all = l.buttons;
+    for (const b of all) {
+      expect(b.x, 'one column').toBe(0);
+      expect(b.h, 'a 50 mm row').toBeGreaterThanOrEqual(0.05);
+    }
+    all.forEach((b, i) => i && expect(b.y, `${b.id} under ${all[i - 1]!.id}`).toBeLessThan(all[i - 1]!.y));
+    expect(rows.filter((b) => b.kind === 'primary').map((b) => b.id), 'Easy is the selected bar').toEqual(['stage-easy']);
+  });
+
+  it('is a menu laid over the title, and in XR hangs where every button is in reach', () => {
+    expect(MENU_SCREENS).toContain('stages');
+    expect(OVERLAY_SCREENS).toContain('stages');
+    for (const [name, card] of [['stages', l], ['board', layout('board', { level: 0, levels: 21 })]] as const) {
+      for (const level of LEVELS) {
+        const a = menuAnchor(card, level);
+        for (const b of card.buttons) for (const x of [b.x - b.w / 2, b.x, b.x + b.w / 2]) for (const y of [b.y - b.h / 2, b.y + b.h / 2]) {
+          expect(inZone(panelToWorld(a, [x, y, 0]), PANEL_ZONE), `${name} ${level.id} ${b.id}`).toBe(true);
+        }
+      }
     }
   });
 });

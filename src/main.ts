@@ -8,7 +8,8 @@ import { grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle, typ
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
 import { buildScene } from './scene';
-import { loadBackdrop } from './backdrop';
+import { loadBackdrop, type BackdropId } from './backdrop';
+import { MENU_BACKDROP, RANDOM_PICK, STAGES, dOf, kindOf, parOf, stageOf, type StageId } from './stages';
 import { createScenery } from './scenery';
 import { trackMr } from './mr';
 import { tuneForSoftwareGl } from './render';
@@ -27,11 +28,11 @@ import { loadMusicOn, saveMusicOn } from './music';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
 import { carried, loadRun, nextIndex, reached, saveRun, solvedLevel, startRun, won, type Run } from './run';
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
-import { tinkerLevel } from './tinker';
+import { fallbackLevel, tinkerLevel } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
 import { fetchGlobal, submitGlobal } from './global';
-import { BOARDS, RUN_STEP, addEntry, backInitial, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
-import { CAMPAIGN, DIFFICULTIES, DIFFICULTY_LEVEL, freshSeed, kindOfDifficulty, puzzleFor, randomLevel, type Difficulty } from './random';
+import { BOARDS, RUN_STEP, boardOf, addEntry, backInitial, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
+import { CAMPAIGN, DIFFICULTIES, freshSeed, puzzleFor, randomLevel, type Difficulty } from './random';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
 import { goalOf, goalText } from './goal';
@@ -81,11 +82,14 @@ const classic = (() => {
   }
 })();
 const seedOfLevel = new WeakMap<Level, number>();
+/** The run in progress (or saved), from New Game; the stage it plays is the one the campaign levels are made for. */
+let run: Run | null = sharedSeed === null ? loadRun(storage) : null;
+let stage: StageId = run?.stage ?? 'easy';
 function campaignLevel(i: number): Level {
   const hand = classic ? LEVELS[i] : undefined;
   if (hand) return hand;
-  const seed = freshSeed(i + 1);
-  const level = { ...randomLevel(i + 1, seed), id: `l${i + 1}`, name: `Level ${i + 1}` };
+  const seed = freshSeed(kindOf(stage, i + 1));
+  const level = { ...randomLevel(dOf(stage, i + 1), seed), id: `l${i + 1}`, name: `Level ${i + 1}` };
   seedOfLevel.set(level, seed);
   return level;
 }
@@ -93,18 +97,19 @@ function campaignLevel(i: number): Level {
 let special: 'random' | 'shared' = sharedSeed === null ? 'random' : 'shared';
 let randomDiff: Difficulty = 'easy';
 const randomPuzzle = (): Level => {
-  const seed = freshSeed(kindOfDifficulty(randomDiff));
-  const level = randomLevel(DIFFICULTY_LEVEL[randomDiff], seed);
+  const pick = RANDOM_PICK[randomDiff];
+  const seed = freshSeed(kindOf(pick.stage, pick.level));
+  const level = randomLevel(dOf(pick.stage, pick.level), seed);
   seedOfLevel.set(level, seed);
   return level;
 };
-// The 20 campaign levels, then the extra slot.
-let levels: readonly Level[] = [...Array.from({ length: CAMPAIGN }, (_, i) => campaignLevel(i)), sharedSeed === null ? randomPuzzle() : puzzleFor(sharedSeed, tinkerLevel)];
+// The 20 campaign levels, then the extra slot. Every level is made fresh when it is played, so only the one Continue shows is made now; the rest wait as a cheap stand-in.
+const firstSlot = run ? nextIndex(run) : 0;
+let levels: readonly Level[] = [...Array.from({ length: CAMPAIGN }, (_, i) => (i === firstSlot || classic ? campaignLevel(i) : fallbackLevel(`l${i + 1}`))), sharedSeed === null ? randomPuzzle() : puzzleFor(sharedSeed, tinkerLevel)];
 let levelIds = levels.map((l) => l.id);
 /** The slot after the campaign: always the last one. */
 const randomSlot = () => levels.length - 1;
-/** The campaign run in progress (or saved), from New Game. Only a completed run is scored, with a name entered once, when it ends. Random levels are practice: no run. */
-let run: Run | null = sharedSeed === null ? loadRun(storage) : null;
+// Only a completed run is scored, with a name entered once, when it ends. Random levels are practice: no run.
 // High score boards (src/scores.ts): a top ten per campaign level and one per Random level difficulty, kept on this device.
 let scores: Scores = loadScores(storage);
 /**
@@ -115,6 +120,7 @@ let scores: Scores = loadScores(storage);
 type Overlay =
   | { kind: 'board'; board: string; tab: 'local' | 'global' }
   | { kind: 'options'; confirm: boolean }
+  | { kind: 'stages' }
   | { kind: 'picker' }
   | { kind: 'result'; level: number; ms: number }
   | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; letters: string; cursor: number };
@@ -142,15 +148,25 @@ let outcome: Outcome | null = null;
 const continueAt = () => (run ? nextIndex(run) : 0);
 const resume = () => run !== null;
 
+/** The time limit of a level: a stage's table for its 20 levels, the measured difficulty for anything else (Random, a shared puzzle, the hand-made specs' levels). */
+const parHere = (i: number, l: Level): number => (i < CAMPAIGN && !classic ? parOf(stage, i + 1) : parFor(l));
 let levelIndex = sharedSeed === null ? continueAt() : randomSlot();
 let level: Level = levels[levelIndex]!;
-par = parFor(level);
+par = parHere(levelIndex, level);
 tuneForSoftwareGl(world.renderer);
 const built = buildScene(level, world.scene, world.renderer);
 // The bench and a rendered panorama behind the tray on desktop and phone; in immersive-ar only a few props on the real table (src/scenery.ts).
 const scenery = createScenery(world.scene);
-/** The rendered panorama behind the tray; the first look is the attic (c2) everywhere. */
-void loadBackdrop('c2', isPhone(window.innerWidth, window.innerHeight)).then((t) => scenery.setBackdrop('c2', t));
+/**
+ * The rendered panorama behind the tray: the attic (c2) on every menu, the stage's own while a level is on. One at a time: a
+ * new one replaces the old (freeing its texture) once it has loaded, and a switch made while one is loading wins.
+ */
+let backdropWanted: BackdropId | null = null;
+function useBackdrop(id: BackdropId): void {
+  if (id === backdropWanted) return;
+  backdropWanted = id;
+  void loadBackdrop(id, isPhone(window.innerWidth, window.innerHeight)).then((t) => (backdropWanted === id ? scenery.setBackdrop(id, t) : t.dispose()));
+}
 world.renderer.xr.addEventListener('sessionstart', () => scenery.set(true));
 world.renderer.xr.addEventListener('sessionend', () => scenery.set(false));
 
@@ -432,7 +448,7 @@ const codeOf = (l: Level): string | null => {
 function loadLevel(i: number): void {
   levelIndex = i;
   level = levels[i]!;
-  par = parFor(level);
+  par = parHere(levelIndex, level);
   outcome = null;
   dropGearEntities();
   built.load(level);
@@ -497,11 +513,19 @@ function playRandom(d: Difficulty): void {
   send({ type: 'play', level: randomSlot() });
 }
 
+/** A fresh run of a stage from its level 1. */
+function newRun(id: StageId): void {
+  stage = id;
+  run = startRun(id);
+  saveRun(storage, run);
+  send({ type: 'play', level: 0 });
+}
+
 /** The name entry for a completed run, over the title: the total time large, then three letters. */
-function askInitials(ms: number): void {
+function askInitials(ms: number, board: string): void {
   const entry = { ms, date: todayISO() };
-  const q = qualifies(scores, 'campaign', { ...entry, name: scores.initials });
-  if (q.ok) overlay = { kind: 'initials', board: 'campaign', rank: q.rank, entry, letters: scores.initials, cursor: 0 };
+  const q = qualifies(scores, board, { ...entry, name: scores.initials });
+  if (q.ok) overlay = { kind: 'initials', board, rank: q.rank, entry, letters: scores.initials, cursor: 0 };
 }
 
 /**
@@ -513,7 +537,7 @@ function endRun(why: 'timeout' | 'giveup' | 'won'): void {
   run = null;
   saveRun(storage, run);
   send({ type: 'back', level: 0 });
-  if (r && why === 'won') askInitials(r.ms);
+  if (r && why === 'won') askInitials(r.ms, boardOf(r.stage));
   else if (r) {
     const end = reached(r, levelClock.seconds);
     overlay = { kind: 'result', level: end.level, ms: end.ms };
@@ -522,9 +546,10 @@ function endRun(why: 'timeout' | 'giveup' | 'won'): void {
   fitView(true);
 }
 
-/** The best times card: the campaign board, completed runs only. */
+/** The best times card: one stage's board, completed runs only. */
 function boardCard(id: string, tab: 'local' | 'global'): NonNullable<PanelCtx['board']> {
-  const local = { label: 'Campaign', tab, entries: scores.boards[id]!, empty: 'No finished runs yet.' };
+  const st = id.replace(/^campaign-/, '');
+  const local = { label: stageOf(st as StageId).name, stage: st, tab, entries: scores.boards[id]!, empty: 'No finished runs yet.' };
   if (tab === 'local') return local;
   // Global: the last good rows; with none, "Loading" while asking and the local rows with a quiet note once it failed.
   const rows = globalRows.get(id);
@@ -567,22 +592,23 @@ function pressOverlay(id: string): void {
       resetProgress();
       overlay = null;
     } else return;
+  } else if (o.kind === 'stages') {
+    overlay = null;
+    const pick = STAGES.find((st) => `stage-${st.id}` === id);
+    if (pick) return newRun(pick.id);
   } else if (o.kind === 'picker') {
     overlay = null;
     if (id !== 'back' && (DIFFICULTIES as readonly string[]).includes(id)) return playRandom(id as Difficulty);
   } else if (o.kind === 'board') {
     if (id === 'back') overlay = null;
     else if (id === 'tab-local' || id === 'tab-global') overlay = { ...o, tab: id === 'tab-global' ? 'global' : 'local' };
+    else if (STAGES.some((st) => `tab-${st.id}` === id)) overlay = { ...o, board: boardOf(id.slice(4)) };
     else return;
     const now = overlay as Overlay | null;
     if (now?.kind === 'board' && now.tab === 'global') loadGlobal(now.board);
   } else if (o.kind === 'result') {
     overlay = null;
-    if (id === 'start') {
-      run = startRun();
-      saveRun(storage, run);
-      return send({ type: 'play', level: 0 });
-    }
+    if (id === 'start') overlay = { kind: 'stages' }; // New Game: which stage?
   } else {
     const slot = /^slot-([0-2])$/.exec(id);
     if (slot) return void (overlay = { ...o, cursor: Number(slot[1]) }, showPanel());
@@ -637,8 +663,14 @@ function send(e: FlowEvent): void {
     }
     burst.position.set(...trayLocal(DIAL_AT[0], DIAL_AT[1], 0.008));
   }
+  syncBackdrop();
   showPanel();
   fitView(true); // a new level or card may want the camera nearer or further
+}
+/** The title and its cards show the attic; a level on the board shows its stage's panorama (a Random level, its pick's stage). */
+function syncBackdrop(): void {
+  const on = flow.name === 'title' ? null : levelIndex < CAMPAIGN ? stage : isRandomLevel(levelIndex) ? RANDOM_PICK[randomDiff].stage : null;
+  useBackdrop(on ? stageOf(on).backdrop : MENU_BACKDROP);
 }
 
 const PRESS: Record<string, FlowEvent> = {
@@ -661,7 +693,7 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   if (overlay) return pressOverlay(id);
   if ((id === 'scores' || id === 'options') && flow.name === 'title') {
     globalAsk.clear();
-    overlay = id === 'scores' ? { kind: 'board', board: BOARDS[0]!, tab: 'local' } : { kind: 'options', confirm: false };
+    overlay = id === 'scores' ? { kind: 'board', board: boardOf(stage), tab: 'local' } : { kind: 'options', confirm: false };
     showPanel();
     return fitView(true);
   }
@@ -671,10 +703,10 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
     return fitView(true);
   }
   if (flow.name === 'title' && id === 'start') {
-    // New Game: a fresh campaign run from level 1.
-    run = startRun();
-    saveRun(storage, run);
-    return send({ type: 'play', level: 0 });
+    // New Game: which stage, then a fresh run from its level 1.
+    overlay = { kind: 'stages' };
+    showPanel();
+    return fitView(true);
   }
   if (id === 'giveup') return isRandomLevel(levelIndex) ? send({ type: 'back', level: continueAt() }) : endRun('giveup');
   if (id === 'menu') {
@@ -1266,6 +1298,7 @@ function showPanel(now = performance.now()): void {
     initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms } : undefined,
     result: overlay?.kind === 'result' ? { level: overlay.level, ms: overlay.ms } : undefined,
     board: overlay?.kind === 'board' ? boardCard(overlay.board, overlay.tab) : undefined,
+    stage: levelIndex < CAMPAIGN ? stageOf(stage).name : undefined,
     level: levelIndex,
     levels: levels.length,
     shared: special === 'shared',
@@ -1290,6 +1323,7 @@ function showPanel(now = performance.now()): void {
   if (menuUp() || placedFor) placePanels();
 }
 
+syncBackdrop();
 // The world is built and the first card is up: the loading card in index.html fades out of the way.
 document.getElementById('loading')?.classList.add('done');
 
@@ -1460,6 +1494,12 @@ window.__chrono = Object.freeze({
   },
   get seedNote() {
     return seedNote && !seedNote.hidden ? seedNote.textContent : null;
+  },
+  get stage() {
+    return stage;
+  },
+  get hudLabel() {
+    return levelIndex < CAMPAIGN ? `${stageOf(stage).name} · Level ${levelIndex + 1}` : `Level ${levelIndex + 1}`;
   },
   /** Test hook: the run in progress (or saved), null when none. */
   get run() {

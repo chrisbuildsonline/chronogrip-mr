@@ -23,7 +23,7 @@ test('demo story (headset): seated, pinch the escapement gear in passthrough, tw
     await shot(page, '1-title');
   });
 
-  await test.step('When the player pokes New Game, which plays level 1', async () => {
+  await test.step('When the player pokes New Game and Easy, which plays level 1', async () => {
     await begin(page, (id) => poke(page, id));
     await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
   });

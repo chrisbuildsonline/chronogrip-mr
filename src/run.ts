@@ -1,17 +1,18 @@
 import { CAMPAIGN } from './random';
+import { STAGE_IDS, type StageId } from './stages';
 
 /**
- * A run is one go at the campaign, from New Game to level 20. Only a completed run is scored (its total time, with a name
+ * A run is one go at a stage, from New Game to its level 20. Only a completed run is scored (its total time, with a name
  * entered once); Give up and running out of time end the run with a short result card and score nothing. Pure state; main.ts
  * owns the clock and the storage. `cleared` is the levels solved so far; `ms` is their time plus any time carried over from a
  * puzzle that was restarted or left on the Main menu.
  */
-export type Run = { cleared: number; ms: number };
+export type Run = { stage: StageId; cleared: number; ms: number };
 
-export const startRun = (): Run => ({ cleared: 0, ms: 0 });
+export const startRun = (stage: StageId): Run => ({ stage, cleared: 0, ms: 0 });
 
 /** A level was solved in `seconds`. */
-export const solvedLevel = (r: Run, seconds: number): Run => ({ cleared: r.cleared + 1, ms: r.ms + Math.round(Math.max(0, seconds) * 1000) });
+export const solvedLevel = (r: Run, seconds: number): Run => ({ ...r, cleared: r.cleared + 1, ms: r.ms + Math.round(Math.max(0, seconds) * 1000) });
 
 /** The time spent on a puzzle that did not finish (restarted, or left on the Main menu) still counts towards the run. */
 export const carried = (r: Run, seconds: number): Run => ({ ...r, ms: r.ms + Math.round(Math.max(0, seconds) * 1000) });
@@ -33,10 +34,11 @@ export function loadRun(storage: Pick<Storage, 'getItem'> | null | undefined): R
     const raw = storage?.getItem(KEY);
     const o: unknown = raw ? JSON.parse(raw) : null;
     if (typeof o !== 'object' || o === null || Array.isArray(o)) return null;
-    const { cleared, ms } = o as Record<string, unknown>;
+    const { stage, cleared, ms } = o as Record<string, unknown>;
+    if (typeof stage !== 'string' || !(STAGE_IDS as readonly string[]).includes(stage)) return null; // a run saved before the stages is dropped
     if (typeof cleared !== 'number' || !Number.isInteger(cleared) || cleared < 0 || cleared >= CAMPAIGN) return null;
     if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) return null;
-    return { cleared, ms };
+    return { stage: stage as StageId, cleared, ms };
   } catch {
     return null;
   }

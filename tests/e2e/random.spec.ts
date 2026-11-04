@@ -1,6 +1,7 @@
 import { expect, test, type Page } from './fixtures';
 import { decodeSeed } from '../../src/seed';
-import { DIFFICULTY_LEVEL, difficultyOf, puzzleFor } from '../../src/random';
+import { difficultyOf, puzzleFor } from '../../src/random';
+import { RANDOM_PICK, targetScore } from '../../src/stages';
 import { tinkerLevel } from '../../src/tinker';
 import { calibrateByMouse } from './calibrate';
 
@@ -70,10 +71,9 @@ test('desktop: Random level opens a picker (Easy, Medium, Hard, Expert), Hard pl
   expect(await words(page)).toContain('RANDOM · HARD');
   const first = await layoutOf(page);
   const code = (await page.evaluate(() => window.__chrono!.seedCode))!;
-  // The puzzle is as hard as Hard says: its measured difficulty is nearer level 15's than level 3's.
+  // The puzzle is as hard as Hard says: its measured difficulty is near that stage level's target.
   const level = puzzleFor(decodeSeed(code)!, tinkerLevel);
-  expect(Math.abs(difficultyOf(level) - 22.5), 'near the Hard target').toBeLessThan(6);
-  expect(DIFFICULTY_LEVEL.hard).toBe(15);
+  expect(Math.abs(difficultyOf(level) - targetScore(RANDOM_PICK.hard.stage, RANDOM_PICK.hard.level)), 'near the Hard target').toBeLessThan(6);
   await page.screenshot({ path: `${OUT}/hard-play.png` });
 
   await solve(page);

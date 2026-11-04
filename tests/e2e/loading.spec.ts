@@ -36,7 +36,11 @@ test('a loading card shows from first paint until the world is up, then fades ou
   await page.screenshot({ path: `${OUT}/0-title-after-load.png` });
   const [x, y] = await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'start')!.screen);
   await page.mouse.click(x, y);
-  await expect.poll(() => flowOf(page)).toBe('playing'); // New Game plays level 1 at once
+  // New Game opens the stage picker; Easy plays its level 1.
+  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'stage-easy'));
+  const [sx, sy] = await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'stage-easy')!.screen);
+  await page.mouse.click(sx, sy);
+  await expect.poll(() => flowOf(page)).toBe('playing');
 });
 
 test('a file that never arrives shows a readable error on the card, not an endless spinner', async ({ page }) => {

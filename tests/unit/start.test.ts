@@ -138,13 +138,13 @@ describe('options panel layout', () => {
 });
 
 describe('high scores board', () => {
-  it('stacks, top to bottom: the Local / Global control, the ten rows, Back; centred, with no level switcher', () => {
+  it('stacks, top to bottom: the stage tabs, the Local / Global control, the ten rows, Back; centred, with no level switcher', () => {
     for (const narrow of [false, true]) {
       const g = boardGrid(narrow);
       const l = layout('board', { level: 0, levels: 21, random: true, narrow });
       const by = (id: string) => l.buttons.find((b) => b.id === id)!;
       const [back, a, b] = [by('back'), by('tab-local'), by('tab-global')];
-      expect(l.buttons.map((x) => x.id)).toEqual(['back', 'tab-local', 'tab-global']);
+      expect(l.buttons.map((x) => x.id)).toEqual(['back', 'tab-local', 'tab-global', 'tab-easy', 'tab-medium', 'tab-hard']);
       expect(l.width).toBe(NARROW_W);
       expect(g).toMatchObject({ cols: 1, rows: 10 });
       expect(back.x).toBe(0);
@@ -161,10 +161,11 @@ describe('high scores board', () => {
   it('has pill segments 44 px or more tall at the phone sheet scale, inside their track', () => {
     const l = layout('board', { level: 0, levels: 21, random: true, narrow: true });
     for (const s of l.buttons.filter((x) => x.kind === 'tab')) {
+      const track = s.id === 'tab-local' || s.id === 'tab-global' ? l.track! : l.track2!;
       expect(s.w, 'a pill, not a circle').toBeGreaterThan(s.h);
       expect(s.h * phonePx(375)).toBeGreaterThanOrEqual(44);
-      expect(s.x - s.w / 2).toBeGreaterThanOrEqual(l.track!.x - l.track!.w / 2 - 1e-9);
-      expect(s.x + s.w / 2).toBeLessThanOrEqual(l.track!.x + l.track!.w / 2 + 1e-9);
+      expect(s.x - s.w / 2).toBeGreaterThanOrEqual(track.x - track.w / 2 - 1e-9);
+      expect(s.x + s.w / 2).toBeLessThanOrEqual(track.x + track.w / 2 + 1e-9);
     }
   });
 });

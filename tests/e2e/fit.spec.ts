@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { newGame } from './start';
 
 import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
@@ -105,7 +106,7 @@ for (const [w, h] of [[375, 812], [768, 1024], [1440, 900]] as const) {
     expect(dist(await page.evaluate(() => window.__chrono!.cameraAt))).toBeCloseTo(dist(eye), 4);
     await click(page, 'back');
     await page.waitForFunction(() => window.__chrono!.card?.screen === 'title');
-    await click(page, 'start');
+    await newGame(page, (id) => click(page, id));
     await page.waitForFunction(() => window.__chrono!.flow === 'playing');
     await fits(page, w, h, 'hud');
     const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;

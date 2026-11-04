@@ -34,6 +34,8 @@ export type PanelCtx = {
   /** The last slot is a Random level; `difficulty` is its name (Easy..Expert). */
   random?: boolean;
   difficulty?: string;
+  /** The stage being played (Easy..Hard), for the HUD and the pause card; absent on a Random or shared puzzle. */
+  stage?: string;
   resume: boolean;
   time: number;
   hover: string | null;
@@ -60,7 +62,7 @@ export type PanelCtx = {
   result?: { level: number; ms: number };
   /** The best times card: the board's name, its rows, and the muted line shown while it is empty. */
   /** `tab` is the board shown; `note` is a quiet line over the rows (the global board is offline). */
-  board?: { label: string; entries: readonly Entry[]; empty: string; tab: 'local' | 'global'; note?: string };
+  board?: { label: string; stage: string; entries: readonly Entry[]; empty: string; tab: 'local' | 'global'; note?: string };
 };
 
 /** The HUD's countdown ring: its centre from the card's left edge, and its radius with the stroke, metres. */
@@ -309,7 +311,7 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
   if (menu) return menuButton(g, b, x, y, w, h, hover, ctx);
   if (b.kind === 'tab') {
     // The selected tab is the amber tint pill (as the status pills); the other is muted words with no fill.
-    const picked = ctx.board?.tab === (b.id === 'tab-global' ? 'global' : 'local');
+    const picked = b.id === 'tab-local' || b.id === 'tab-global' ? ctx.board?.tab === (b.id === 'tab-global' ? 'global' : 'local') : b.id === `tab-${ctx.board?.stage}`;
     pill(g, x, y, w, h);
     if (picked) {
       g.fillStyle = C.tint;
@@ -365,7 +367,7 @@ function selectedRow(g: Draw, x: number, y: number, w: number, h: number) {
 function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: number, hover: boolean, ctx: PanelCtx) {
   const left = x - w / 2;
   if (b.kind === 'tab') {
-    const picked = ctx.board?.tab === (b.id === 'tab-global' ? 'global' : 'local');
+    const picked = b.id === 'tab-local' || b.id === 'tab-global' ? ctx.board?.tab === (b.id === 'tab-global' ? 'global' : 'local') : b.id === `tab-${ctx.board?.stage}`;
     text(g, b.label.toUpperCase(), x, y + 1, jfont(picked ? 600 : 400, T.button * 0.9), picked ? C.amber : C.menuInk, 'center', 3);
     if (picked) {
       g.fillStyle = C.amber;
@@ -394,7 +396,8 @@ function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: numb
   if (lit) selectedRow(g, x, y, w, h);
   const word = b.label.toUpperCase();
   const color = lit ? C.menuHi : C.menuInk;
-  text(g, word, left + mm(11), y + 1, jfont(400, T.button * 1.1), color, 'left', 4.2);
+  text(g, word, left + mm(11), b.hint ? y - mm(4.5) : y + 1, jfont(400, T.button * 1.1), color, 'left', 4.2);
+  if (b.hint) text(g, b.hint, left + mm(11), y + mm(7), jfont(400, T.body * 0.85), lit ? C.menuInk : C.menuMuted, 'left', 1);
   if (b.kind === 'toggle') {
     const on = !!(b.id === 'sound' ? ctx.sound : b.id === 'music' ? ctx.music : ctx.relaxed);
     text(g, on ? 'ON' : 'OFF', left + w - mm(8), y + 1, jfont(600, T.button * 0.8), on ? C.amber : C.menuMuted, 'right', 3);
@@ -427,12 +430,16 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
         text(g, line, left, y(l.height - 0.092), jfont(400, T.body * 0.85 * Math.min(1, (W - mm(2 * 24)) / g.measureText(line).width)), C.menuMuted, 'left', 0);
       }
       break;
+    case 'stages':
+      head('NEW GAME', 'CHOOSE A STAGE');
+      text(g, '20 levels each, made fresh every time.', left, y(l.height - 0.092), jfont(400, T.body * 0.85), C.menuMuted, 'left', 1);
+      break;
     case 'picker':
       head('PRACTICE', 'RANDOM LEVEL');
       text(g, 'A new puzzle each time. How hard?', left, y(l.height - 0.092), jfont(400, T.body * 0.85), C.menuMuted, 'left', 1);
       break;
     case 'paused':
-      head('PAUSED', ctx.level >= ctx.levels - 1 ? (ctx.random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : 'SHARED PUZZLE') : `LEVEL ${ctx.level + 1}`);
+      head('PAUSED', ctx.level >= ctx.levels - 1 ? (ctx.random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : 'SHARED PUZZLE') : `${ctx.stage ? `${ctx.stage.toUpperCase()} · ` : ''}LEVEL ${ctx.level + 1}`);
       text(g, clock(ctx.time), left, y(l.height - 0.092), jfont(400, T.body * 0.9), C.menuMuted, 'left', 2);
       break;
     case 'result': {
@@ -451,7 +458,7 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
     case 'board': {
       const b = ctx.board!;
       const grid = boardGrid(!!ctx.narrow);
-      head('CAMPAIGN · FASTEST RUNS', 'HIGH SCORES', 30, grid.headY + 0.02);
+      head(`${b.label.toUpperCase()} · FASTEST RUNS`, 'HIGH SCORES', 30, grid.headY + 0.02);
       const lowered = !!b.note;
       if (b.note) {
         const [nx, ny] = at(-l.width / 2 + 0.024, grid.y0);
@@ -483,6 +490,12 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
   }
 }
 
+
+/** The bed under a menu's tab segments: a faint cream wash on the dark layer (the cream card colour made the grey tab words unreadable). */
+function bed(g: Draw) {
+  g.fillStyle = 'rgba(241,232,216,0.09)';
+  g.fill();
+}
 
 function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   T = ctx.narrow ? NARROW : WIDE;
@@ -518,13 +531,13 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       // A shared puzzle reads "SHARED" over "Puzzle", and the time moves over to make room.
       // Random has no column split: one eyebrow line, "RANDOM · HARD", with the time under it at the left, so the difficulty is
       // never squeezed beside the time.
-      const timeX = random ? 0.016 : shared ? 0.08 : 0.066; // "SHARED" is wider than "LEVEL"
+      const timeX = random ? 0.016 : shared ? 0.08 : ctx.stage ? 0.092 : 0.066; // "SHARED" and "MEDIUM · LEVEL" are wider than "LEVEL"
       // The heading shrinks to stop short of the time ("Step 12" is the widest).
       const headSize = (words: string) => {
         g.font = font(600, T.heading, SERIF);
         return T.heading * Math.min(1, mm((timeX - 0.016 - 0.008) * 1000) / g.measureText(words).width);
       };
-      text(g, random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : shared ? 'SHARED' : 'LEVEL', left(0.016), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
+      text(g, random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : shared ? 'SHARED' : ctx.stage ? `${ctx.stage.toUpperCase()} · LEVEL` : 'LEVEL', left(0.016), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
       if (!random) {
         if (shared) text(g, 'Puzzle', left(0.016), y(0.022), font(600, headSize('Puzzle'), SERIF), C.ink, 'left');
         else text(g, level, left(0.016), y(0.022), font(700, T.xl), C.ink, 'left');
@@ -559,8 +572,12 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   if (l.track) {
     const [kx, ky] = at(l.track.x, l.track.y);
     pill(g, kx, ky, l.track.w * PX, l.track.h * PX);
-    g.fillStyle = C.deep;
-    g.fill();
+    bed(g);
+  }
+  if (l.track2) {
+    const [kx, ky] = at(l.track2.x, l.track2.y);
+    pill(g, kx, ky, l.track2.w * PX, l.track2.h * PX);
+    bed(g);
   }
   for (const b of l.buttons) button(g, b, at, ctx, menu);
   T = WIDE;

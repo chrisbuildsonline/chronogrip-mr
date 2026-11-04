@@ -1,4 +1,5 @@
 import { expect, test, type Page } from './fixtures';
+import { newGame } from './start';
 import { calibrateByMouse } from './calibrate';
 
 /** The campaign as shipped: every level generated fresh each time it is played. */
@@ -53,7 +54,7 @@ async function solve(page: Page) {
 test('desktop: New Game is level 1; a solve goes to level 2, a different puzzle; there is no level list or Choose level anywhere', async ({ page }) => {
   const errors = await open(page);
   expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['New Game', 'Random level', 'Options', 'High scores']);
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 0);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1');
   const l1 = await layoutOf(page);
@@ -78,7 +79,7 @@ test('desktop: New Game is level 1; a solve goes to level 2, a different puzzle;
 
 test('desktop: Restart from the pause card is a new puzzle at the same level', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   const first = await layoutOf(page);
   await click(page, 'pause');
@@ -91,7 +92,7 @@ test('desktop: Restart from the pause card is a new puzzle at the same level', a
 
 test('desktop: a puzzle code reopens the exact puzzle', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   const code = (await page.evaluate(() => window.__chrono!.seedCode))!;
   expect(code).toMatch(/^[0-9A-Z]{4,7}$/);
@@ -105,7 +106,7 @@ test('desktop: a puzzle code reopens the exact puzzle', async ({ page }) => {
 
 test('desktop: level 20 is generated and solvable by the hooks, and a bigger puzzle than level 1', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'start');
+  await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   const gears1 = await page.evaluate(() => window.__chrono!.gearCount);
   await page.evaluate(() => window.__chrono!.jump(20));

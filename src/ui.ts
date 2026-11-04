@@ -1,25 +1,26 @@
 import type { Level } from './levels';
+import { STAGES } from './stages';
 import { COMFORT, TRAY_POSE, inZone, layerLift, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
 
 /** Layouts and placement of the in-world panels (see design/DESIGN.md). Panel space: metres, origin at the bottom centre, +Y up, +Z towards the player. */
-export type Screen = 'title' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options' | 'result';
+export type Screen = 'title' | 'stages' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options' | 'result';
 export const SCREENS: readonly Screen[] = ['title', 'hud', 'complete', 'paused'];
 /** Cards laid over the title or the complete card: the initials entry, the high scores board, the options and the difficulty picker. */
 /** How opaque the black layer behind the menus is. */
 export const SCRIM_OPACITY = 0.9;
 /** The menus: the game behind them is dimmed to 90% black (a full-view layer on a flat screen, a backing panel in AR). */
-export const MENU_SCREENS: readonly Screen[] = ['title', 'picker', 'board', 'options', 'paused', 'result', 'initials'];
+export const MENU_SCREENS: readonly Screen[] = ['title', 'stages', 'picker', 'board', 'options', 'paused', 'result', 'initials'];
 /** The cards the board is played with: the camera fits for these, the menus are centred over a black layer. */
 export const PLAY_SCREENS: readonly Screen[] = SCREENS.filter((s) => !MENU_SCREENS.includes(s));
-export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options', 'picker', 'result'];
+export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options', 'stages', 'picker', 'result'];
 
 export type ButtonKind = 'primary' | 'secondary' | 'icon' | 'toggle' | 'arrow' | 'tab' | 'slot';
 /** A button rectangle in panel space; x, y is its centre. */
-export type Button = { id: string; label: string; kind: ButtonKind; x: number; y: number; w: number; h: number };
+export type Button = { id: string; label: string; kind: ButtonKind; x: number; y: number; w: number; h: number; /** A small line after a menu row's label. */ hint?: string };
 /** A display slot (not a target) in panel space; x, y is its centre. */
 export type Slot = { x: number; y: number; w: number; h: number };
-/** `track`: the rounded bed the two high scores tab segments sit in. */
-export type Layout = { width: number; height: number; buttons: Button[]; slots?: Slot[]; track?: Slot };
+/** `track`: the rounded bed the Local / Global tab segments sit in; `track2`: the one under the stage tabs. */
+export type Layout = { width: number; height: number; buttons: Button[]; slots?: Slot[]; track?: Slot; track2?: Slot };
 
 /** Smallest side of any button: a fingertip target. */
 export const BUTTON_MIN_M = 0.04;
@@ -32,6 +33,7 @@ const PAD = 0.016;
 const GAP = 0.012;
 const BH = 0.046;
 const WIDE_TAB = 0.068;
+const STAGE_TAB = 0.076;
 /** A high scores tab. */
 const tabBtn = (id: string, label: string, x: number, y: number, w = WIDE_TAB, h = BH - 0.006): Button => ({ id, label, kind: 'tab', x, y, w, h });
 
@@ -96,6 +98,12 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
         ? [['reset-yes', 'Reset now', 'primary'], ['reset-cancel', 'Keep it', 'secondary'], ['back', 'Back', 'secondary']]
         : [['relaxed', 'No timer', 'toggle'], ['sound', 'Sound', 'toggle'], ['music', 'Music', 'toggle'], ['reset', 'Reset progress', 'secondary'], ['back', 'Back', 'secondary']];
       return { width: NARROW_W, height: startHeight(items.length), buttons: stack(PAD, items, ROW_W, ROW_H) };
+    }
+    case 'stages': {
+      // New Game: which stage. Each row carries its one-line hint; all three are open.
+      const rows = stack(PAD + ROW_H + MENU_GAP, STAGES.map((st, i) => [`stage-${st.id}`, st.name, i === 0 ? 'primary' : 'secondary'] as const), ROW_W, ROW_H).map((b, i) => ({ ...b, hint: STAGES[i]!.hint }));
+      const items = stack(PAD, [['back', 'Back', 'secondary']], ROW_W, ROW_H);
+      return { width: NARROW_W, height: startHeight(STAGES.length + 1), buttons: [...rows, ...items] };
     }
     case 'picker': {
       // Random level (practice): how hard. Easy, Medium, Hard, Expert, then Back.
@@ -163,8 +171,10 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
           ...stack(PAD, [['back', 'Back', 'secondary']], ROW_W, ROW_H),
           tabBtn('tab-local', 'Local', -WIDE_TAB / 2, g.tabsY, WIDE_TAB, g.tabH),
           tabBtn('tab-global', 'Global', WIDE_TAB / 2, g.tabsY, WIDE_TAB, g.tabH),
+          ...STAGES.map((st, i) => tabBtn(`tab-${st.id}`, st.name, (i - 1) * STAGE_TAB, g.stageY, STAGE_TAB, g.tabH)),
         ],
         track: { x: 0, y: g.tabsY, w: trackW, h: g.tabH + 0.006 },
+        track2: { x: 0, y: g.stageY, w: STAGES.length * STAGE_TAB + 0.006, h: g.tabH + 0.006 },
       };
     }
   }
@@ -182,8 +192,9 @@ export function boardGrid(narrow: boolean) {
   const rowsFoot = PAD + ROW_H + 0.012;
   const y0 = rowsFoot + pitch / 2 + (rows - 1) * pitch;
   const tabsY = rowsFoot + rows * pitch + GAP + 0.003 + tabH / 2;
-  const headY = tabsY + tabH / 2 + 0.04;
-  return { width: NARROW_W, cols, rows, gap: 0, pitch, y0, headY, tabsY, tabH, height: headY + 0.06, colW: NARROW_W - 2 * PAD };
+  const stageY = tabsY + tabH + 0.01;
+  const headY = stageY + tabH / 2 + 0.04;
+  return { width: NARROW_W, cols, rows, gap: 0, pitch, y0, headY, tabsY, stageY, tabH, height: headY + 0.06, colW: NARROW_W - 2 * PAD };
 }
 
 /** The button under a panel-space point that is within touch depth of the face, else null. */
