@@ -1,29 +1,23 @@
 import type { Level } from './levels';
+import { difficultyOf } from './random';
 
 /** Whether a solve beat the level's par time. */
 export type Outcome = 'pass' | 'over';
 
 /** Par never drops below this, so the first levels are generous to learn the controls on. */
 const PAR_FLOOR = 120;
-/** Seconds added per gear to place, per compound pair (two gears sharing an axle) and per decoy left in the tray. */
-const PER_PLACED = 25;
-const PER_COMPOUND = 20;
-const PER_DECOY = 10;
+/** Seconds added per point of measured difficulty (src/random.ts difficultyOf), on top of PAR_BASE. */
+const PER_POINT = 9;
 const PAR_BASE = 60;
 
 /**
- * The par time in seconds, a multiple of five: 60 s plus 25 s per gear to place, 20 s per compound pair and 10 s per decoy,
- * never under 120 s. Level 1 (one gear, no decoys) gets the floor; it only reads the level, so the daily and a shared
- * ?seed= puzzle get the par of their own difficulty.
+ * The par time in seconds, a multiple of five: 60 s plus 9 s per point of measured difficulty (the ways to place the parts,
+ * near-miss decoys, compound pairs, a turn against the driver, a tight target), never under 120 s. Level 1 gets the floor;
+ * it only reads the level, so a generated level, a shared ?seed= puzzle and a Random level get the par of their own difficulty,
+ * and par climbs with the level number as the measured difficulty does.
  */
 export function parFor(level: Level): number {
-  const onAxle = new Map<string, number>();
-  for (const axle of Object.values(level.solution)) onAxle.set(axle, (onAxle.get(axle) ?? 0) + 1);
-  const placed = Object.keys(level.solution).length;
-  const compound = [...onAxle.values()].filter((n) => n > 1).length;
-  const decoys = level.tray.filter((g) => !(g.id in level.solution)).length;
-  const raw = PAR_BASE + PER_PLACED * placed + PER_COMPOUND * compound + PER_DECOY * decoys;
-  return Math.ceil(Math.max(PAR_FLOOR, raw) / 5) * 5;
+  return Math.ceil(Math.max(PAR_FLOOR, PAR_BASE + PER_POINT * difficultyOf(level)) / 5) * 5;
 }
 
 /** A solve at exactly par passes. */
