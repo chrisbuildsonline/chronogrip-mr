@@ -71,7 +71,7 @@ test('README screenshots: title, a gear in hand mid-puzzle, level complete', asy
   await shotWhen(page, 'title', `(now / 1000 / ${GHOST_PERIOD_S}) % 1 > 0.36 && (now / 1000 / ${GHOST_PERIOD_S}) % 1 < 0.44`);
 
   // Mid-puzzle on level 2: one gear placed, the next carried by the mouse towards its axle, the axles it fits pulsing amber.
-  await click(page, 'levels');
+  await click(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await click(page, 'level-2');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1);

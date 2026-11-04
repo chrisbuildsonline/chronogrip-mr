@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { LEVELS } from '../../src/levels';
 import { CLEAR, axleAt, carry, device, enterWithHands, gearAt, movePinchTo, nudge, pinch, pinchAt, poke, type Device } from './hands';
+import { begin } from './start';
 
 const [gearId, axleId] = Object.entries(LEVELS[0]!.solution)[0]!;
 
@@ -43,11 +44,19 @@ const setVisibility = (page: Page, s: string) => page.evaluate(([d, v]) => (wind
 
 test('dev server (iwsdk): a pinch on a panel button presses it, a pinch on the knob turns it, neither picks up a gear', async ({ page }) => {
   const errors = await enter(page, '');
-  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'start'), undefined, { timeout: 15_000 });
-  await pinchAt(page, await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'start')!.world));
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'scores'), undefined, { timeout: 15_000 });
+  // High scores opens the board over the start panel; the same spot on the board card is empty, so the pinch ends there.
+  await pinchAt(page, await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'scores')!.world));
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'board', undefined, { timeout: 10_000 });
   expect(await page.evaluate(() => window.__chrono!.held)).toBeNull();
   expect(await page.evaluate(() => window.__chrono!.grabVia)).toBeNull();
+  expect(await page.evaluate(() => window.__chrono!.flow)).toBe('title');
+  await pinch(page, 'right', 0);
+  await poke(page, 'back');
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'title', undefined, { timeout: 10_000 });
+  await begin(page, (id) => poke(page, id));
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
+  expect(await page.evaluate(() => window.__chrono!.held)).toBeNull();
   await pinch(page, 'right', 0);
 
   await carry(page, gearId, axleId);
@@ -61,7 +70,7 @@ test('dev server (iwsdk): a pinch on a panel button presses it, a pinch on the k
 
 test('dev server (iwsdk): the headset menu mid-carry puts the gear back, and the next pinch still picks it up', async ({ page }) => {
   const errors = await enter(page, '');
-  await poke(page, 'start');
+  await begin(page, (id) => poke(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
   await pinch(page, 'right', 0);
 
@@ -92,7 +101,7 @@ test('dev server (iwsdk): the headset menu mid-carry puts the gear back, and the
 
 test("dev server (iwsdk): restarting and changing level leave only the new level's gears, back at their start spots", async ({ page }) => {
   const errors = await enter(page, '');
-  await poke(page, 'levels');
+  await poke(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'select', undefined, { timeout: 10_000 });
   await poke(page, 'level-2');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1, undefined, { timeout: 10_000 });

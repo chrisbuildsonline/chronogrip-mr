@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
+import { begin } from './start';
 
 const audio = (page: Page) => page.evaluate(() => ({ ...window.__chrono!.audio }));
 
@@ -64,7 +65,7 @@ test('desktop: a gear that jams the train snaps with a click and grinds', async 
   await page.waitForFunction(() => window.__chrono?.ready === true);
 
   // Level 2: the 40-tooth gear on the middle axle is too big for the train, and jams it.
-  await click(page, 'levels');
+  await click(page, 'start');
   await click(page, 'level-2');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelId === 'l2');
   await page.waitForFunction(() => window.__chrono!.audio.state === 'running');
@@ -91,7 +92,7 @@ test('desktop: pausing suspends the audio and resuming brings it back', async ({
   await page.goto('/');
   await page.waitForFunction(() => window.__chrono?.ready === true);
 
-  await click(page, 'start');
+  await begin(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await page.waitForFunction(() => window.__chrono!.audio.state === 'running');
 

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { LEVELS } from '../../src/levels';
 import { twistRight, twistToTarget } from './calibrate';
 import { CLEAR, axleAt, carry, device, enterWithHands, flow, gearAt, movePinchTo, nudge, pinch, pinchAt, poke, type Device } from './hands';
+import { begin } from './start';
 
 test('dev server: poke Start, the ghost hand shows until the first grab, solve level 1 by hand, Next', async ({ page }) => {
   const errors = await enterWithHands(page);
@@ -10,7 +11,7 @@ test('dev server: poke Start, the ghost hand shows until the first grab, solve l
   expect(await page.evaluate(() => window.__chrono!.ghostHand)).toBe(true);
   await page.screenshot({ path: 'test-results/f9-dev-title.png' });
 
-  await poke(page, 'start');
+  await begin(page, (id) => poke(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
   expect(await page.evaluate(() => window.__chrono!.ghostHand)).toBe(true);
   await pinch(page, 'right', 0);
@@ -59,7 +60,7 @@ test('dev server: poke Start, the ghost hand shows until the first grab, solve l
 
 test('dev server: the headset menu pauses mid-level; the board and the clock hold until Resume; session end pauses', async ({ page }) => {
   const errors = await enterWithHands(page);
-  await poke(page, 'levels');
+  await poke(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'select', undefined, { timeout: 10_000 });
   await poke(page, 'level-2');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1, undefined, { timeout: 10_000 });

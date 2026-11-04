@@ -5,6 +5,7 @@ import { randomLevel, unpackSeed } from '../../src/random';
 import { formatDate } from '../../src/scores';
 import { clockTenths } from '../../src/ui';
 import { calibrateByMouse } from './calibrate';
+import { begin } from './start';
 
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/scores';
@@ -69,7 +70,7 @@ async function solve(page: Page, solution: Record<string, string>) {
 }
 
 async function startLevel1(page: Page) {
-  await click(page, 'start');
+  await begin(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'hud');
   await frames(page);
 }
@@ -146,12 +147,13 @@ test('desktop: a first solve asks for initials (#1), Save writes them, and Best 
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);
   await cardIs(page, 'title');
-  expect((await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label)))).toEqual(['Continue', 'Levels', 'Best times', 'No timer']);
+  expect((await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label)))).toEqual(['Continue', 'Options', 'High scores']);
   await click(page, 'scores');
   await cardIs(page, 'board');
   const row = saved.boards.l1![0]!;
   const shown = await words(page);
-  expect(shown).toContain('Best times');
+  expect(shown).toContain('High scores');
+  expect(shown).toContain('LOCAL'); // the tab strip: Local now, room beside it for the global board
   expect(shown).toContain('Level 1');
   expect(shown).toContain('KIX');
   expect(shown).toContain(clockTenths(row.ms / 1000));
@@ -219,7 +221,7 @@ test('desktop: the empty board, the switcher through L1..L8 and Random, and it o
   await cardIs(page, 'title');
 
   // Starting level 1 (touching a gear or pressing Start) leaves the board; going back, it opens on the level last played.
-  await click(page, 'start');
+  await begin(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await click(page, 'pause');
   await click(page, 'levels');
@@ -271,7 +273,7 @@ test('desktop: against a full board, a solve faster than the slowest asks at its
 
 test('desktop: a Random solve is saved with its step and shows as "Step N"', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'levels');
+  await click(page, 'start');
   await click(page, `level-${LEVELS.length + 2}`);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await solve(page, await randomSolution(page));
@@ -334,13 +336,13 @@ test('desktop: a full board shows two columns of five, ranked, with the date', a
   expect(errors).toEqual([]);
 });
 
-test('phone 375 x 812: the title row fits four pills, and the board is legible with Back under the thumb', async ({ page }) => {
+test('phone 375 x 812: the start panel fits its three buttons, and the board is legible with Back under the thumb', async ({ page }) => {
   await seed(page, { version: 1, initials: 'ZED', boards: { l1: full(8000), random: Array.from({ length: 10 }, (_, i) => ({ name: 'BOB', step: 12 - (i >> 1), ms: 61000 + i * 1000, date: '2026-11-04' })) } });
   const errors = await open(page, '/', PHONE);
   await cardIs(page, 'title');
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
   const pills = await page.evaluate(() => window.__chrono!.buttons());
-  expect(pills.map((b) => b.id)).toEqual(['start', 'levels', 'scores', 'relaxed']);
+  expect(pills.map((b) => b.id)).toEqual(['start', 'options', 'scores']);
   for (const b of pills) {
     expect(b.rect[2] - b.rect[0], `${b.id} is 44 px wide or more`).toBeGreaterThanOrEqual(44);
     expect(b.rect[3] - b.rect[1], `${b.id} is 44 px tall or more`).toBeGreaterThanOrEqual(44);
@@ -354,7 +356,7 @@ test('phone 375 x 812: the title row fits four pills, and the board is legible w
     expect(apart, `${a.id} and ${b.id} do not overlap`).toBe(true);
   }
   const labels = await page.evaluate(() => window.__chrono!.labels());
-  for (const name of ['Start', 'Levels', 'Best times', 'No timer']) {
+  for (const name of ['Start game', 'Options', 'High scores']) {
     const l = labels.find((x) => x.text === name)!;
     expect(l.height, `${name} is 12 px or more`).toBeGreaterThanOrEqual(12);
     const b = pills.find((p) => p.label === name)!;

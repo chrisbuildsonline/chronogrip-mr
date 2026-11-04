@@ -108,7 +108,7 @@ for (const [w, h] of [[375, 812], [390, 844]] as const) {
     }
 
     await phoneCard(page, w, h, 'title');
-    await click(page, 'levels');
+    await click(page, 'start');
     await page.waitForFunction(() => window.__chrono!.flow === 'select');
     await phoneCard(page, w, h, 'select');
     const tiles = (await page.evaluate(() => window.__chrono!.buttons())).filter((b) => b.id.startsWith('level-'));
@@ -176,12 +176,13 @@ test('desktop 1440x900: the cards are the wide ones, placed and sized as before'
     got.forEach((p, i) => p.forEach((v, k) => expect(Math.abs(v - want[i]![k]!), `${name} corner ${i}`).toBeLessThan(0.5)));
     // The desktop type scale: buttons 12.5 mm, body 13.5 mm (design/DESIGN.md).
     const labels = await page.evaluate(() => window.__chrono!.labels());
-    for (const l of labels.filter((x) => ['Start', 'Resume', 'Restart'].includes(x.text))) expect(l.size, l.text).toBeCloseTo(0.0125, 6);
+    for (const l of labels.filter((x) => ['Resume', 'Restart'].includes(x.text))) expect(l.size, l.text).toBeCloseTo(0.0125, 6);
+    for (const l of labels.filter((x) => ['Start game', 'Options', 'High scores'].includes(x.text))) expect(l.size, l.text).toBeCloseTo(0.01375, 6); // the start panel's big buttons
     for (const l of labels.filter((x) => x.text === 'Turn the marked gear')) expect(l.size, l.text).toBeCloseTo(0.0135, 6);
     await page.screenshot({ path: `${OUT}/1440x900-${name}.png` });
   };
   await check('title');
-  await click(page, 'levels');
+  await click(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await check('select');
   await click(page, 'level-1');

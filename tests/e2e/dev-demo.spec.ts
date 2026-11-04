@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { LEVELS } from '../../src/levels';
 import { twistRight, twistToTarget } from './calibrate';
 import { CLEAR, axleAt, device, enterWithHands, flow, gearAt, movePinchTo, nudge, pinch, pinchAt, poke, type Device } from './hands';
+import { begin } from './start';
 
 const shot = (page: import('@playwright/test').Page, name: string) => page.screenshot({ path: `test-results/demo/${name}.png` });
 const audio = (page: import('@playwright/test').Page) => page.evaluate(() => ({ ...window.__chrono!.audio }));
@@ -22,8 +23,8 @@ test('demo story (headset): seated, pinch the escapement gear in passthrough, tw
     await shot(page, '1-title');
   });
 
-  await test.step('When the player pokes Start', async () => {
-    await poke(page, 'start');
+  await test.step('When the player pokes Start game and then level 1', async () => {
+    await begin(page, (id) => poke(page, id));
     await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
   });
 

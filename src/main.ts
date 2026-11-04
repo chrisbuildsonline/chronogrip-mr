@@ -21,14 +21,14 @@ import { faultKind, faultOf, faultText, shakeSpin, shakeTilt, SHAKE_MS, type Fau
 import { C } from './palette';
 import type { GearSpin } from './train';
 import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
-import { createSound, ticksBetween } from './sound';
+import { createSound, loadSoundOn, saveSoundOn, ticksBetween } from './sound';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
 import { firstUnsolved, loadProgress, recordOutcome, recordSolve, saveProgress, type Progress } from './progress';
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
 import { dailySeed, tinkerLevel, withDaily } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
 import { BOARDS, addEntry, backInitial, boardOf, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
-import { adapt, freshSeed, loadRandom, puzzleFor, randomLevel, saveRandom, type RandomState } from './random';
+import { START, adapt, freshSeed, loadRandom, puzzleFor, randomLevel, saveRandom, type RandomState } from './random';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
 import { goalOf, goalText } from './goal';
@@ -86,11 +86,13 @@ let progress: Progress = loadProgress(storage);
 // High score boards (src/scores.ts): a top ten per hand-made level and one for Random, kept on this device.
 let scores: Scores = loadScores(storage);
 /**
- * A card laid over the flow's own: the best times board (opened from the title), or the initials entry that comes before
- * the complete card when a solve makes its board's top ten. `board` is the board id (l1-l8, random).
+ * A card laid over the flow's own: the high scores board or the options (opened from the start panel), or the initials entry
+ * that comes before the complete card when a solve makes its board's top ten. `board` is the board id (l1-l8, random);
+ * `confirm`: Reset progress is waiting for its yes.
  */
 type Overlay =
   | { kind: 'board'; board: string }
+  | { kind: 'options'; confirm: boolean }
   | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; letters: string; cursor: number };
 let overlay: Overlay | null = null;
 /** The board of the level last started: the board the Best times card opens on. */
@@ -180,6 +182,9 @@ const worldOf = (v: Vector3): Vec3 => {
 
 // Sound: procedural WebAudio, created and unlocked on the first press (mouse or pinch); silent before that.
 const sound = createSound();
+/** Options: sound on or off, saved across visits. */
+let soundOn = loadSoundOn(storage);
+sound.setMuted(!soundOn);
 
 const panels = createPanels();
 world.scene.add(panels.root);
@@ -455,10 +460,40 @@ function boardCard(id: string): NonNullable<PanelCtx['board']> {
   return { label: random ? 'Random' : `Level ${n}`, entries: scores.boards[id]!, empty: `No times yet. Solve ${random ? 'a Random puzzle' : `level ${n}`} to set one.` };
 }
 
+/**
+ * Options > Reset progress, once confirmed: forgets every solved level (best times on the tiles, passes, Continue) and the
+ * Random run's step, and puts level 1 back on the board. The high scores boards are a separate store and stay.
+ */
+function resetProgress(): void {
+  progress = { best: {} };
+  saveProgress(storage, progress);
+  run = START;
+  saveRandom(storage, run);
+  levels = [...levels.slice(0, -1), rollRandom()];
+  levelIds = levels.map((l) => l.id);
+  loadLevel(sharedSeed === null ? continueAt() : randomSlot() - 1);
+  flow = { ...flow, level: levelIndex };
+}
+
 /** A press on the card laid over the flow: the board's Back and level arrows, or the initials' arrows, Save and Skip. */
 function pressOverlay(id: string): void {
   const o = overlay!;
-  if (o.kind === 'board') {
+  if (o.kind === 'options') {
+    if (id === 'back') overlay = null;
+    else if (id === 'relaxed') {
+      relaxed = !relaxed;
+      saveRelaxed(storage, relaxed);
+    } else if (id === 'sound') {
+      soundOn = !soundOn;
+      sound.setMuted(!soundOn);
+      saveSoundOn(storage, soundOn);
+    } else if (id === 'reset') overlay = { kind: 'options', confirm: true };
+    else if (id === 'reset-cancel') overlay = { kind: 'options', confirm: false };
+    else if (id === 'reset-yes') {
+      resetProgress();
+      overlay = null;
+    } else return;
+  } else if (o.kind === 'board') {
     if (id === 'back') overlay = null;
     else if (id === 'board-prev' || id === 'board-next') overlay = { ...o, board: BOARDS[(BOARDS.indexOf(o.board) + (id === 'board-next' ? 1 : BOARDS.length - 1)) % BOARDS.length]! };
     else return;
@@ -480,7 +515,7 @@ function send(e: FlowEvent): void {
   const next = step(flow, e, levels.length);
   if (next === flow) return;
   // A card laid over the flow goes when the flow leaves its place: the board with the title, the initials with the complete card.
-  if (overlay && next.name !== (overlay.kind === 'board' ? 'title' : 'complete')) overlay = null;
+  if (overlay && next.name !== (overlay.kind === 'initials' ? 'complete' : 'title')) overlay = null;
   if (next.name === 'playing') lastBoard = next.level === randomSlot() ? 'random' : (boardOf(levels[next.level]!.id) ?? lastBoard);
   if (next.name === 'paused') {
     putBack();
@@ -531,7 +566,7 @@ function send(e: FlowEvent): void {
 }
 
 const PRESS: Record<string, FlowEvent> = {
-  start: { type: 'start' },
+  start: { type: 'select' }, // Start game / Continue opens level select
   levels: { type: 'select' },
   pause: { type: 'pause' },
   resume: { type: 'resume' },
@@ -550,8 +585,8 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   if (by === 'hand' && now - pressedAt < PRESS_GAP_MS) return;
   pressedAt = now;
   if (overlay) return pressOverlay(id);
-  if (id === 'scores' && flow.name === 'title') {
-    overlay = { kind: 'board', board: lastBoard };
+  if ((id === 'scores' || id === 'options') && flow.name === 'title') {
+    overlay = id === 'scores' ? { kind: 'board', board: lastBoard } : { kind: 'options', confirm: false };
     showPanel();
     return fitView(true);
   }
@@ -1139,6 +1174,9 @@ function showPanel(now = performance.now()): void {
     newBest,
     time: levelClock.seconds,
     relaxed,
+    sound: soundOn,
+    confirm: overlay?.kind === 'options' && overlay.confirm,
+    xr: world.renderer.xr.isPresenting,
     timer: relaxed || screenOf(flow) !== 'hud' ? null : { par, ...timerView(levelClock.seconds, par) }, // only the HUD carries it, so no other card redraws as it counts
     outcome,
     par: outcome ? par : null,
@@ -1367,6 +1405,12 @@ window.__chrono = Object.freeze({
   },
   get audio() {
     return { state: sound.state(), ...sound.counts };
+  },
+  get soundOn() {
+    return soundOn;
+  },
+  get options() {
+    return overlay?.kind === 'options' ? { confirm: overlay.confirm, relaxed, sound: soundOn } : null;
   },
   // info.autoReset (the default) zeroes the counters at the start of each render, so these are the last frame's.
   get render() {

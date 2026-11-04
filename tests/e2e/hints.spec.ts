@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { GHOST_TWIST_S } from '../../src/ghost';
 import { LEVELS } from '../../src/levels';
+import { begin } from './start';
 
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/hints';
@@ -84,8 +85,11 @@ test('desktop: the "Drag to look around" note fades after the first drag and sta
   await page.screenshot({ path: `${OUT}/note-faded.png`, clip: { x: 980, y: 0, width: 300, height: 130 } });
 
   // It does not come back on later steps of the flow.
-  const [sx, sy] = await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'start')!.screen);
-  await page.mouse.click(sx, sy);
+  await begin(page, async (id) => {
+    await page.waitForFunction((b) => !window.__chrono!.cameraMoving && window.__chrono!.buttons().some((x) => x.id === b), id);
+    const [x, y] = await page.evaluate((b) => window.__chrono!.buttons().find((x) => x.id === b)!.screen, id);
+    await page.mouse.click(x, y);
+  });
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
   await place(page, gear, axle);

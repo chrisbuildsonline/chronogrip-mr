@@ -13,9 +13,9 @@ export const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Ne
 const SERIF = 'Georgia, "Times New Roman", serif';
 const mm = (v: number) => v * 3;
 /** Type scale in panel millimetres (design/DESIGN.md). */
-const WIDE = { display: 36, xl: 24, heading: 18, button: 12.5, body: 13.5, eyebrow: 8.5 };
+const WIDE = { display: 36, title: 46, xl: 24, heading: 18, button: 12.5, body: 13.5, eyebrow: 8.5 };
 /** On a phone the small styles grow so every word is 12 px or more on screen; the rest already is. */
-const NARROW = { ...WIDE, button: 14, eyebrow: 11 };
+const NARROW = { ...WIDE, title: 42, button: 14, eyebrow: 11 };
 /** The scale for the card being drawn: `draw` sets it from ctx.narrow. */
 let T = WIDE;
 const font = (weight: number, sizeMm: number, face = SANS) => `${weight} ${mm(sizeMm)}px ${face}`;
@@ -52,6 +52,10 @@ export type PanelCtx = {
   copy?: string;
   /** The Relaxed (no timer) setting: the toggle's state. */
   relaxed?: boolean;
+  /** The Options panel: the Sound switch's state, whether Reset progress is waiting for its confirm, and whether the player is in XR (the grab line says pinch). */
+  sound?: boolean;
+  confirm?: boolean;
+  xr?: boolean;
   /** The HUD's countdown ring: par, whole seconds left and over, share of par left. Absent in Relaxed mode. */
   timer?: { par: number; left: number; over: number; fraction: number } | null;
   /** The complete card: whether this solve beat par, and the par it was held to. Absent in Relaxed mode. */
@@ -364,7 +368,7 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
     g.beginPath();
     g.arc(x, y, h / 2, 0, Math.PI * 2);
   } else pill(g, x, y, w, h);
-  const on = b.kind === 'toggle' && !!ctx.relaxed;
+  const on = b.kind === 'toggle' && !!(b.id === 'sound' ? ctx.sound : ctx.relaxed);
   g.fillStyle = b.kind === 'primary' ? (hover ? C.inkHover : C.ink) : on ? C.tint : hover ? C.deepHover : C.deep;
   g.fill();
   if (hover) {
@@ -379,7 +383,7 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
   else if (b.kind === 'toggle') toggle(g, b.label, on, x, y);
   else if (b.kind === 'tile') tile(g, b, x, y, w, h, ctx);
   else if (b.id === 'back') backLabel(g, b.label, x, y, tall);
-  else text(g, b.label, x, y + 1, font(600, T.button), b.kind === 'primary' ? C.cream : C.ink);
+  else text(g, b.label, x, y + 1, font(600, T.button * (b.h >= 0.05 ? 1.1 : 1)), b.kind === 'primary' ? C.cream : C.ink); // the start panel's big buttons carry bigger words
 }
 
 function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
@@ -408,9 +412,29 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   const name = random ? `Random · Step ${ctx.step ?? 1}` : shared ? 'Shared puzzle' : daily ? 'Daily' : `Level ${level}`;
   switch (screen) {
     case 'title': {
-      const up = l.height - 0.15; // the phone's second pill row lifts the words
-      text(g, 'A CLOCKWORK PUZZLE', cx, y(0.128 + up), font(700, T.eyebrow), C.muted, 'center', 3);
-      text(g, 'ChronoGrip', cx, y(0.093 + up), font(600, T.display, SERIF), C.ink);
+      // The phone's second button row lifts the words: the same stack, a little tighter to the card's 0.208 m.
+      const [eyebrowAt, titleAt, taglineAt] = ctx.narrow ? [0.195, 0.168, 0.139] : [0.152, 0.118, 0.082];
+      // The eyebrow with a short amber rule at each side, the big serif title, one line of tagline over the buttons.
+      const eyeY = y(eyebrowAt);
+      text(g, 'A CLOCKWORK PUZZLE', cx, eyeY, font(700, T.eyebrow), C.muted, 'center', 3);
+      g.font = font(700, T.eyebrow);
+      g.letterSpacing = '3px';
+      const half = g.measureText('A CLOCKWORK PUZZLE').width / 2;
+      g.letterSpacing = '0px';
+      g.fillStyle = C.amber;
+      for (const s of [-1, 1]) g.fillRect(s < 0 ? cx - half - mm(17) : cx + half + mm(5), eyeY - mm(0.6), mm(12), mm(1.2));
+      g.font = font(600, T.title, SERIF);
+      const titleSize = T.title * Math.min(1, (W - mm(2 * 16)) / g.measureText('ChronoGrip').width);
+      text(g, 'ChronoGrip', cx, y(titleAt), font(600, titleSize, SERIF), C.ink);
+      text(g, 'Mesh the gears. Wake the bird.', cx, y(taglineAt), font(500, T.body), C.muted);
+      break;
+    }
+    case 'options': {
+      const sure = !!ctx.confirm;
+      const line = sure ? 'Clears levels and Random. Best times stay.' : ctx.xr ? 'Grab a gear: pinch it, carry it, let go.' : ctx.narrow ? 'Grab a gear: touch and drag it.' : 'Grab a gear: click and drag it.';
+      text(g, sure ? 'Reset progress?' : 'Options', cx, y(l.height - 0.028), font(600, T.heading, SERIF), C.ink);
+      g.font = font(500, T.body);
+      text(g, line, cx, y(l.height - 0.056), font(500, T.body * Math.min(1, (W - mm(2 * 16)) / g.measureText(line).width)), C.muted);
       break;
     }
     case 'initials': {
@@ -441,7 +465,13 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
     case 'board': {
       const b = ctx.board!;
       const grid = boardGrid(!!ctx.narrow);
-      text(g, 'Best times', left(0.016), y(grid.headY), font(600, T.heading, SERIF), C.ink, 'left');
+      text(g, 'High scores', left(0.016), y(grid.headY), font(600, T.heading, SERIF), C.ink, 'left');
+      // The tab strip: Local, selected (amber tint pill, as the status pills); a Global tab will take the free room to its right.
+      const [tx, ty] = at(grid.tabs.x0 + grid.tabs.local.w / 2, grid.tabs.y);
+      pill(g, tx, ty, grid.tabs.local.w * PX, grid.tabs.h * PX);
+      g.fillStyle = C.tint;
+      g.fill();
+      text(g, 'LOCAL', tx, ty + 1, font(700, T.eyebrow + 1.5), C.tintInk, 'center', 1);
       // The level switcher's name, between its arrows, shrunk to fit.
       const [prev, next] = ['board-prev', 'board-next'].map((id) => l.buttons.find((x) => x.id === id)!) as [Button, Button];
       g.font = font(600, T.heading, SERIF);

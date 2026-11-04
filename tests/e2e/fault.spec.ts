@@ -24,7 +24,7 @@ async function click(page: Page, id: string) {
 }
 
 async function playLevel(page: Page, n: number, id: string) {
-  await click(page, 'levels');
+  await click(page, 'start');
   await click(page, `level-${n}`);
   await page.waitForFunction((l) => window.__chrono!.flow === 'playing' && window.__chrono!.levelId === l && !window.__chrono!.cameraMoving, id);
 }

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { GHOST_PERIOD_S } from '../../src/ghost';
 import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
+import { begin } from './start';
 
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/polish';
@@ -77,7 +78,7 @@ test('desktop 1280x720: every panel in frame, a real time on a quick solve, shot
   await ghostMidCarry(page);
   await page.screenshot({ path: `${OUT}/1-title.png` });
 
-  await click(page, 'start');
+  await begin(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await inFrame(page, 'hud');
   await ghostMidCarry(page);

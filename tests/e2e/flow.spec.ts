@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
+import { begin } from './start';
 
 async function open(page: Page) {
   const errors: string[] = [];
@@ -39,7 +40,7 @@ test('desktop: title, start, solve level 1, complete card, next loads level 2', 
   await page.waitForTimeout(1200); // let the ghost hand reach its carry pose
   await page.screenshot({ path: 'test-results/f9-title.png' });
 
-  await click(page, 'start');
+  await begin(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await page.waitForFunction(() => window.__chrono!.levelTime > 0);
   expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['pause']);
@@ -75,7 +76,7 @@ test('desktop: title, start, solve level 1, complete card, next loads level 2', 
 
 test('desktop: level select reaches level 3; a hidden tab pauses and resume keeps the board', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'levels');
+  await click(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await page.waitForTimeout(300);
   await page.screenshot({ path: 'test-results/f9-select.png' });

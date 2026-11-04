@@ -3,6 +3,7 @@ import { LEVELS } from '../../src/levels';
 import { decodeSeed, encodeSeed } from '../../src/seed';
 import { MAX_STEP, randomLevel, unpackSeed } from '../../src/random';
 import { calibrateByMouse } from './calibrate';
+import { begin } from './start';
 
 /** Screenshots land here for a look by eye (gitignored with dist). */
 const OUT = 'dist/f29-shots';
@@ -127,7 +128,7 @@ async function hudClear(page: Page, at: string) {
 }
 
 async function openRandom(page: Page) {
-  await click(page, 'levels');
+  await click(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await click(page, `level-${SLOT}`);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
@@ -135,7 +136,7 @@ async function openRandom(page: Page) {
 
 test('desktop: Random is a tile after the daily; three solves in a row climb, and the code reopens the same puzzle', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'levels');
+  await click(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await frames(page);
   const tiles = await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label));
@@ -192,7 +193,7 @@ test('desktop: the puzzle code on the complete card opens that exact Random puzz
   expect(got).toEqual({ ...gears, code: want.code, note: null });
   expect(got.id).toBe(want.level.id);
   // It opens as a shared puzzle and plays through with the very same solution.
-  await click(page, 'start');
+  await begin(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   expect(await words(page)).toEqual(expect.arrayContaining(['SHARED', 'Puzzle']));
   for (const [gear, axle] of Object.entries(want.level.solution)) await place(page, gear, axle);
@@ -235,8 +236,10 @@ test('desktop: the step is saved, picked up on a reload and by the Random tile; 
 
 test('desktop: with No timer a solve is just one step on', async ({ page }) => {
   const errors = await open(page);
+  await click(page, 'options');
   await click(page, 'relaxed');
   await page.waitForFunction(() => window.__chrono!.timer.relaxed);
+  await click(page, 'back');
   await openRandom(page);
   expect(await random(page)).toMatchObject({ step: 1 });
   await solve(page);
@@ -259,8 +262,8 @@ test('desktop: corrupt storage starts the run at step 1 without a console error'
 test('desktop: Random never changes the hand-made levels, the daily or the title', async ({ page }) => {
   const errors = await open(page);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1');
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Start', 'Levels', 'Best times', 'No timer']);
-  await click(page, 'levels');
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Start game', 'Options', 'High scores']);
+  await click(page, 'start');
   await click(page, 'level-9');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   expect(await words(page)).toContain('Daily');
@@ -272,9 +275,9 @@ test('phone 375x812: nothing on the HUD overlaps, for Random at its widest and f
   await page.addInitScript((k) => localStorage.setItem(k, JSON.stringify({ step: 12, slow: false })), KEY);
   const errors = await open(page, '/', { width: 375, height: 812 });
   const cases: [string, () => Promise<void>][] = [
-    ['Random step 12', async () => void (await click(page, 'levels'), await click(page, `level-${SLOT}`))],
-    ['Level 8', async () => void (await click(page, 'levels'), await click(page, 'level-8'))],
-    ['Daily', async () => void (await click(page, 'levels'), await click(page, 'level-9'))],
+    ['Random step 12', async () => void (await click(page, 'start'), await click(page, `level-${SLOT}`))],
+    ['Level 8', async () => void (await click(page, 'start'), await click(page, 'level-8'))],
+    ['Daily', async () => void (await click(page, 'start'), await click(page, 'level-9'))],
   ];
   for (const [name, go] of cases) {
     await page.goto('/');
@@ -295,7 +298,7 @@ test('phone 375x812: nothing on the HUD overlaps, for Random at its widest and f
   const code = encodeSeed(424242);
   await page.goto(`/?seed=${code}`);
   await page.waitForFunction(() => window.__chrono?.ready === true);
-  await click(page, 'start');
+  await begin(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await hudClear(page, 'Shared');
   expect(errors).toEqual([]);
@@ -304,7 +307,7 @@ test('phone 375x812: nothing on the HUD overlaps, for Random at its widest and f
 test('phone 375x812: the Random bar and the Next puzzle sheet fit', async ({ page }) => {
   const size = { width: 375, height: 812 };
   const errors = await open(page, '/', size);
-  await click(page, 'levels');
+  await click(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
   await frames(page);

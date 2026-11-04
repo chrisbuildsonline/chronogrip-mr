@@ -46,7 +46,7 @@ test('desktop 1440x900: a warm workshop behind the tray, title and a level in pl
   const errors = await open(page, 1440, 900);
   await expectWorkshop(page);
   await page.screenshot({ path: `${OUT}/desktop-title.png` });
-  await click(page, 'levels');
+  await click(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await click(page, 'level-2');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
@@ -60,7 +60,7 @@ test('phone 375x812: the workshop backs the tray without crowding the card', asy
   const errors = await open(page, 375, 812);
   await expectWorkshop(page);
   await page.screenshot({ path: `${OUT}/phone-title.png` });
-  await click(page, 'levels');
+  await click(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await click(page, 'level-2');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
@@ -72,7 +72,7 @@ test('phone 375x812: the workshop backs the tray without crowding the card', asy
 
 test('level 5 with the workshop up stays inside the render budget', async ({ page }) => {
   await open(page, 1440, 900);
-  await click(page, 'levels');
+  await click(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'select');
   await click(page, `level-${LEVELS.findIndex((l) => l.id === 'l5') + 1}`);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelId === 'l5');

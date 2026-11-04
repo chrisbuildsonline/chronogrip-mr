@@ -22,7 +22,7 @@ test('every level and the daily stay inside the render budget while playing', as
 
   // Every hand-made level, then the daily.
   for (let i = 0; i < LEVELS.length + 1; i++) {
-    await click(page, 'levels');
+    await click(page, i === 0 ? 'start' : 'levels'); // the start panel first, then the pause card
     await page.waitForFunction(() => window.__chrono!.flow === 'select');
     await click(page, `level-${i + 1}`);
     await page.waitForFunction((n) => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === n, i);

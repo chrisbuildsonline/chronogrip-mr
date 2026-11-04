@@ -5,6 +5,7 @@ import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { clock } from '../../src/ui';
 import { parFor } from '../../src/timer';
 import { calibrateByMouse } from './calibrate';
+import { begin } from './start';
 
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/timer';
@@ -48,7 +49,7 @@ async function place(page: Page, gear: string, axle: string) {
 
 /** Starts the level up now (from the title) and waits for the HUD. */
 async function start(page: Page) {
-  if ((await page.evaluate(() => window.__chrono!.flow)) === 'title') await click(page, 'start');
+  if ((await page.evaluate(() => window.__chrono!.flow)) === 'title') await begin(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'hud');
   await frames(page);
@@ -148,14 +149,15 @@ test('desktop: running out the clock still wakes the bird; the card says over ti
 test('desktop: Relaxed hides the ring, never says over time, persists across a reload and toggles on the pause card', async ({ page }) => {
   const errors = await open(page);
   expect((await timer(page)).relaxed).toBe(false);
+  await click(page, 'options'); // the switch lives in Options now
   expect(await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'relaxed')!.label)).toBe('No timer');
   await frames(page);
-  await page.screenshot({ path: `${OUT}/title-off-1440x900.png` });
+  await page.screenshot({ path: `${OUT}/options-off-1440x900.png` });
   await click(page, 'relaxed');
   await page.waitForFunction(() => window.__chrono!.timer.relaxed);
   expect(await page.evaluate(() => localStorage.getItem('chronogrip.relaxed.v1'))).toBe('1');
   await frames(page);
-  await page.screenshot({ path: `${OUT}/relaxed-title-1440x900.png` });
+  await page.screenshot({ path: `${OUT}/relaxed-options-1440x900.png` });
 
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);
@@ -199,7 +201,7 @@ test('desktop: the daily and a shared ?seed= puzzle get the par of their own dif
   expect((await timer(page)).par).toBe(parFor(tinkerLevel(seed)));
   const errors2 = await open(page, '/');
   expect((await timer(page)).par).toBe(L1_PAR);
-  await click(page, 'levels');
+  await click(page, 'start');
   await click(page, `level-${LEVELS.length + 1}`);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   expect((await timer(page)).par).toBe(parFor(tinkerLevel(dailySeed(new Date()))));
@@ -231,16 +233,20 @@ for (const size of [{ width: 375, height: 812 }]) {
         expect(Math.min(b.rect[2] - b.rect[0], b.rect[3] - b.rect[1]), `${what} ${b.id}`).toBeGreaterThanOrEqual(40);
       }
     };
-    await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'relaxed'));
+    await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'options'));
     await fits('title');
-    await page.screenshot({ path: `${OUT}/title-off-${size.width}x${size.height}.png` });
+    await click(page, 'options');
+    await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'relaxed'));
+    await fits('options');
+    await page.screenshot({ path: `${OUT}/options-off-${size.width}x${size.height}.png` });
     await click(page, 'relaxed');
     await page.waitForFunction(() => window.__chrono!.timer.relaxed);
     await frames(page);
-    await fits('title on');
+    await fits('options on');
     await page.screenshot({ path: `${OUT}/relaxed-${size.width}x${size.height}.png` });
     await click(page, 'relaxed');
     await page.waitForFunction(() => !window.__chrono!.timer.relaxed);
+    await click(page, 'back');
     await start(page);
     await fits('hud');
     await page.screenshot({ path: `${OUT}/hud-${size.width}x${size.height}.png` });

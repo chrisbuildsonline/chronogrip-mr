@@ -2,10 +2,10 @@ import type { Level } from './levels';
 import { COMFORT, TRAY_POSE, layerLift, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
 
 /** Layouts and placement of the in-world panels (see design/DESIGN.md). Panel space: metres, origin at the bottom centre, +Y up, +Z towards the player. */
-export type Screen = 'title' | 'select' | 'hud' | 'complete' | 'paused' | 'initials' | 'board';
+export type Screen = 'title' | 'select' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options';
 export const SCREENS: readonly Screen[] = ['title', 'select', 'hud', 'complete', 'paused'];
-/** Cards laid over the title or the complete card for a moment: the initials entry and the best times board. */
-export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board'];
+/** Cards laid over the title or the complete card: the initials entry, the high scores board and the options. */
+export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options'];
 
 export type ButtonKind = 'primary' | 'secondary' | 'tile' | 'icon' | 'toggle' | 'arrow';
 /** A button rectangle in panel space; x, y is its centre. */
@@ -39,7 +39,7 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
  * `random`: the last level is the endless Random puzzle, after the daily or shared one, with its own tile; `daily`: the last base level is today's tinker puzzle; `shared`: it is a puzzle opened from a ?seed= link. `resume`: a level is solved, so the title offers Continue.
  * `over`: the level was solved past its par time, so the complete card leads with Retry. `copy`: the label of the Copy link pill on the complete card (absent: no pill). `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
  */
-export type LayoutCtx = { level: number; levels: number; daily?: boolean; shared?: boolean; random?: boolean; resume?: boolean; narrow?: boolean; copy?: string; over?: boolean };
+export type LayoutCtx = { level: number; levels: number; daily?: boolean; shared?: boolean; random?: boolean; resume?: boolean; narrow?: boolean; copy?: string; over?: boolean; confirm?: boolean };
 
 /** Width of every card on a phone in portrait (outside XR), metres of panel space. */
 export const NARROW_W = 0.3;
@@ -59,8 +59,14 @@ const BACK_W = 0.076;
 const BACK_GAP = 0.02;
 /** The Relaxed toggle on the phone's pause card. */
 const TOGGLE_W = 0.082;
-/** The phone's title card is one pill row taller than the wide one, for the Best times and No timer pills. */
-export const NARROW_TITLE_EXTRA = BH + GAP;
+/** The start panel's big buttons: 50 mm tall in XR and on a desktop (their top edge stays under the zone's 18 degrees), the primary 52 mm on a phone (59 px at the sheet scale). */
+const START_BH = 0.05;
+const START_FOOT = 0.014;
+const START_BH_NARROW = 0.052;
+/** The start panel: 0.17 m tall wide (a little taller would push the desktop camera back at 1440 x 900), 0.208 m as a phone sheet (title, tagline and two button rows; no taller than the old title sheet, so the phone camera is unchanged). */
+export const START_H = { wide: 0.17, narrow: 0.208 } as const;
+/** The options panel: 0.15 m tall wide (heading, one static line, one button row), 0.2 m as a phone sheet (two rows). */
+export const OPTIONS_H = { wide: 0.15, narrow: 0.2 } as const;
 /** Wide enough for "Turn the marked gear ↻ 37.5 rpm" in body type, and for the countdown ring and its time between the clock and the pause button. */
 const HUD_W = 0.3;
 
@@ -71,13 +77,38 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
   const [primaryW, secondaryW] = narrow ? [0.1, 0.072] : [0.11, 0.088];
   switch (screen) {
     case 'title': {
-      const start: Parameters<typeof row>[1][number] = ['start', ctx.resume ? 'Continue' : 'Start', 'primary', 0.1];
-      // Wide: one row of four, as wide as the pause card so every pill stays in the panel zone.
-      if (!narrow) return { width: 0.42, height: 0.15, buttons: row(low, [start, ['levels', 'Levels', 'secondary', 0.074], ['scores', 'Best times', 'secondary', 0.096], ['relaxed', 'No timer', 'toggle', 0.088]]) };
-      // Phone: four pills at 14 mm type will not fit one 268 mm row, so two: Start and Levels under the thumb, the other two above.
-      const [a, b] = row(low, [start, ['levels', 'Levels', 'secondary', 0.072]]);
-      const [c, d] = row(low + BH + GAP, [['scores', 'Best times', 'secondary', 0.1], ['relaxed', 'No timer', 'toggle', 0.098]]);
-      return { width: NARROW_W, height: 0.15 + NARROW_TITLE_EXTRA, buttons: [a!, b!, c!, d!] };
+      const start = ['start', ctx.resume ? 'Continue' : 'Start game', 'primary'] as const;
+      const sized = (bs: Button[], h: number) => bs.map((b) => ({ ...b, h }));
+      // Wide: the three big buttons on one row, Start game the widest, so every target stays in the panel zone.
+      if (!narrow) return { width: 0.42, height: START_H.wide, buttons: sized(row(START_FOOT + START_BH / 2, [[...start, 0.13], ['options', 'Options', 'secondary', 0.09], ['scores', 'High scores', 'secondary', 0.11]]), START_BH) };
+      // Phone: Start game across the foot under the thumb, Options and High scores side by side above it.
+      const full = NARROW_W - 2 * PAD;
+      const half = (full - GAP) / 2;
+      const [a] = sized(row(PAD + START_BH_NARROW / 2, [[...start, full]]), START_BH_NARROW);
+      const [b, c] = row(PAD + START_BH_NARROW + GAP + BH / 2, [['options', 'Options', 'secondary', half], ['scores', 'High scores', 'secondary', half]]);
+      return { width: NARROW_W, height: START_H.narrow, buttons: [a!, b!, c!] };
+    }
+    case 'options': {
+      const confirm = !!ctx.confirm;
+      if (!narrow) {
+        // One row low on the card, as everywhere in the zone: Back, the two switches, Reset progress. Confirming swaps the switches for a choice.
+        const items: Parameters<typeof row>[1] = confirm
+          ? [['back', 'Back', 'secondary', 0.07], ['reset-cancel', 'Keep it', 'secondary', 0.09], ['reset-yes', 'Reset now', 'primary', 0.11]]
+          : [['back', 'Back', 'secondary', 0.07], ['relaxed', 'No timer', 'toggle', 0.088], ['sound', 'Sound', 'toggle', 0.08], ['reset', 'Reset progress', 'secondary', 0.11]];
+        return { width: 0.44, height: OPTIONS_H.wide, buttons: row(low, items) };
+      }
+      // Phone: two rows. The thumb row carries Back and Reset progress (or the choice), the switches ride above.
+      const full = NARROW_W - 2 * PAD;
+      const half = (full - GAP) / 2;
+      const up = low + BH + GAP;
+      if (confirm) {
+        const [yes, no] = row(low, [['reset-yes', 'Reset now', 'primary', 0.15], ['reset-cancel', 'Keep it', 'secondary', full - 0.15 - GAP]]);
+        const [back] = row(up, [['back', 'Back', 'secondary', 0.1]]);
+        return { width: NARROW_W, height: OPTIONS_H.narrow, buttons: [back!, no!, yes!] };
+      }
+      const [back, reset] = row(low, [['back', 'Back', 'secondary', 0.1], ['reset', 'Reset progress', 'secondary', full - 0.1 - GAP]]);
+      const [timer, sound] = row(up, [['relaxed', 'No timer', 'toggle', half], ['sound', 'Sound', 'toggle', half]]);
+      return { width: NARROW_W, height: OPTIONS_H.narrow, buttons: [back!, timer!, sound!, reset!] };
     }
     case 'select': {
       const n = ctx.levels;
@@ -234,7 +265,10 @@ export function boardGrid(narrow: boolean) {
   const pitch = narrow ? 0.0165 : 0.0185;
   const y0 = PAD + BH + GAP + pitch / 2 + (rows - 1) * pitch;
   const headY = y0 + pitch / 2 + 0.024;
-  return { width, cols, rows, gap, pitch, y0, headY, height: headY + 0.027, colW: (width - 2 * PAD - (cols - 1) * gap) / cols, labelW: narrow ? 0.066 : 0.12 };
+  // The tab strip on the heading's line, just after "High scores": "Local" first, and the rest of the strip is kept free for the global board's tab.
+  const tabW = narrow ? 0.13 : 0.16;
+  const tabs = { x0: -width / 2 + PAD + 0.125, y: headY, w: tabW, h: 0.026, local: { w: narrow ? 0.06 : 0.066 } };
+  return { width, cols, rows, gap, pitch, y0, headY, tabs, height: headY + 0.027, colW: (width - 2 * PAD - (cols - 1) * gap) / cols, labelW: narrow ? 0.066 : 0.12 };
 }
 
 /** The button under a panel-space point that is within touch depth of the face, else null. */

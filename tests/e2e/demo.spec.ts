@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
+import { begin } from './start';
 
 const shot = (page: Page, name: string) => page.screenshot({ path: `test-results/demo/desktop-${name}.png` });
 const audio = (page: Page) => page.evaluate(() => ({ ...window.__chrono!.audio }));
@@ -26,9 +27,12 @@ test('demo story (desktop): click Start, drag the escapement gear onto its axle,
     await shot(page, '1-title');
   });
 
-  await test.step('When the player clicks Start', async () => {
-    const [x, y] = await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'start')!.screen);
-    await page.mouse.click(x, y);
+  await test.step('When the player clicks Start game and picks level 1', async () => {
+    await begin(page, async (id) => {
+      await page.waitForFunction((b) => !window.__chrono!.cameraMoving && window.__chrono!.buttons().some((x) => x.id === b), id);
+      const [x, y] = await page.evaluate((b) => window.__chrono!.buttons().find((x) => x.id === b)!.screen, id);
+      await page.mouse.click(x, y);
+    });
     await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   });
 
