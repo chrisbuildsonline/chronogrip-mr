@@ -1,23 +1,22 @@
-import { LEVELS } from './levels';
-import { MAX_STEP } from './random';
+import { CAMPAIGN, DIFFICULTIES } from './random';
 
 /**
- * High score boards: one per hand-made level (by level id) and one for Random. Daily and shared puzzles change every day or
- * are one-offs, so they get none. A level entry is ranked by time, a Random entry by the step solved and then the time;
- * either way the earlier date wins a tie, and each board keeps its top ten. Everything here is pure.
+ * High score boards: one per campaign level (l1-l20, whichever puzzle was generated for it) and one per Random level difficulty
+ * (random-easy .. random-expert). A shared puzzle is a one-off, so it gets none. Entries are ranked by time, the earlier date
+ * wins a tie, and each board keeps its top ten. Everything here is pure.
  */
-export const BOARDS: readonly string[] = [...LEVELS.map((l) => l.id), 'random'];
+export const BOARDS: readonly string[] = [...Array.from({ length: CAMPAIGN }, (_, i) => `l${i + 1}`), ...DIFFICULTIES.map((d) => `random-${d}`)];
 export const TOP = 10;
 export const DEFAULT_INITIALS = 'AAA';
 
-/** `step` is only on a Random entry: the step that was solved. `date` is the local day, YYYY-MM-DD. */
-export type Entry = { name: string; ms: number; date: string; step?: number };
+/** `date` is the local day, YYYY-MM-DD. */
+export type Entry = { name: string; ms: number; date: string };
 export type Scores = { initials: string; boards: Record<string, Entry[]> };
 
 export const emptyScores = (): Scores => ({ initials: DEFAULT_INITIALS, boards: Object.fromEntries(BOARDS.map((id) => [id, []])) });
 
-/** The board a level plays for: l1-l8 by id; the daily, a shared puzzle and anything else get none. */
-export const boardOf = (levelId: string): string | null => (LEVELS.some((l) => l.id === levelId) ? levelId : null);
+/** The board a level plays for: l1-l20 by id; a shared puzzle (id t<seed>) and anything else gets none. */
+export const boardOf = (levelId: string): string | null => (BOARDS.includes(levelId) ? levelId : null);
 
 /** Exactly three letters A-Z: anything else is dropped and a short name is padded with A. */
 export function sanitiseName(name: unknown): string {
@@ -37,18 +36,14 @@ export function formatDate(date: string): string {
   return validDate(date) ? `${Number(date.slice(8))} ${MONTHS[Number(date.slice(5, 7)) - 1]}` : '';
 }
 
-/** Whether an entry is fit for a board: a positive finite time, a day, and for Random a whole step in range. */
+/** Whether an entry is fit for a board: a positive finite time and a day. */
 function valid(board: string, e: Entry): boolean {
-  if (!BOARDS.includes(board) || !Number.isFinite(e.ms) || e.ms <= 0 || !validDate(e.date)) return false;
-  if (board === 'random') return typeof e.step === 'number' && Number.isInteger(e.step) && e.step >= 1 && e.step <= MAX_STEP;
-  return true;
+  return BOARDS.includes(board) && Number.isFinite(e.ms) && e.ms > 0 && validDate(e.date);
 }
 
-/** Negative when `a` ranks above `b`: levels by time; Random by step (higher first), then time; the earlier date breaks a tie. */
-function order(board: string, a: Entry, b: Entry): number {
-  const byTime = a.ms - b.ms;
-  const byDate = a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
-  return board === 'random' ? b.step! - a.step! || byTime || byDate : byTime || byDate;
+/** Negative when `a` ranks above `b`: by time; the earlier date breaks a tie. */
+function order(_board: string, a: Entry, b: Entry): number {
+  return a.ms - b.ms || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
 }
 
 /** Whether an entry would make the board's top ten, and the rank it would take (a later tie ranks after the entry already there). */
@@ -61,7 +56,7 @@ export function qualifies(s: Scores, board: string, e: Entry): { ok: boolean; ra
 /** The scores with the entry in its place and the board trimmed to ten; the same object back if it does not qualify. The name is remembered as the last initials. */
 export function addEntry(s: Scores, board: string, e: Entry): Scores {
   if (!qualifies(s, board, e).ok) return s;
-  const entry: Entry = { name: sanitiseName(e.name), ms: e.ms, date: e.date, ...(board === 'random' ? { step: e.step } : {}) };
+  const entry: Entry = { name: sanitiseName(e.name), ms: e.ms, date: e.date };
   const rows = [...s.boards[board]!, entry].sort((a, b) => order(board, a, b)).slice(0, TOP);
   return { initials: entry.name, boards: { ...s.boards, [board]: rows } };
 }
@@ -85,7 +80,7 @@ export function loadScores(storage: Pick<Storage, 'getItem'> | null | undefined)
       const kept: Entry[] = [];
       for (const r of rows) {
         if (!isObject(r)) continue;
-        const e: Entry = { name: sanitiseName(r.name), ms: r.ms as number, date: r.date as string, ...(board === 'random' ? { step: r.step as number } : {}) };
+        const e: Entry = { name: sanitiseName(r.name), ms: r.ms as number, date: r.date as string };
         if (valid(board, e)) kept.push(e);
       }
       s.boards[board] = kept.sort((a, b) => order(board, a, b)).slice(0, TOP);

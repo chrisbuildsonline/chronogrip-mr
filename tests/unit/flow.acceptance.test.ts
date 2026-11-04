@@ -83,7 +83,7 @@ describe('Given level 1 is loaded', () => {
     expect(g.automatonRunning).toBe(false);
   });
 
-  it('When every level is solved and calibrated in turn, Then the automaton runs and each level completes; Next after level 5 returns to level select', () => {
+  it('When every level is solved and calibrated in turn, Then the automaton runs and each level completes and Next plays the following level', () => {
     const g = game();
     for (let i = 0; i < LEVELS.length; i++) {
       solve(g, i);
@@ -95,7 +95,7 @@ describe('Given level 1 is loaded', () => {
       expect(g.flow).toEqual({ name: 'complete', level: i });
       g.send({ type: 'next' });
     }
-    expect(g.flow.name).toBe('select');
+    expect(g.flow).toEqual({ name: 'playing', level: LEVELS.length });
   });
 
   it('When the twist overshoots straight through the band, Then it does not calibrate until held in band', () => {
@@ -125,7 +125,7 @@ describe('Given level 1 is loaded', () => {
 
   it('When paused mid-level, Then the board is kept and placing does nothing until resume', () => {
     const g = game();
-    g.send({ type: 'select', level: 1 });
+    g.send({ type: 'play', level: 1 });
     g.place('i1', 'a1');
     g.send({ type: 'pause' });
     g.place('i2', 'a2');

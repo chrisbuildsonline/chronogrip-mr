@@ -1,17 +1,17 @@
-import { LEVELS } from './levels';
+import { CAMPAIGN } from './random';
 import type { Screen } from './ui';
 
-export type FlowName = 'title' | 'select' | 'playing' | 'calibrate' | 'complete' | 'paused';
+export type FlowName = 'title' | 'playing' | 'calibrate' | 'complete' | 'paused';
 /** `resumeTo` is set only on a pause taken while calibrating. */
 export type Flow = { readonly name: FlowName; readonly level: number; readonly resumeTo?: 'calibrate' };
 export type FlowEvent =
   | { type: 'start' | 'solve' | 'calibrated' | 'next' | 'restart' | 'pause' | 'resume' }
-  | { type: 'select'; level?: number }
+  | { type: 'play'; level: number }
   | { type: 'back'; level: number };
 
 export const TITLE: Flow = { name: 'title', level: 0 };
-/** The hand-made levels; the game adds the daily after them and passes the full count to `step`. */
-export const LEVEL_COUNT = LEVELS.length;
+/** The campaign levels; the game adds one more slot (a Random level or a shared puzzle) and passes the full count to `step`. */
+export const LEVEL_COUNT = CAMPAIGN + 1;
 
 const to = (name: FlowName, level: number): Flow => ({ name, level });
 /** Mid-level: the board is in play or its escapement is being regulated. */
@@ -30,8 +30,8 @@ export function step(f: Flow, e: FlowEvent, levels = LEVEL_COUNT): Flow {
     case 'calibrated':
       return f.name === 'calibrate' ? to('complete', f.level) : f;
     case 'next':
-      if (f.name !== 'complete') return f;
-      return f.level + 1 < levels ? to('playing', f.level + 1) : to('select', f.level);
+      // The last campaign level and the extra slot have no next level here: the game decides (the menu, or another Random level).
+      return f.name === 'complete' && f.level + 2 < levels ? to('playing', f.level + 1) : f;
     case 'restart':
       return inLevel(f) || f.name === 'paused' || f.name === 'complete' ? to('playing', f.level) : f;
     case 'pause':
@@ -39,11 +39,11 @@ export function step(f: Flow, e: FlowEvent, levels = LEVEL_COUNT): Flow {
       return f.name === 'playing' ? to('paused', f.level) : f;
     case 'resume':
       return f.name === 'paused' ? to(f.resumeTo ?? 'playing', f.level) : f;
-    case 'select':
-      if (e.level === undefined) return inLevel(f) ? f : to('select', f.level);
+    case 'play':
       return inRange(e.level, levels) ? to('playing', e.level) : f;
     case 'back':
-      return f.name === 'select' && inRange(e.level, levels) ? to('title', e.level) : f;
+      // To the title, with the level Continue plays on the board: from a pause or a complete card.
+      return (f.name === 'paused' || f.name === 'complete') && inRange(e.level, levels) ? to('title', e.level) : f;
   }
 }
 
@@ -51,9 +51,9 @@ const inRange = (level: number, levels: number) => Number.isInteger(level) && le
 
 /** Whether a transition puts a fresh board up: a level (re)starting, or back to the title on the level Continue plays. */
 export const reloads = (prev: Flow, e: FlowEvent, next: Flow) =>
-  next !== prev && (e.type === 'back' || (next.name === 'playing' && (e.type === 'restart' || e.type === 'next' || e.type === 'select')));
+  next !== prev && (e.type === 'back' || (next.name === 'playing' && (e.type === 'restart' || e.type === 'next' || e.type === 'play')));
 
-const SCREEN: Record<FlowName, Screen> = { title: 'title', select: 'select', playing: 'hud', calibrate: 'hud', complete: 'complete', paused: 'paused' };
+const SCREEN: Record<FlowName, Screen> = { title: 'title', playing: 'hud', calibrate: 'hud', complete: 'complete', paused: 'paused' };
 export const screenOf = (f: Flow): Screen => SCREEN[f.name];
 
 /** Level time in seconds: feed it every frame; only frames that run back to back while running count. */

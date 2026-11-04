@@ -6,7 +6,7 @@ import { tinkerLevel, dailySeed } from '../../src/tinker';
 import { loadSoundOn, saveSoundOn, createSound } from '../../src/sound';
 import { phonePx } from '../../src/fit';
 
-const ctx = { level: 0, levels: LEVELS.length + 2, daily: true, random: true };
+const ctx = { level: 0, levels: LEVELS.length + 2, random: true };
 const levels = [...LEVELS, tinkerLevel(dailySeed(new Date(2026, 10, 4))), tinkerLevel(dailySeed(new Date(2027, 0, 1)))];
 
 describe('start panel layout', () => {
@@ -70,7 +70,7 @@ describe('start panel layout', () => {
 
   it('in XR the menu card hangs low enough that every button, edge to edge, is in the panel zone and 60 cm reach, above every level', () => {
     for (const level of levels) {
-      for (const [screen, extra] of [['title', {}], ['title', { resume: true }], ['options', {}], ['options', { confirm: true }], ['board', {}], ['select', { cols: 2 }]] as const) {
+      for (const [screen, extra] of [['title', {}], ['title', { resume: true }], ['options', {}], ['options', { confirm: true }], ['board', {}], ['picker', {}]] as const) {
         const l = layout(screen, { ...ctx, ...extra });
         const a = menuAnchor(l, level);
         for (const b of l.buttons) {
@@ -140,7 +140,7 @@ describe('high scores board', () => {
   it('stacks, top to bottom: the Local / Global control, the ten rows, the level switcher, Back; all centred', () => {
     for (const narrow of [false, true]) {
       const g = boardGrid(narrow);
-      const l = layout('board', { level: 0, levels: 10, daily: true, random: true, narrow });
+      const l = layout('board', { level: 0, levels: 10, random: true, narrow });
       const by = (id: string) => l.buttons.find((b) => b.id === id)!;
       const [back, a, b, prev, next] = [by('back'), by('tab-local'), by('tab-global'), by('board-prev'), by('board-next')];
       expect(l.width).toBe(NARROW_W);
@@ -158,7 +158,7 @@ describe('high scores board', () => {
   });
 
   it('has pill segments 44 px or more tall at the phone sheet scale, inside their track', () => {
-    const l = layout('board', { level: 0, levels: 10, daily: true, random: true, narrow: true });
+    const l = layout('board', { level: 0, levels: 10, random: true, narrow: true });
     for (const s of l.buttons.filter((x) => x.kind === 'tab')) {
       expect(s.w, 'a pill, not a circle').toBeGreaterThan(s.h);
       expect(s.h * phonePx(375)).toBeGreaterThanOrEqual(44);

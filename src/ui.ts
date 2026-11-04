@@ -2,18 +2,18 @@ import type { Level } from './levels';
 import { COMFORT, TRAY_POSE, inZone, layerLift, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
 
 /** Layouts and placement of the in-world panels (see design/DESIGN.md). Panel space: metres, origin at the bottom centre, +Y up, +Z towards the player. */
-export type Screen = 'title' | 'select' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options';
-export const SCREENS: readonly Screen[] = ['title', 'select', 'hud', 'complete', 'paused'];
-/** Cards laid over the title or the complete card: the initials entry, the high scores board and the options. */
+export type Screen = 'title' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options';
+export const SCREENS: readonly Screen[] = ['title', 'hud', 'complete', 'paused'];
+/** Cards laid over the title or the complete card: the initials entry, the high scores board, the options and the difficulty picker. */
 /** How opaque the black layer behind the menus is. */
 export const SCRIM_OPACITY = 0.9;
 /** The menus: the game behind them is dimmed to 90% black (a full-view layer on a flat screen, a backing panel in AR). */
-export const MENU_SCREENS: readonly Screen[] = ['title', 'select', 'board', 'options'];
+export const MENU_SCREENS: readonly Screen[] = ['title', 'picker', 'board', 'options'];
 /** The cards the board is played with: the camera fits for these, the menus are centred over a black layer. */
 export const PLAY_SCREENS: readonly Screen[] = SCREENS.filter((s) => !MENU_SCREENS.includes(s));
-export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options'];
+export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options', 'picker'];
 
-export type ButtonKind = 'primary' | 'secondary' | 'tile' | 'icon' | 'toggle' | 'arrow' | 'tab';
+export type ButtonKind = 'primary' | 'secondary' | 'icon' | 'toggle' | 'arrow' | 'tab';
 /** A button rectangle in panel space; x, y is its centre. */
 export type Button = { id: string; label: string; kind: ButtonKind; x: number; y: number; w: number; h: number };
 /** A display slot (not a target) in panel space; x, y is its centre. */
@@ -51,11 +51,11 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
 }
 
 /**
- * `random`: the last level is the endless Random puzzle, after the daily or shared one, with its own tile; `daily`: the last base level is today's tinker puzzle; `shared`: it is a puzzle opened from a ?seed= link. `resume`: a level is solved, so the title offers Continue.
- * `cols`: the level select's tiles in one column or two (a flat view picks by the room it has; XR always two, so the column stays in the comfort cone).
+ * `level` is the slot on the board and `levels` how many slots there are: the campaign levels, then one more for a Random level or
+ * a puzzle opened from a ?seed= link (`random`, `shared` say which). `resume`: a level is solved, so the title offers Continue.
  * `over`: the level was solved past its par time, so the complete card leads with Retry. `copy`: the label of the Copy link pill on the complete card (absent: no pill). `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
  */
-export type LayoutCtx = { level: number; levels: number; daily?: boolean; shared?: boolean; random?: boolean; resume?: boolean; narrow?: boolean; copy?: string; over?: boolean; confirm?: boolean; cols?: 1 | 2 };
+export type LayoutCtx = { level: number; levels: number; shared?: boolean; random?: boolean; resume?: boolean; narrow?: boolean; copy?: string; over?: boolean; confirm?: boolean };
 
 /** Width of every card on a phone in portrait (outside XR), metres of panel space. */
 export const NARROW_W = 0.3;
@@ -71,9 +71,6 @@ const START_BTN_W = 0.2;
 const startHeight = (buttons: number) => PAD + buttons * START_BH + (buttons - 1) * MENU_GAP + 0.106;
 /** Room over the options buttons for the heading and the static line. */
 const OPTIONS_HEAD = 0.078;
-/** The level select's tiles: 44 mm tall and 6 mm apart in one column (a mouse), 50 mm and 12 mm in two (a finger or a hand); room over them for the "Levels" heading. */
-const SELECT_TILE = { 1: { w: 0.2, h: 0.044, gap: 0.006 }, 2: { w: (NARROW_W - 2 * PAD - GAP) / 2, h: 0.05, gap: GAP } } as const;
-const SELECT_HEAD = 0.058;
 /** Wide enough for "Turn the marked gear ↻ 37.5 rpm" in body type, and for the countdown ring and its time between the clock and the pause button. */
 const HUD_W = 0.3;
 
@@ -102,23 +99,10 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
         : [['relaxed', 'No timer', 'toggle'], ['sound', 'Sound', 'toggle'], ['reset', 'Reset progress', 'secondary'], ['back', 'Back', 'secondary']];
       return { width: NARROW_W, height: PAD + items.length * BH + (items.length - 1) * MENU_GAP + OPTIONS_HEAD, buttons: stack(PAD, items, START_BTN_W, BH) };
     }
-    case 'select': {
-      const n = ctx.levels;
-      const rnd = !!ctx.random;
-      const base = rnd ? n - 1 : n; // the numbered levels and the daily or shared one; Random comes after them
-      const label = (i: number) => (rnd && i === n - 1 ? 'Random' : i === base - 1 && (ctx.shared ? 'Shared' : ctx.daily && 'Daily')) || String(i + 1);
-      // The tiles in one centred column, or two when the room is short; Back is a pill under them. The tiles read top to bottom (one column) or left to right, then down (two).
-      const cols = ctx.cols ?? 1;
-      const t = SELECT_TILE[cols];
-      const rows = Math.ceil(n / cols);
-      const foot = PAD + BH + GAP;
-      const tiles = Array.from({ length: n }, (_, i): Button => {
-        const alone = cols === 2 && i === n - 1 && n % 2 === 1; // an odd last tile sits in the middle
-        const x = cols === 1 || alone ? 0 : (i % 2 === 0 ? -1 : 1) * (t.w + GAP) / 2;
-        return { id: `level-${i + 1}`, label: label(i), kind: 'tile', x, y: foot + (rows - 1 - Math.floor(i / cols)) * (t.h + t.gap) + t.h / 2, w: t.w, h: t.h };
-      });
-      const back: Button = { id: 'back', label: 'Back', kind: 'secondary', x: 0, y: PAD + BH / 2, w: BACK_W, h: BH };
-      return { width: NARROW_W, height: foot + rows * t.h + (rows - 1) * t.gap + SELECT_HEAD, buttons: [back, ...tiles] };
+    case 'picker': {
+      // Random level: how hard, one column: Easy, Medium, Hard, Expert, then Back.
+      const items: Parameters<typeof stack>[1] = [['easy', 'Easy', 'secondary'], ['medium', 'Medium', 'secondary'], ['hard', 'Hard', 'secondary'], ['expert', 'Expert', 'secondary'], ['back', 'Back', 'secondary']];
+      return { width: NARROW_W, height: PAD + items.length * BH + (items.length - 1) * MENU_GAP + OPTIONS_HEAD, buttons: stack(PAD, items, START_BTN_W, BH) };
     }
     case 'hud': {
       // The goal line runs across the top; under it the level, a time with tenths (0:04.7) and the pause button. The
@@ -127,23 +111,25 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       return { width, height: 0.096, buttons: [{ id: 'pause', label: 'Pause', kind: 'icon', x: width / 2 - 0.008 - BH / 2, y: 0.031, w: BH, h: BH }] };
     }
     case 'complete': {
-      // After the last level the primary already goes to level select, so there is no second Levels button.
-      // Random is not "the next level" after the daily: the daily is still the last of the levels.
-      const endless = !!ctx.random && ctx.level === ctx.levels - 1;
-      const last = endless || ctx.level + 1 >= (ctx.random ? ctx.levels - 1 : ctx.levels);
-      // Random keeps going: its primary is the next puzzle, not a way back to level select.
-      const nextLabel = endless ? 'Next puzzle' : last ? 'Levels' : 'Next';
-      // Over par: Retry leads, and Next stays a plain secondary so a slow solve never blocks the way on.
-      const items: Parameters<typeof row>[1] = ctx.over
-        ? [['restart', 'Retry', 'primary', primaryW], ['next', nextLabel, 'secondary', secondaryW]]
-        : [['next', nextLabel, 'primary', primaryW], ['restart', 'Restart', 'secondary', secondaryW]];
-      if (!last) items.push(['levels', 'Levels', 'secondary', secondaryW]);
-      if (ctx.copy && last) {
-        // The tinker puzzle is always the last level; only it has room for a third pill. On a phone "Copy link" needs a little more than 72 mm, so the primary gives it 8.
-        items[0]![3] = narrow ? 0.092 : primaryW;
-        items.push(['copy', ctx.copy, 'secondary', narrow ? 0.082 : secondaryW]);
-        // "Next puzzle" is the longest label: on a phone it gets 104 mm and Restart/Retry and Copy link share the rest (the row may use a little of the card's padding).
-        if (narrow && endless) for (const it of items) it[3] = it[0] === 'next' ? 0.104 : it[0] === 'restart' ? 0.062 : 0.08;
+      // The last slot is a Random level or a shared puzzle; the one before it is level 20, after which Next is the menu.
+      const special = ctx.level >= ctx.levels - 1;
+      const last = ctx.level === ctx.levels - 2;
+      // A campaign level: Retry is a new puzzle at the same difficulty. Over par it leads, and Next stays a plain secondary so a slow solve never blocks the way on.
+      // A Random level: Play again is a new puzzle at the same difficulty. A shared puzzle: Restart is the same puzzle again.
+      const items: Parameters<typeof row>[1] = special
+        ? ctx.random
+          ? [['next', 'Play again', 'primary', primaryW], ['menu', 'Menu', 'secondary', secondaryW]]
+          : [['restart', 'Restart', 'primary', primaryW], ['menu', 'Menu', 'secondary', secondaryW]]
+        : ctx.over
+          ? [['restart', 'Retry', 'primary', primaryW], ['next', last ? 'Menu' : 'Next', 'secondary', secondaryW]]
+          : [['next', last ? 'Menu' : 'Next', 'primary', primaryW], ['restart', 'Retry', 'secondary', secondaryW]];
+      if (ctx.copy) {
+        // On a phone "Copy link" needs a little more than 72 mm, so the primary gives it 8; "Play again" is the longest label and gets 104 mm.
+        if (narrow) {
+          items[0]![3] = special && ctx.random ? 0.104 : 0.092;
+          items[1]![3] = special && ctx.random ? 0.062 : secondaryW;
+        }
+        items.push(['copy', ctx.copy, 'secondary', narrow ? (special && ctx.random ? 0.08 : 0.082) : secondaryW]);
       }
       return { width: narrow ? NARROW_W : 0.35, height: 0.17, buttons: row(low, items) };
     }
@@ -153,7 +139,7 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
         return {
           width: 0.42,
           height: 0.15,
-          buttons: row(low, [['resume', 'Resume', 'primary', 0.1], ['restart', 'Restart', 'secondary', 0.08], ['levels', 'Choose level', 'secondary', 0.108], ['relaxed', 'No timer', 'toggle', 0.09]]),
+          buttons: row(low, [['resume', 'Resume', 'primary', 0.1], ['restart', 'Restart', 'secondary', 0.08], ['menu', 'Main menu', 'secondary', 0.108], ['relaxed', 'No timer', 'toggle', 0.09]]),
         };
       }
       // Phone: the row is full, and the zone does not apply outside XR, so the toggle rides the top right beside the "Paused" words.
@@ -161,7 +147,7 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       return {
         width: NARROW_W,
         height: 0.15,
-        buttons: [...row(low, [['resume', 'Resume', 'primary', 0.086], ['restart', 'Restart', 'secondary', 0.066], ['levels', 'Choose level', 'secondary', 0.1]]), toggle],
+        buttons: [...row(low, [['resume', 'Resume', 'primary', 0.086], ['restart', 'Restart', 'secondary', 0.066], ['menu', 'Main menu', 'secondary', 0.1]]), toggle],
       };
     }
     case 'initials': {

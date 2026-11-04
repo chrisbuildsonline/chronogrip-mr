@@ -27,14 +27,11 @@ const font = (weight: number, sizeMm: number, face = SANS) => `${weight} ${mm(si
 export type PanelCtx = {
   level: number;
   levels: number;
-  daily: boolean;
-  /** The last level is a puzzle opened from a ?seed= link: "Shared puzzle", not a numbered level or the daily. */
+  /** The last slot is a puzzle opened from a ?seed= link: "Shared puzzle", not a numbered level. */
   shared?: boolean;
-  /** The very last level is the endless Random puzzle, after the daily or shared one; `step` is the step of the Random puzzle on the board. */
+  /** The last slot is a Random level; `difficulty` is its name (Easy..Expert). */
   random?: boolean;
-  step?: number;
-  /** The step the next Random puzzle will be (the run's saved step), shown on the Random tile. */
-  next?: number;
+  difficulty?: string;
   resume: boolean;
   newBest: boolean;
   time: number;
@@ -42,8 +39,6 @@ export type PanelCtx = {
   hover: string | null;
   goal: Goal | null;
   fault?: keyof typeof FAULT_WORDS | null;
-  /** The level select's tiles in one column or two. */
-  cols?: 1 | 2;
   /** A phone in portrait outside XR: the narrow layouts and the phone type scale. */
   narrow?: boolean;
   /** The puzzle code of the level on the complete card (a tinker level), null for a hand-made one. */
@@ -70,13 +65,8 @@ export type PanelCtx = {
   board?: { label: string; entries: readonly Entry[]; empty: string; tab: 'local' | 'global'; note?: string };
 };
 
-/** Levels that count towards "N of M solved": Random is endless, so it is not one of them. */
-const counted = (ctx: PanelCtx) => ctx.levels - (ctx.random ? 1 : 0);
-const isDaily = (ctx: PanelCtx, i: number) => ctx.daily && i === counted(ctx) - 1;
-const isShared = (ctx: PanelCtx, i: number) => !!ctx.shared && i === counted(ctx) - 1;
 /** The HUD's countdown ring: its centre from the card's left edge, and its radius with the stroke, metres. */
 export const RING = { x: 0.183, r: 0.011 };
-const isRandom = (ctx: PanelCtx, i: number) => !!ctx.random && i === ctx.levels - 1;
 
 type Draw = CanvasRenderingContext2D;
 
@@ -170,48 +160,6 @@ function toggle(g: Draw, label: string, on: boolean, x: number, y: number) {
   text(g, label, x + w / 2, y + 1, font(600, size), on ? C.tintInk : C.ink, 'right');
 }
 
-/** A level tile: its number (or 'Daily'); once solved, the best time in muted text under it and a small amber check. */
-function tile(g: Draw, b: Button, x: number, y: number, w: number, h: number, ctx: PanelCtx) {
-  const i = Number(b.id.slice('level-'.length)) - 1;
-  const best = ctx.best[i];
-  const daily = isDaily(ctx, i);
-  if (daily) {
-    // The daily is set apart by an amber edge along its top.
-    g.save();
-    pill(g, x, y, w, h, mm(12));
-    g.clip();
-    g.fillStyle = C.amber;
-    g.fillRect(x - w / 2, y - h / 2, w, mm(4));
-    g.restore();
-  }
-  // "Shared" and "Random" are the longest words on a tile: serif like "Daily", shrunk to leave a little room at each side.
-  const word = daily || isShared(ctx, i) || isRandom(ctx, i);
-  let size = T.heading;
-  if (word) {
-    g.font = font(600, size, SERIF);
-    size *= Math.min(1, (w - mm(8)) / g.measureText(b.label).width);
-  }
-  // Random says where the run stands: "Step 3" in muted type under its name, or beside it on the phone's wide bar.
-  if (isRandom(ctx, i) && ctx.next !== undefined) {
-    const step = `Step ${ctx.next}`;
-    if (w > 3 * h) {
-      text(g, b.label, x - mm(24), y, font(600, size, SERIF), C.ink);
-      text(g, step, x + mm(46), y + 1, font(700, T.body), C.muted);
-    } else {
-      text(g, b.label, x, y - mm(8), font(600, size, SERIF), C.ink);
-      text(g, step, x, y + mm(16), font(700, T.body), C.muted);
-    }
-    return;
-  }
-  // A short tile (the single column's) has the label and the best time side by side; a tall one stacks them.
-  const side = best != null && h < 0.05 * PX;
-  text(g, b.label, x - (side ? mm(34) : 0), y - (best == null || side ? 0 : mm(8)), word ? font(600, size, SERIF) : font(700, T.xl), C.ink);
-  if (best == null) return;
-  if (side) text(g, clock(best), x + mm(24), y + 1, font(700, T.body), C.muted);
-  else text(g, clock(best), x, y + mm(16), font(700, T.body), C.muted);
-  check(g, x + w / 2 - mm(9), y - h / 2 + mm(10));
-}
-
 /**
  * The turn arrow (↻ or ↺ as the player sees the gear): an open circle of radius `r` round x, y with its gap at the top
  * and an arrowhead at the end it turns towards. Drawn, not a glyph, so it looks the same in every font.
@@ -240,7 +188,7 @@ export function turnArrow(g: Draw, x: number, y: number, r: number, dir: Goal['d
   g.fill();
 }
 
-/** A small amber disc with a cream tick: solved tiles, a matched goal. */
+/** A small amber disc with a cream tick: a matched goal, a pass. */
 function check(g: Draw, cx: number, cy: number, r = mm(5)) {
   const k = r / mm(5);
   g.beginPath();
@@ -382,9 +330,9 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
     }
     return text(g, b.label, x, y + 1, font(600, T.button), picked ? C.tintInk : C.muted); // the size of Back's label
   }
-  // A pill where it is wider than tall; a cell taller than wide (a tile, the phone's Back) gets the tile's corners.
+  // A pill where it is wider than tall; a cell taller than wide gets rounded corners.
   const tall = b.h > b.w;
-  if (b.kind === 'tile' || tall) pill(g, x, y, w, h, mm(12));
+  if (tall) pill(g, x, y, w, h, mm(12));
   else if (b.kind === 'icon') {
     g.beginPath();
     g.arc(x, y, h / 2, 0, Math.PI * 2);
@@ -402,7 +350,6 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
     for (const dx of [-mm(3.2), mm(3.2)]) g.fillRect(x + dx - mm(1.5), y - mm(6), mm(3), mm(12));
   } else if (b.kind === 'arrow') arrowGlyph(g, b.id, x, y);
   else if (b.kind === 'toggle') toggle(g, b.label, on, x, y);
-  else if (b.kind === 'tile') tile(g, b, x, y, w, h, ctx);
   else if (b.id === 'back') backLabel(g, b.label, x, y, tall);
   else text(g, b.label, x, y + 1, font(600, T.button * (b.h >= 0.05 ? 1.1 : 1)), b.kind === 'primary' ? C.cream : C.ink); // the start panel's big buttons carry bigger words
 }
@@ -426,11 +373,11 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   const right = (x: number) => at(l.width / 2 - x, 0)[0];
   const y = (v: number) => at(0, v)[1];
   const cx = at(0, 0)[0];
-  const daily = isDaily(ctx, ctx.level);
   const level = String(ctx.level + 1);
-  const shared = isShared(ctx, ctx.level);
-  const random = isRandom(ctx, ctx.level);
-  const name = random ? `Random · Step ${ctx.step ?? 1}` : shared ? 'Shared puzzle' : daily ? 'Daily' : `Level ${level}`;
+  const special = ctx.level >= ctx.levels - 1;
+  const shared = special && !!ctx.shared;
+  const random = special && !!ctx.random;
+  const name = random ? `Random · ${ctx.difficulty ?? ''}` : shared ? 'Shared puzzle' : `Level ${level}`;
   switch (screen) {
     case 'title': {
       // The words hang from the card's top, over the stacked buttons.
@@ -504,11 +451,11 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
         text(g, b.empty, ex, ey, font(600, T.body * Math.min(1, mm((l.width - 0.032) * 1000) / g.measureText(b.empty).width)), C.muted);
         break;
       }
-      // Rank muted, initials bold, the time as m:ss.t right-aligned so the digits stack, the date muted just after it; Random rows show "Step 6" and the time.
+      // Rank muted, initials bold, the time as m:ss.t right-aligned so the digits stack, the date muted just after it.
       const phone = !!ctx.narrow;
       const [size, small] = phone ? [11.5, 11] : [12.5, 12];
       // Offsets from a column's left edge, wide enough for a wide system font (DejaVu) too.
-      const cols = phone ? { name: 0.021, step: 0.058, level: 0.105, random: 0.17 } : { name: 0.024, step: 0.058, level: 0.11, random: 0.166 };
+      const cols = phone ? { name: 0.021, time: 0.105 } : { name: 0.024, time: 0.11 };
       (lowered ? b.entries.slice(0, grid.rows - 1) : b.entries).forEach((e, n) => {
         const i = n + (lowered ? 1 : 0);
         const rowY = grid.y0 - (i % grid.rows) * grid.pitch;
@@ -519,26 +466,18 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
         };
         put(String(n + 1), 0, font(600, small), C.muted, 'left');
         put(e.name, cols.name, font(700, size), C.ink, 'left');
-        if (e.step === undefined) put(clockTenths(e.ms / 1000), cols.level, font(600, size), C.ink, 'right');
-        else {
-          put(`Step ${e.step}`, cols.step, font(600, size), C.ink, 'left');
-          put(clockTenths(e.ms / 1000), cols.random, font(600, size), C.ink, 'right');
-        }
-        put(formatDate(e.date), (e.step === undefined ? cols.level : cols.random) + 0.012, font(500, small), C.muted, 'left'); // right after the time
+        put(clockTenths(e.ms / 1000), cols.time, font(600, size), C.ink, 'right');
+        put(formatDate(e.date), cols.time + 0.012, font(500, small), C.muted, 'left'); // right after the time
       });
       break;
     }
-    case 'select': {
-      const solved = ctx.best.filter((b) => b != null).length;
-      // The heading sits in the middle of the room over the targets (one row wide, two on a phone).
-      const head = (Math.max(...l.buttons.map((b) => b.y + b.h / 2)) + l.height) / 2;
-      text(g, 'Levels', left(0.016), y(head), font(600, T.heading, SERIF), C.ink, 'left');
-      text(g, `${solved} of ${counted(ctx)} solved`, right(0.016), y(head), font(600, T.body), C.muted, 'right');
+    case 'picker':
+      text(g, 'Random level', cx, y(l.height - 0.028), font(600, T.heading, SERIF), C.ink);
+      text(g, 'A new puzzle each time. How hard?', cx, y(l.height - 0.056), font(500, T.body * Math.min(1, (W - mm(2 * 16)) / (g.font = font(500, T.body), g.measureText('A new puzzle each time. How hard?').width))), C.muted);
       break;
-    }
     case 'hud':
       // A shared puzzle reads "SHARED" over "Puzzle", and the time moves over to make room.
-      // Random has no column split: one eyebrow line, "RANDOM · STEP 3", with the time under it at the left, so the step is
+      // Random has no column split: one eyebrow line, "RANDOM · HARD", with the time under it at the left, so the difficulty is
       // never squeezed beside the time.
       const timeX = random ? 0.016 : shared ? 0.08 : 0.066; // "SHARED" is wider than "LEVEL"
       // The heading shrinks to stop short of the time ("Step 12" is the widest).
@@ -546,10 +485,9 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
         g.font = font(600, T.heading, SERIF);
         return T.heading * Math.min(1, mm((timeX - 0.016 - 0.008) * 1000) / g.measureText(words).width);
       };
-      text(g, random ? `RANDOM · STEP ${ctx.step ?? 1}` : shared ? 'SHARED' : 'LEVEL', left(0.016), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
+      text(g, random ? `RANDOM · ${(ctx.difficulty ?? '').toUpperCase()}` : shared ? 'SHARED' : 'LEVEL', left(0.016), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
       if (!random) {
         if (shared) text(g, 'Puzzle', left(0.016), y(0.022), font(600, headSize('Puzzle'), SERIF), C.ink, 'left');
-        else if (daily) text(g, 'Daily', left(0.016), y(0.022), font(600, T.heading, SERIF), C.ink, 'left');
         else text(g, level, left(0.016), y(0.022), font(700, T.xl), C.ink, 'left');
         text(g, 'TIME', left(timeX), y(0.048), font(700, T.eyebrow), C.muted, 'left', 1);
       }

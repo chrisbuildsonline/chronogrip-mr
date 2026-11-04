@@ -1,20 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { LEVELS } from '../../src/levels';
-import { MAX_STEP } from '../../src/random';
 import { BOARDS, DEFAULT_INITIALS, TOP, addEntry, backInitial, boardOf, emptyScores, formatDate, loadScores, qualifies, saveScores, stepInitial, typeInitial, type Entry } from '../../src/scores';
 
 const KEY = 'chronogrip.scores.v1';
 const store = (raw: string | null) => ({ getItem: (k: string) => (k === KEY ? raw : null) });
 const lvl = (ms: number, date = '2026-11-04', name = 'ABC'): Entry => ({ name, ms, date });
-const rnd = (step: number, ms: number, date = '2026-11-04', name = 'ABC'): Entry => ({ name, step, ms, date });
 
 describe('boards', () => {
-  it('has one board per hand-made level and one for Random, and none for the daily or a shared puzzle', () => {
-    expect(BOARDS).toEqual([...LEVELS.map((l) => l.id), 'random']);
+  it('has one board per campaign level l1-l20 and one per Random level difficulty, and none for a shared puzzle', () => {
+    expect(BOARDS).toEqual([...Array.from({ length: 20 }, (_, i) => `l${i + 1}`), 'random-easy', 'random-medium', 'random-hard', 'random-expert']);
     expect(boardOf('l1')).toBe('l1');
-    expect(boardOf('l8')).toBe('l8');
+    expect(boardOf('l20')).toBe('l20');
     expect(boardOf('t123456')).toBeNull();
-    expect(boardOf('l9')).toBeNull();
+    expect(boardOf('l21')).toBeNull();
     expect(boardOf('constructor')).toBeNull();
   });
 });
@@ -89,41 +86,13 @@ describe('addEntry and qualifies on a level board', () => {
   });
 });
 
-describe('the Random board', () => {
-  it('ranks by step, highest first, then by time', () => {
+describe('a Random level difficulty board', () => {
+  it('ranks by time like a level board, one board per difficulty', () => {
     let s = emptyScores();
-    s = addEntry(s, 'random', rnd(3, 20000, '2026-11-04', 'AAA'));
-    s = addEntry(s, 'random', rnd(6, 90000, '2026-11-04', 'BBB'));
-    s = addEntry(s, 'random', rnd(6, 80000, '2026-11-04', 'CCC'));
-    s = addEntry(s, 'random', rnd(1, 5000, '2026-11-04', 'DDD'));
-    expect(s.boards.random!.map((e) => e.name)).toEqual(['CCC', 'BBB', 'AAA', 'DDD']);
-  });
-
-  it('ties on step and time go to the earlier date', () => {
-    let s = addEntry(emptyScores(), 'random', rnd(4, 9000, '2026-11-05', 'LAT'));
-    s = addEntry(s, 'random', rnd(4, 9000, '2026-11-01', 'EAR'));
-    expect(s.boards.random!.map((e) => e.name)).toEqual(['EAR', 'LAT']);
-  });
-
-  it('trims to ten and qualifies by step first', () => {
-    let s = emptyScores();
-    for (let i = 0; i < 10; i++) s = addEntry(s, 'random', rnd(5, 10000 + i * 1000));
-    expect(qualifies(s, 'random', rnd(6, 999999))).toEqual({ ok: true, rank: 1 });
-    expect(qualifies(s, 'random', rnd(4, 1000))).toEqual({ ok: false, rank: 11 });
-    expect(qualifies(s, 'random', rnd(5, 12500))).toEqual({ ok: true, rank: 4 });
-    s = addEntry(s, 'random', rnd(6, 999999));
-    expect(s.boards.random).toHaveLength(TOP);
-    expect(s.boards.random![0]).toMatchObject({ step: 6 });
-    expect(s.boards.random!.at(-1)!.ms).toBe(18000);
-  });
-
-  it('needs a step in range', () => {
-    const s = emptyScores();
-    expect(qualifies(s, 'random', lvl(1000)).ok).toBe(false);
-    expect(qualifies(s, 'random', rnd(0, 1000)).ok).toBe(false);
-    expect(qualifies(s, 'random', rnd(MAX_STEP + 1, 1000)).ok).toBe(false);
-    expect(qualifies(s, 'random', rnd(1.5, 1000)).ok).toBe(false);
-    expect(qualifies(s, 'random', rnd(MAX_STEP, 1000)).ok).toBe(true);
+    for (const ms of [30000, 10000, 20000]) s = addEntry(s, 'random-hard', lvl(ms));
+    expect(s.boards['random-hard']!.map((e) => e.ms)).toEqual([10000, 20000, 30000]);
+    expect(s.boards['random-easy']).toEqual([]);
+    expect(qualifies(s, 'random', lvl(1000)).ok).toBe(false); // the old single board is gone
   });
 });
 
@@ -140,7 +109,7 @@ describe('saveScores and loadScores', () => {
   it('round trips', () => {
     const data: Record<string, string> = {};
     let s = addEntry(emptyScores(), 'l4', lvl(7200, '2026-11-04', 'ZED'));
-    s = addEntry(s, 'random', rnd(6, 61000, '2026-11-03', 'QUX'));
+    s = addEntry(s, 'random-hard', lvl(61000, '2026-11-03', 'QUX'));
     saveScores({ setItem: (k, v) => void (data[k] = v) }, s);
     expect(Object.keys(data)).toEqual([KEY]);
     expect(loadScores({ getItem: (k) => data[k] ?? null })).toEqual(s);
@@ -200,16 +169,16 @@ describe('saveScores and loadScores', () => {
     expect(s.boards.l5![0]!.ms).toBe(1000);
   });
 
-  it('drops a Random entry without a valid step, and a level entry keeps no step', () => {
+  it('keeps no step on an entry, and ignores the old single Random board', () => {
     const raw = JSON.stringify({
       version: 1,
       boards: {
-        random: [{ name: 'ABC', ms: 1000, date: '2026-11-04' }, { name: 'ABC', step: 99, ms: 1000, date: '2026-11-04' }, { name: 'ABC', step: 3, ms: 1000, date: '2026-11-04' }],
+        random: [{ name: 'ABC', step: 3, ms: 1000, date: '2026-11-04' }],
         l1: [{ name: 'ABC', step: 3, ms: 1000, date: '2026-11-04' }],
       },
     });
     const s = loadScores(store(raw));
-    expect(s.boards.random).toEqual([{ name: 'ABC', step: 3, ms: 1000, date: '2026-11-04' }]);
+    expect(s.boards.random).toBeUndefined();
     expect(s.boards.l1).toEqual([{ name: 'ABC', ms: 1000, date: '2026-11-04' }]);
   });
 

@@ -141,13 +141,17 @@ interface ChronoHook {
   /** Live: the black layer behind the menus: `full` over a flat view, `backing` panel behind the card in XR, null in play. */
   readonly scrim: { readonly mode: 'full' | 'backing' | null; readonly opacity: number; readonly backingOpacity: number };
   /** Live: the card now up (its screen and panel-space size in metres), null when none is shown. */
-  readonly card: { readonly screen: 'title' | 'select' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options'; readonly width: number; readonly height: number } | null;
+  readonly card: { readonly screen: 'title' | 'picker' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options'; readonly width: number; readonly height: number } | null;
   /** The words on the card now up: text, font size in panel metres, and that size in page pixels as seen now. */
   labels(): { text: string; size: number; height: number; y: number; left: number; right: number }[];
   /** Live: the puzzle code of the loaded level (a tinker level), null for a hand-made one. */
   readonly seedCode: string | null;
   /** Live: Random mode. `mode`: the board is the Random puzzle; `step`: its step; `next`: the step of the next puzzle (saved); `slow`: the last solve was over par; `slot`: its level index. */
-  readonly random: { readonly mode: boolean; readonly step: number; readonly next: number; readonly slow: boolean; readonly slot: number };
+  readonly random: { readonly mode: boolean; readonly difficulty: string; readonly slot: number };
+  /** Test hook: starts campaign level `n` (1-based) at once, a fresh puzzle. */
+  jump(n: number): void;
+  /** The solution of the level on the board, gear id to axle id. */
+  readonly solution: Record<string, string>;
   /** Live: the saved high score boards (a copy): the last initials used, and per board id (l1-l8, random) its top ten entries, best first. Random entries carry the `step` solved. */
   readonly scores: { readonly initials: string; readonly boards: Readonly<Record<string, readonly { readonly name: string; readonly ms: number; readonly date: string; readonly step?: number }[]>> };
   /** Live: whether sound is on (Options; saved as chronogrip.sound.v1). */

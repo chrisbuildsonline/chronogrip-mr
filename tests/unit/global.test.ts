@@ -5,15 +5,15 @@ const ok = (body: unknown, status = 200) => vi.fn(async () => new Response(JSON.
 const hang = () => vi.fn((_u: string, init: RequestInit) => new Promise<Response>((_r, rej) => init.signal!.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')))));
 
 describe('scorePayload', () => {
-  it('builds the body for a level time, rounded to 2 dp, with no step', () => {
+  it('builds the body for a level time, rounded to 2 dp', () => {
     expect(scorePayload('l3', 'ABC', 12.3456)).toEqual({ level: 'l3', initials: 'ABC', seconds: 12.35 });
   });
-  it('adds the step for Random only', () => {
-    expect(scorePayload('random', 'XYZ', 40, 7)).toEqual({ level: 'random', initials: 'XYZ', seconds: 40, step: 7 });
-    expect(scorePayload('l1', 'XYZ', 40, 7)).toEqual({ level: 'l1', initials: 'XYZ', seconds: 40 });
+  it('takes every campaign board and every Random level difficulty board, and nothing else', () => {
+    for (const board of ['l1', 'l9', 'l20', 'random-easy', 'random-medium', 'random-hard', 'random-expert']) expect(scorePayload(board, 'XYZ', 40)).toEqual({ level: board, initials: 'XYZ', seconds: 40 });
+    for (const board of ['l0', 'l21', 'random', 'random-', 'random-insane']) expect(scorePayload(board, 'XYZ', 40), board).toBeNull();
   });
   it.each([
-    ['unknown level', 'l9', 'ABC', 5, undefined],
+    ['unknown level', 'l21', 'ABC', 5, undefined],
     ['daily id', 't123456', 'ABC', 5, undefined],
     ['injection level', 'l1&x=1', 'ABC', 5, undefined],
     ['prototype level', 'constructor', 'ABC', 5, undefined],
@@ -28,13 +28,8 @@ describe('scorePayload', () => {
     ['Infinity seconds', 'l1', 'ABC', Infinity, undefined],
     ['an hour', 'l1', 'ABC', 3600, undefined],
     ['rounds to zero', 'l1', 'ABC', 0.001, undefined],
-    ['random without step', 'random', 'ABC', 5, undefined],
-    ['random step 0', 'random', 'ABC', 5, 0],
-    ['random step 1001', 'random', 'ABC', 5, 1001],
-    ['random fractional step', 'random', 'ABC', 5, 2.5],
-    ['random NaN step', 'random', 'ABC', 5, NaN],
-  ])('rejects %s', (_n, level, initials, seconds, step) => {
-    expect(scorePayload(level, initials, seconds, step)).toBeNull();
+  ])('rejects %s', (_n, level, initials, seconds) => {
+    expect(scorePayload(level, initials, seconds)).toBeNull();
   });
   it('rejects non-string and non-number inputs', () => {
     for (const bad of [null, undefined, 5, {}, []]) {
@@ -46,9 +41,9 @@ describe('scorePayload', () => {
 });
 
 describe('boardUrl', () => {
-  it('asks a level board by time and a Random board by step then time, ten rows', () => {
-    expect(boardUrl('l1')).toBe(`${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.l1&order=seconds.asc&limit=10`);
-    expect(boardUrl('random')).toBe(`${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.random&order=step.desc,seconds.asc&limit=10`);
+  it('asks a board by time, ten rows', () => {
+    expect(boardUrl('l1')).toBe(`${GLOBAL_BASE}?select=initials,seconds,created_at&level=eq.l1&order=seconds.asc&limit=10`);
+    expect(boardUrl('random-hard')).toBe(`${GLOBAL_BASE}?select=initials,seconds,created_at&level=eq.random-hard&order=seconds.asc&limit=10`);
   });
   it('carries only the publishable key', () => {
     expect(GLOBAL_KEY).toMatch(/^sb_publishable_/);
@@ -56,10 +51,10 @@ describe('boardUrl', () => {
 });
 
 describe('parseRows', () => {
-  const row = { initials: 'ABC', seconds: 12.34, step: null, created_at: '2026-11-04T10:11:12.000Z' };
+  const row = { initials: 'ABC', seconds: 12.34, created_at: '2026-11-04T10:11:12.000Z' };
   it('turns good rows into entries', () => {
     expect(parseRows([row], 'l1')).toEqual([{ name: 'ABC', ms: 12340, date: '2026-11-04' }]);
-    expect(parseRows([{ ...row, step: 6 }], 'random')).toEqual([{ name: 'ABC', ms: 12340, date: '2026-11-04', step: 6 }]);
+    expect(parseRows([row], 'random-hard')).toEqual([{ name: 'ABC', ms: 12340, date: '2026-11-04' }]);
   });
   it('accepts numeric strings from numeric columns', () => {
     expect(parseRows([{ ...row, seconds: '12.34' }], 'l1')[0]?.ms).toBe(12340);
@@ -81,22 +76,22 @@ describe('parseRows', () => {
     ];
     expect(parseRows([...junk, row], 'l1')).toEqual([{ name: 'ABC', ms: 12340, date: '2026-11-04' }]);
   });
-  it('drops a Random row without a whole step in range, and ignores a step on a level row', () => {
-    for (const step of [null, 0, 1001, 2.5, 'six']) expect(parseRows([{ ...row, step }], 'random')).toEqual([]);
+  it('ignores a stray step column on any row, and gives nothing for a board that does not exist', () => {
     expect(parseRows([{ ...row, step: 4 }], 'l2')).toEqual([{ name: 'ABC', ms: 12340, date: '2026-11-04' }]);
+    expect(parseRows([row], 'random')).toEqual([]);
   });
   it('returns nothing for a body that is not a list, and at most ten rows', () => {
     for (const bad of [null, undefined, {}, 'oops', 4, { message: 'no' }]) expect(parseRows(bad, 'l1')).toEqual([]);
     expect(parseRows(Array.from({ length: 30 }, () => row), 'l1')).toHaveLength(10);
   });
   it('knows no board it was not asked for', () => {
-    expect(parseRows([row], 'l9')).toEqual([]);
+    expect(parseRows([row], 'l21')).toEqual([]);
   });
 });
 
 describe('fetchGlobal', () => {
   it('sends the key and returns parsed rows', async () => {
-    const f = ok([{ initials: 'ZED', seconds: 9.5, step: null, created_at: '2026-01-02T00:00:00Z' }]);
+    const f = ok([{ initials: 'ZED', seconds: 9.5, created_at: '2026-01-02T00:00:00Z' }]);
     expect(await fetchGlobal('l1', f)).toEqual([{ name: 'ZED', ms: 9500, date: '2026-01-02' }]);
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(boardUrl('l1'));
@@ -110,7 +105,7 @@ describe('fetchGlobal', () => {
   });
   it('does not ask at all for a board it does not know', async () => {
     const f = ok([]);
-    expect(await fetchGlobal('l9', f)).toBeNull();
+    expect(await fetchGlobal('l21', f)).toBeNull();
     expect(f).not.toHaveBeenCalled();
   });
 });
@@ -118,23 +113,23 @@ describe('fetchGlobal', () => {
 describe('submitGlobal', () => {
   it('posts the JSON with the key and a minimal return', async () => {
     const f = vi.fn(async () => new Response(null, { status: 201 }));
-    expect(await submitGlobal('random', 'ABC', 41234, 3, f)).toBe(true);
+    expect(await submitGlobal('random-hard', 'ABC', 41234, f)).toBe(true);
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(GLOBAL_BASE);
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({ apikey: GLOBAL_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' });
-    expect(JSON.parse(init.body as string)).toEqual({ level: 'random', initials: 'ABC', seconds: 41.23, step: 3 });
+    expect(JSON.parse(init.body as string)).toEqual({ level: 'random-hard', initials: 'ABC', seconds: 41.23 });
   });
   it('sends nothing for an invalid score', async () => {
     const f = vi.fn(async () => new Response(null, { status: 201 }));
-    expect(await submitGlobal('l1', 'ab', 5000, undefined, f)).toBe(false);
-    expect(await submitGlobal('l1', 'ABC', 0, undefined, f)).toBe(false);
-    expect(await submitGlobal('t1', 'ABC', 5000, undefined, f)).toBe(false);
+    expect(await submitGlobal('l1', 'ab', 5000, f)).toBe(false);
+    expect(await submitGlobal('l1', 'ABC', 0, f)).toBe(false);
+    expect(await submitGlobal('t1', 'ABC', 5000, f)).toBe(false);
     expect(f).not.toHaveBeenCalled();
   });
   it('never throws on a 500, a throw or a timeout', async () => {
-    expect(await submitGlobal('l1', 'ABC', 5000, undefined, ok({}, 500))).toBe(false);
-    expect(await submitGlobal('l1', 'ABC', 5000, undefined, vi.fn(async () => Promise.reject(new Error('x'))))).toBe(false);
-    expect(await submitGlobal('l1', 'ABC', 5000, undefined, hang() as never, 20)).toBe(false);
+    expect(await submitGlobal('l1', 'ABC', 5000, ok({}, 500))).toBe(false);
+    expect(await submitGlobal('l1', 'ABC', 5000, vi.fn(async () => Promise.reject(new Error('x'))))).toBe(false);
+    expect(await submitGlobal('l1', 'ABC', 5000, hang() as never, 20)).toBe(false);
   });
 });

@@ -25,11 +25,11 @@ import { createSound, loadSoundOn, saveSoundOn, ticksBetween } from './sound';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
 import { firstUnsolved, loadProgress, recordOutcome, recordSolve, saveProgress, type Progress } from './progress';
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
-import { dailySeed, tinkerLevel, withDaily } from './tinker';
+import { tinkerLevel } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
 import { fetchGlobal, submitGlobal } from './global';
 import { BOARDS, addEntry, backInitial, boardOf, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
-import { START, adapt, freshSeed, loadRandom, puzzleFor, randomLevel, saveRandom, type RandomState } from './random';
+import { CAMPAIGN, DIFFICULTIES, DIFFICULTY_LEVEL, freshSeed, kindOfDifficulty, puzzleFor, randomLevel, type Difficulty } from './random';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
 import { goalOf, goalText } from './goal';
@@ -49,13 +49,13 @@ if (!enterButton || !enterNote) throw new Error('Enter MR controls missing');
 
 const world = await World.create(container, createWorldOptions());
 
-// ?seed=CODE: a shared tinker puzzle. It takes the daily's slot (the last level) and is the board the title opens on;
-// its best time is saved under its own id (t<seed>), so the daily's and l1-l5's saved times are never touched.
+// ?seed=CODE: a shared puzzle, the exact one the code was made from. It takes the extra slot after the 20 campaign levels and is
+// the board the title opens on; its best time is saved under its own id (t<seed>), so the campaign's saved times are never touched.
 const seedParam = new URLSearchParams(location.search).get('seed');
 const sharedSeed = seedParam === null ? null : decodeSeed(seedParam);
 const seedNote = document.getElementById('seed-note');
 if (seedParam !== null && sharedSeed === null && seedNote) {
-  seedNote.textContent = 'That puzzle code didn’t work. Pick any level to play.';
+  seedNote.textContent = 'That puzzle code didn’t work. Start a new game instead.';
   seedNote.hidden = false;
   setTimeout(() => (seedNote.hidden = true), 8000);
 }
@@ -67,33 +67,51 @@ const storage = (() => {
     return null;
   }
 })();
-// Random mode (src/random.ts): the run's step is saved; the puzzle in the last slot is re-rolled for each new one.
-// Its solves are never saved as level progress: the run's one key is all it keeps.
-let run: RandomState = loadRandom(storage);
-/** The step of the Random puzzle in the last slot, and whether its first solve has already moved the run on. */
-let randomStep = run.step;
-let randomScored = false;
-const rollRandom = (): Level => {
-  randomStep = run.step;
-  randomScored = false;
-  return randomLevel(randomStep, freshSeed(randomStep));
+// Generated puzzles (src/random.ts): every campaign level is made fresh each time it is started, from a new seed, so it cannot be
+// learned; the seed is kept so the puzzle's code can be shared. `classic` (a flag the e2e specs set) plays the hand-made
+// levels l1-l8 in their places, so specs can drive a puzzle they know.
+const classic = (() => {
+  try {
+    return window.localStorage.getItem('chronogrip.classic.v1') === '1';
+  } catch {
+    return false;
+  }
+})();
+const seedOfLevel = new WeakMap<Level, number>();
+function campaignLevel(i: number): Level {
+  const hand = classic ? LEVELS[i] : undefined;
+  if (hand) return hand;
+  const seed = freshSeed(i + 1);
+  const level = { ...randomLevel(i + 1, seed), id: `l${i + 1}`, name: `Level ${i + 1}` };
+  seedOfLevel.set(level, seed);
+  return level;
+}
+/** What the extra slot after the campaign holds: a Random level at a difficulty, or a puzzle opened from a ?seed= link. */
+let special: 'random' | 'shared' = sharedSeed === null ? 'random' : 'shared';
+let randomDiff: Difficulty = 'easy';
+const randomPuzzle = (): Level => {
+  const seed = freshSeed(kindOfDifficulty(randomDiff));
+  const level = randomLevel(DIFFICULTY_LEVEL[randomDiff], seed);
+  seedOfLevel.set(level, seed);
+  return level;
 };
-// The hand-made levels, then today's daily tinker puzzle (or the shared one), then the Random puzzle.
-let levels: readonly Level[] = [...LEVELS, sharedSeed === null ? tinkerLevel(dailySeed(new Date())) : puzzleFor(sharedSeed, tinkerLevel), rollRandom()];
+// The 20 campaign levels, then the extra slot.
+let levels: readonly Level[] = [...Array.from({ length: CAMPAIGN }, (_, i) => campaignLevel(i)), sharedSeed === null ? randomPuzzle() : puzzleFor(sharedSeed, tinkerLevel)];
 let levelIds = levels.map((l) => l.id);
-/** The slot of the Random puzzle: always the last one. */
+/** The slot after the campaign: always the last one. */
 const randomSlot = () => levels.length - 1;
 let progress: Progress = loadProgress(storage);
-// High score boards (src/scores.ts): a top ten per hand-made level and one for Random, kept on this device.
+// High score boards (src/scores.ts): a top ten per campaign level and one per Random level difficulty, kept on this device.
 let scores: Scores = loadScores(storage);
 /**
  * A card laid over the flow's own: the high scores board or the options (opened from the start panel), or the initials entry
- * that comes before the complete card when a solve makes its board's top ten. `board` is the board id (l1-l8, random);
+ * that comes before the complete card when a solve makes its board's top ten. `board` is the board id (l1-l20, random-easy..);
  * `confirm`: Reset progress is waiting for its yes.
  */
 type Overlay =
   | { kind: 'board'; board: string; tab: 'local' | 'global' }
   | { kind: 'options'; confirm: boolean }
+  | { kind: 'picker' }
   | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; letters: string; cursor: number };
 let overlay: Overlay | null = null;
 // The global top tens (src/global.ts): the last good board per id, kept so a tab switch does not ask again, and how this
@@ -119,10 +137,10 @@ let relaxed = loadRelaxed(storage);
 let par = 0;
 let outcome: Outcome | null = null;
 /** The title board is the level Continue plays: the first one not yet solved. */
-const continueAt = () => firstUnsolved(progress, levelIds.slice(0, -1));
-const resume = () => levelIds.slice(0, -1).some((id) => Object.hasOwn(progress.best, id));
+const continueAt = () => firstUnsolved(progress, levelIds.slice(0, CAMPAIGN));
+const resume = () => levelIds.slice(0, CAMPAIGN).some((id) => Object.hasOwn(progress.best, id));
 
-let levelIndex = sharedSeed === null ? continueAt() : randomSlot() - 1;
+let levelIndex = sharedSeed === null ? continueAt() : randomSlot();
 let level: Level = levels[levelIndex]!;
 par = parFor(level);
 tuneForSoftwareGl(world.renderer);
@@ -245,14 +263,6 @@ function menuMargin(card: { width: number; height: number }): number {
   const clash = left < (title?.right ?? 0) + 8 || right > entry.left - 8;
   return clash ? Math.max(MENU_MARGIN, headerBottom()) : MENU_MARGIN;
 }
-/** A single column of level tiles needs this many pixels per metre or the words get small; below it, two columns. */
-const SELECT_MIN_PX = 1150;
-/** One column of tiles if the screen has the room, else two; XR is always two (the column would climb out of the comfort cone). */
-const selectCols = (): 1 | 2 => {
-  if (world.renderer.xr.isPresenting) return 2;
-  const tall = layout('select', { level: 0, levels: levels.length, cols: 1 }).height;
-  return (window.innerHeight - 2 * MENU_MARGIN) / tall >= SELECT_MIN_PX ? 1 : 2;
-};
 /**
  * In XR the card tilts to face the head; on desktop it lies face on to the preview camera, so it reads square. On a phone
  * it is a bottom sheet held in front of the camera, a phone width wide, whatever the orbit or zoom. A menu is the exception
@@ -407,8 +417,11 @@ const collectTargets = () => {
 collectTargets();
 
 /** A fresh board for a level: every gear back on the strip, the clock at zero. */
-/** The short code of a tinker level (ids t<seed>); null for a hand-made one. */
-const codeOf = (l: Level): string | null => (/^t\d+$/.test(l.id) ? encodeSeed(Number(l.id.slice(1))) : null);
+/** The short code of a generated puzzle (the seed it was made from, or the id t<seed> of a shared one); null for a hand-made one. */
+const codeOf = (l: Level): string | null => {
+  const seed = seedOfLevel.get(l);
+  return seed !== undefined ? encodeSeed(seed) : /^t\d+$/.test(l.id) ? encodeSeed(Number(l.id.slice(1))) : null;
+};
 /** Copy link on the complete card: idle, copied (back to idle after a moment), or failed (the card shows the link). */
 let copy: { state: 'idle' | 'copied' | 'failed'; link: string | null } = { state: 'idle', link: null };
 const COPIED_MS = 2500;
@@ -480,40 +493,36 @@ function putBack(): void {
   recheck();
 }
 
-/** On the title or level select, swaps in today's daily if the date has rolled over since it was picked (a session left open past midnight). */
-function rolloverDaily(): void {
-  if (sharedSeed !== null || (flow.name !== 'title' && flow.name !== 'select')) return;
-  const base = levels.slice(0, -1);
-  const fresh = withDaily(base, new Date());
-  if (fresh === base) return;
-  levels = [...fresh, levels[randomSlot()]!];
+/** A fresh puzzle for a slot: a new campaign level, or a new Random level at the same difficulty. */
+function freshLevel(i: number): void {
+  const next = i === randomSlot() ? (special === 'random' ? randomPuzzle() : levels[i]!) : campaignLevel(i);
+  levels = levels.map((l, k) => (k === i ? next : l));
   levelIds = levels.map((l) => l.id);
-  if (flow.name === 'title') {
-    loadLevel(continueAt());
-    flow = { ...flow, level: levelIndex };
-  }
+  randomScored = false;
 }
+/** Whether the slot holds a Random level. */
+const isRandomLevel = (i: number) => i === randomSlot() && special === 'random';
+let randomScored = false;
 
-/** A new Random puzzle at the run's step, played at once. */
-function playRandom(): void {
-  levels = [...levels.slice(0, -1), rollRandom()];
-  levelIds = levels.map((l) => l.id);
-  send({ type: 'select', level: randomSlot() });
+/** Random level at a difficulty, played at once. */
+function playRandom(d: Difficulty): void {
+  randomDiff = d;
+  special = 'random';
+  send({ type: 'play', level: randomSlot() });
 }
 
 /** If this solve makes its board's top ten, the initials card comes up before the complete card. */
-function askInitials(board: string, extra: { step?: number }): void {
-  const entry = { ms: Math.round(levelClock.seconds * 1000), date: todayISO(), ...extra };
+function askInitials(board: string): void {
+  const entry = { ms: Math.round(levelClock.seconds * 1000), date: todayISO() };
   const q = qualifies(scores, board, { ...entry, name: scores.initials });
   if (q.ok) overlay = { kind: 'initials', board, rank: q.rank, entry, letters: scores.initials, cursor: 0 };
 }
 
 /** The best times card's board: its name, its rows and what it says while empty. */
 function boardCard(id: string, tab: 'local' | 'global'): NonNullable<PanelCtx['board']> {
-  const n = id.slice(1);
-  const random = id === 'random';
-  const label = random ? 'Random' : `Level ${n}`;
-  const local = { label, tab, entries: scores.boards[id]!, empty: `No times yet. Solve ${random ? 'a Random puzzle' : `level ${n}`} to set one.` };
+  const random = id.startsWith('random-');
+  const name = random ? `Random · ${id.slice('random-'.length).replace(/^./, (c) => c.toUpperCase())}` : `Level ${id.slice(1)}`;
+  const local = { label: name, tab, entries: scores.boards[id]!, empty: `No times yet. Solve ${random ? `a ${name} puzzle` : name.toLowerCase()} to set one.` };
   if (tab === 'local') return local;
   // Global: the last good rows; with none, "Loading" while asking and the local rows with a quiet note once it failed.
   const rows = globalRows.get(id);
@@ -523,17 +532,14 @@ function boardCard(id: string, tab: 'local' | 'global'): NonNullable<PanelCtx['b
 }
 
 /**
- * Options > Reset progress, once confirmed: forgets every solved level (best times on the tiles, passes, Continue) and the
- * Random run's step, and puts level 1 back on the board. The high scores boards are a separate store and stay.
+ * Options > Reset progress, once confirmed: forgets every solved level (passes, Continue) and puts level 1 back on the board.
+ * The high scores boards are a separate store and stay.
  */
 function resetProgress(): void {
   progress = { best: {} };
   saveProgress(storage, progress);
-  run = START;
-  saveRandom(storage, run);
-  levels = [...levels.slice(0, -1), rollRandom()];
-  levelIds = levels.map((l) => l.id);
-  loadLevel(sharedSeed === null ? continueAt() : randomSlot() - 1);
+  freshLevel(continueAt());
+  loadLevel(continueAt());
   flow = { ...flow, level: levelIndex };
 }
 
@@ -555,6 +561,9 @@ function pressOverlay(id: string): void {
       resetProgress();
       overlay = null;
     } else return;
+  } else if (o.kind === 'picker') {
+    overlay = null;
+    if (id !== 'back' && (DIFFICULTIES as readonly string[]).includes(id)) return playRandom(id as Difficulty);
   } else if (o.kind === 'board') {
     if (id === 'back') overlay = null;
     else if (id === 'board-prev' || id === 'board-next') overlay = { ...o, board: BOARDS[(BOARDS.indexOf(o.board) + (id === 'board-next' ? 1 : BOARDS.length - 1)) % BOARDS.length]! };
@@ -568,7 +577,7 @@ function pressOverlay(id: string): void {
     else if (id === 'save') {
       scores = addEntry(scores, o.board, { ...o.entry, name: o.letters });
       saveScores(storage, scores);
-      void submitGlobal(o.board, scores.initials, o.entry.ms, o.entry.step); // fire and forget: the card never waits on it
+      void submitGlobal(o.board, scores.initials, o.entry.ms); // fire and forget: the card never waits on it
       overlay = null;
     } else if (id === 'skip') overlay = null;
     else return;
@@ -582,16 +591,20 @@ function send(e: FlowEvent): void {
   if (next === flow) return;
   // A card laid over the flow goes when the flow leaves its place: the board with the title, the initials with the complete card.
   if (overlay && next.name !== (overlay.kind === 'initials' ? 'complete' : 'title')) overlay = null;
-  if (next.name === 'playing') lastBoard = next.level === randomSlot() ? 'random' : (boardOf(levels[next.level]!.id) ?? lastBoard);
+  if (next.name === 'playing') lastBoard = next.level === randomSlot() ? (special === 'random' ? `random-${randomDiff}` : lastBoard) : (boardOf(levels[next.level]!.id) ?? lastBoard);
   if (next.name === 'paused') {
     putBack();
     letGoKnob();
     sound.suspend();
   } else if (flow.name === 'paused') sound.resume();
-  if (reloads(flow, e, next)) loadLevel(next.level);
+  if (reloads(flow, e, next)) {
+    // A puzzle is made fresh each time it is started: a level played, the next one, a Retry on the complete card, the board the
+    // title shows. A Restart from the pause card puts the same puzzle back.
+    if (e.type === 'play' || e.type === 'next' || e.type === 'back' || (e.type === 'restart' && flow.name === 'complete')) freshLevel(next.level);
+    loadLevel(next.level);
+  }
   const entering = next.name !== flow.name && flow.name !== 'paused';
   flow = next;
-  rolloverDaily();
   if (next.name === 'calibrate' && entering) {
     rewardAt = performance.now();
     spins = checkLevel(level, placements).spins;
@@ -604,14 +617,12 @@ function send(e: FlowEvent): void {
     rewardAt = calibratedAt = performance.now();
     letGoKnob();
     outcome = relaxed ? null : outcomeOf(levelClock.seconds, par);
-    if (levelIndex === randomSlot()) {
-      // Random: the first solve of a puzzle moves the run on (a Retry after going over does not count twice); nothing goes into level progress.
+    if (isRandomLevel(levelIndex)) {
+      // A Random level: its times go on its difficulty's board (first solve of a puzzle only), nothing into level progress.
       newBest = false;
       if (!randomScored) {
         randomScored = true;
-        run = adapt(run, relaxed ? null : levelClock.seconds, par);
-        saveRandom(storage, run);
-        askInitials('random', { step: randomStep });
+        askInitials(`random-${randomDiff}`);
       }
     } else {
       // A first solve is just solved; New best is for beating a time already saved.
@@ -623,7 +634,7 @@ function send(e: FlowEvent): void {
       if (outcome) progress = recordOutcome(progress, level.id, outcome);
       if (r.newBest || outcome) saveProgress(storage, progress);
       const board = boardOf(level.id);
-      if (board) askInitials(board, {});
+      if (board) askInitials(board);
     }
     burst.position.set(...trayLocal(DIAL_AT[0], DIAL_AT[1], 0.008));
   }
@@ -633,7 +644,6 @@ function send(e: FlowEvent): void {
 
 const PRESS: Record<string, FlowEvent> = {
   continue: { type: 'start' }, // straight into the next unsolved level
-  levels: { type: 'select' },
   pause: { type: 'pause' },
   resume: { type: 'resume' },
   restart: { type: 'restart' },
@@ -646,7 +656,6 @@ const PRESS: Record<string, FlowEvent> = {
 const PRESS_GAP_MS = 300;
 let pressedAt = -Infinity;
 function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
-  rolloverDaily();
   const now = performance.now();
   if (by === 'hand' && now - pressedAt < PRESS_GAP_MS) return;
   pressedAt = now;
@@ -657,21 +666,22 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
     showPanel();
     return fitView(true);
   }
-  if (flow.name === 'title' && id === 'random') return playRandom();
-  if (flow.name === 'title' && id === 'start') return send({ type: 'select', level: 0 }); // New Game: level 1, no list
-  const n = /^level-(\d+)$/.exec(id);
-  if (id === 'next' && flow.name === 'complete' && levelIndex >= randomSlot() - 1) {
-    // After the daily or a shared puzzle the way on is level select; after a Random puzzle it is the next one.
-    if (levelIndex === randomSlot()) playRandom();
-    else send({ type: 'select' });
-  } else if (n && Number(n[1]) - 1 === randomSlot()) playRandom();
-  else if (id === 'copy') void copyLink();
+  if (flow.name === 'title' && id === 'random') {
+    overlay = { kind: 'picker' }; // Random level: how hard?
+    showPanel();
+    return fitView(true);
+  }
+  if (flow.name === 'title' && id === 'start') return send({ type: 'play', level: 0 }); // New Game: level 1
+  if (id === 'menu') return send({ type: 'back', level: continueAt() });
+  if (id === 'next' && flow.name === 'complete' && levelIndex >= CAMPAIGN - 1) {
+    // After level 20 the way on is the menu; after a Random level it is another at the same difficulty.
+    if (isRandomLevel(levelIndex)) playRandom(randomDiff);
+    else send({ type: 'back', level: continueAt() });
+  } else if (id === 'copy') void copyLink();
   else if (id === 'relaxed') {
     relaxed = !relaxed;
     saveRelaxed(storage, relaxed);
   }
-  else if (n) send({ type: 'select', level: Number(n[1]) - 1 });
-  else if (id === 'back') send({ type: 'back', level: continueAt() });
   else send(PRESS[id]!);
 }
 /** Board parts move only while playing: on the menus the board is under the dark layer (or the AR backing panel), so a touch there is a button's. */
@@ -923,10 +933,7 @@ canvas.addEventListener('pointermove', (e) => e.buttons && lookNote?.classList.a
 // Pause whenever the player is pulled away: tab hidden, headset menu or headset off, session over.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') send({ type: 'pause' });
-  else {
-    rolloverDaily();
-    fitView(true);
-  }
+  else fitView(true);
 });
 world.renderer.xr.addEventListener('sessionstart', () => {
   const session = world.renderer.xr.getSession();
@@ -1231,11 +1238,9 @@ function showPanel(now = performance.now()): void {
     board: overlay?.kind === 'board' ? boardCard(overlay.board, overlay.tab) : undefined,
     level: levelIndex,
     levels: levels.length,
-    daily: sharedSeed === null, // a shared puzzle in the last slot is not today's daily: it is named "Shared puzzle"
-    shared: sharedSeed !== null,
-    random: true,
-    step: randomStep,
-    next: run.step,
+    shared: special === 'shared',
+    random: special === 'random',
+    difficulty: randomDiff.replace(/^./, (c) => c.toUpperCase()),
     code: codeOf(level),
     link: copy.state === 'failed' ? copy.link : null,
     copy: world.renderer.xr.isPresenting || !codeOf(level) ? undefined : copy.state === 'copied' ? 'Copied' : 'Copy link',
@@ -1254,7 +1259,6 @@ function showPanel(now = performance.now()): void {
     goal: badge.root.visible ? goal() : null,
     fault: faultKind(fault),
     narrow: phone(),
-    cols: selectCols(),
   });
   // A menu is centred in the view and a full-view layer sits under it: place it as soon as it shows, and follow the camera while it does.
   if (menuUp() || placedFor) placePanels();
@@ -1418,7 +1422,15 @@ window.__chrono = Object.freeze({
     return overlay?.kind === 'initials' ? { board: overlay.board, rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor } : null;
   },
   get random() {
-    return { mode: levelIndex === randomSlot(), step: randomStep, next: run.step, slow: run.slow, slot: randomSlot() };
+    return { mode: isRandomLevel(levelIndex), difficulty: randomDiff, slot: randomSlot() };
+  },
+  /** Test hook: starts campaign level `n` (1-based) at once, a fresh puzzle, as New Game and a solve do. */
+  jump(n: number) {
+    send({ type: 'play', level: Math.min(CAMPAIGN, Math.max(1, Math.round(n))) - 1 });
+  },
+  /** Test hook: the solution of the level on the board, gear to axle. */
+  get solution() {
+    return { ...level.solution };
   },
   get seedNote() {
     return seedNote && !seedNote.hidden ? seedNote.textContent : null;

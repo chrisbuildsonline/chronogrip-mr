@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LEVEL_COUNT, TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from '../../src/flow';
-import { LEVELS } from '../../src/levels';
+import { CAMPAIGN } from '../../src/random';
 
 const run = (events: FlowEvent[], from: Flow = TITLE) => events.reduce((f, e) => step(f, e), from);
 
@@ -22,7 +22,7 @@ describe('flow state machine', () => {
     expect(step(cal, { type: 'solve' })).toBe(cal);
     expect(step(cal, { type: 'next' })).toBe(cal);
     expect(step(cal, { type: 'start' })).toBe(cal);
-    expect(step(cal, { type: 'select' })).toBe(cal);
+    expect(step(cal, { type: 'play', level: 2 })).toEqual({ name: 'playing', level: 2 });
   });
 
   it('pause while calibrating resumes back to calibrating, not to playing', () => {
@@ -41,49 +41,45 @@ describe('flow state machine', () => {
     expect(reloads(cal, { type: 'restart' }, next)).toBe(true);
   });
 
-  it('counts every hand-made level', () => {
-    expect(LEVEL_COUNT).toBe(LEVELS.length);
-    expect(LEVEL_COUNT).toBe(8);
+  it('counts the 20 campaign levels and one extra slot (a Random level or a shared puzzle)', () => {
+    expect(LEVEL_COUNT).toBe(CAMPAIGN + 1);
+    expect(LEVEL_COUNT).toBe(21);
   });
 
-  it('next moves to the following level, and from the last level back to level select', () => {
+  it('next moves to the following level; after level 20 and after the extra slot it does nothing here (the game picks the menu or another Random level)', () => {
     expect(run([{ type: 'start' }, { type: 'solve' }, { type: 'calibrated' }, { type: 'next' }])).toEqual({ name: 'playing', level: 1 });
     expect(run([{ type: 'solve' }, { type: 'calibrated' }, { type: 'next' }], { name: 'playing', level: 4 })).toEqual({ name: 'playing', level: 5 });
-    expect(run([{ type: 'solve' }, { type: 'calibrated' }, { type: 'next' }], { name: 'playing', level: 7 })).toEqual({ name: 'select', level: 7 });
+    expect(run([{ type: 'solve' }, { type: 'calibrated' }, { type: 'next' }], { name: 'playing', level: 18 })).toEqual({ name: 'playing', level: 19 });
+    const last: Flow = { name: 'complete', level: 19 };
+    expect(step(last, { type: 'next' })).toBe(last);
+    const extra: Flow = { name: 'complete', level: 20 };
+    expect(step(extra, { type: 'next' })).toBe(extra);
   });
 
-  it('with the daily as a ninth level, next after level 8 plays the daily and next after the daily opens level select', () => {
-    const done = (level: number): Flow => ({ name: 'complete', level });
-    expect(step(done(4), { type: 'next' }, 9)).toEqual({ name: 'playing', level: 5 });
-    expect(step(done(7), { type: 'next' }, 9)).toEqual({ name: 'playing', level: 8 });
-    expect(step(done(8), { type: 'next' }, 9)).toEqual({ name: 'select', level: 8 });
-    expect(step({ name: 'select', level: 0 }, { type: 'select', level: 8 }, 9)).toEqual({ name: 'playing', level: 8 });
-    expect(step({ name: 'select', level: 0 }, { type: 'select', level: 9 }, 9)).toEqual({ name: 'select', level: 0 });
-  });
-
-  it('back leaves level select for the title, on a fresh board at the given level', () => {
-    const s: Flow = { name: 'select', level: 3 };
-    const back = step(s, { type: 'back', level: 1 });
-    expect(back).toEqual({ name: 'title', level: 1 });
-    expect(reloads(s, { type: 'back', level: 1 }, back)).toBe(true);
-    expect(step(back, { type: 'start' })).toEqual({ name: 'playing', level: 1 });
-    for (const name of ['title', 'playing', 'calibrate', 'complete', 'paused'] as const) {
+  it('back leaves a pause or a complete card for the title, on a fresh board at the given level', () => {
+    for (const name of ['paused', 'complete'] as const) {
+      const s: Flow = { name, level: 3 };
+      const back = step(s, { type: 'back', level: 1 });
+      expect(back).toEqual({ name: 'title', level: 1 });
+      expect(reloads(s, { type: 'back', level: 1 }, back)).toBe(true);
+      expect(step(back, { type: 'start' })).toEqual({ name: 'playing', level: 1 });
+      expect(step(s, { type: 'back', level: 99 })).toBe(s);
+    }
+    for (const name of ['title', 'playing', 'calibrate'] as const) {
       const f: Flow = { name, level: 2 };
       expect(step(f, { type: 'back', level: 0 })).toBe(f);
     }
-    expect(step(s, { type: 'back', level: 9 }, 6)).toBe(s);
   });
 
-  it('select opens level select; select with a level plays it', () => {
-    expect(run([{ type: 'select' }])).toEqual({ name: 'select', level: 0 });
-    expect(run([{ type: 'select' }, { type: 'select', level: 2 }])).toEqual({ name: 'playing', level: 2 });
-    expect(run([{ type: 'select', level: 4 }], { name: 'complete', level: 1 })).toEqual({ name: 'playing', level: 4 });
+  it('play starts the level it names, from anywhere', () => {
+    expect(run([{ type: 'play', level: 2 }])).toEqual({ name: 'playing', level: 2 });
+    expect(run([{ type: 'play', level: 4 }], { name: 'complete', level: 1 })).toEqual({ name: 'playing', level: 4 });
+    expect(run([{ type: 'play', level: 20 }])).toEqual({ name: 'playing', level: 20 });
   });
 
   it('ignores level numbers out of range', () => {
-    const s: Flow = { name: 'select', level: 0 };
-    expect(step(s, { type: 'select', level: LEVEL_COUNT })).toBe(s);
-    expect(step(s, { type: 'select', level: -1 })).toBe(s);
+    expect(step(TITLE, { type: 'play', level: LEVEL_COUNT })).toBe(TITLE);
+    expect(step(TITLE, { type: 'play', level: -1 })).toBe(TITLE);
   });
 
   it('pause only from playing; resume goes back to playing', () => {
@@ -115,12 +111,11 @@ describe('flow state machine', () => {
     expect(reloads(paused, { type: 'restart' }, step(paused, { type: 'restart' }))).toBe(true);
     const done: Flow = { name: 'complete', level: 0 };
     expect(reloads(done, { type: 'next' }, step(done, { type: 'next' }))).toBe(true);
-    expect(reloads(done, { type: 'select' }, step(done, { type: 'select' }))).toBe(false);
+    expect(reloads(done, { type: 'play', level: 3 }, step(done, { type: 'play', level: 3 }))).toBe(true);
   });
 
   it('maps every state to the panel it shows', () => {
     expect(screenOf(TITLE)).toBe('title');
-    expect(screenOf({ name: 'select', level: 0 })).toBe('select');
     expect(screenOf({ name: 'playing', level: 0 })).toBe('hud');
     expect(screenOf({ name: 'calibrate', level: 0 })).toBe('hud');
     expect(screenOf({ name: 'complete', level: 0 })).toBe('complete');

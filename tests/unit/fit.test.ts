@@ -180,7 +180,7 @@ describe('phone portrait', () => {
       for (const [width, height] of [[375, 812], [390, 844]] as const) {
         for (const screens of [play]) {
           const bottom = phoneReserve(width, screens, levels.length);
-          const tallest = Math.max(...screens.map((s) => layout(s, { level: 0, levels: levels.length, daily: true, narrow: true }).height));
+          const tallest = Math.max(...screens.map((s) => layout(s, { level: 0, levels: levels.length, narrow: true }).height));
           expect(bottom).toBeCloseTo(PHONE.bottom + PHONE.gap + tallest * phonePx(width), 6);
           const points = viewContent(level, levels.length, TRAY_POSE, dir, []);
           const header = { left: 160, right: width - 16 - 150, bottom: 110 };
@@ -264,7 +264,7 @@ describe('menuCard', () => {
   });
 
   it('a phone card is as wide as the phone sheet (the type stays 12 px or more)', () => {
-    const l = layout('select', { level: 0, levels: 10, narrow: true, cols: 2 });
+    const l = layout('picker', { level: 0, levels: 21, narrow: true });
     const a = card(375, 812, l);
     const [xl] = project(375, 812, panelToWorld(a, [-l.width / 2, l.height / 2, 0]));
     const [xr] = project(375, 812, panelToWorld(a, [l.width / 2, l.height / 2, 0]));
