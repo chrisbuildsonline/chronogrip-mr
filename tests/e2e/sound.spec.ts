@@ -64,6 +64,7 @@ test('desktop: a gear that jams the train snaps with a click and grinds', async 
   await page.waitForFunction(() => window.__chrono?.ready === true);
 
   // Level 2: the 40-tooth gear on the middle axle is too big for the train, and jams it.
+  await page.mouse.click(5, 5); // a real click unlocks the audio
   await choose(page, (id) => click(page, id), 2);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelId === 'l2');
   await page.waitForFunction(() => window.__chrono!.audio.state === 'running');

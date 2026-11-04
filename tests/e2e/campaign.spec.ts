@@ -67,7 +67,7 @@ test('desktop: New Game is level 1; a solve goes to level 2, a different puzzle;
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
 
   await solve(page);
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Next', 'Retry']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Next', 'Retry', 'Copy link']);
   await click(page, 'next');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l2');
@@ -89,7 +89,7 @@ test('desktop: Retry gives a new puzzle at the same difficulty; a restart from t
   // Over par, then solved: Retry leads and deals a new puzzle of level 1.
   await page.evaluate(() => window.__chrono!.advanceClock(1000));
   await solve(page);
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => [b.id, b.label]))).toEqual([['restart', 'Retry'], ['next', 'Next']]);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => [b.id, b.label]))).toEqual([['restart', 'Retry'], ['next', 'Next'], ['copy', 'Copy link']]);
   await click(page, 'restart');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 0);
   expect(await layoutOf(page), 'Retry is a new puzzle').not.toBe(first);

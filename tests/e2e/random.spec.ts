@@ -52,8 +52,8 @@ async function solve(page: Page) {
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   const solution = await page.evaluate(() => window.__chrono!.solution);
   for (const [gear, axle] of Object.entries(solution)) await place(page, gear, axle);
-  await calibrateByMouse(page);
-  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next' || b.id === 'restart'));
+  await calibrateByMouse(page, { keepInitials: true });
+  await page.waitForFunction(() => ['initials', 'complete'].includes(window.__chrono!.card?.screen ?? ''), undefined, { timeout: 15_000 });
   await frames(page);
 }
 
