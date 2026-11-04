@@ -1,10 +1,16 @@
 import type { Level } from './levels';
-import { COMFORT, TRAY_POSE, layerLift, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
+import { COMFORT, TRAY_POSE, inZone, layerLift, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
 
 /** Layouts and placement of the in-world panels (see design/DESIGN.md). Panel space: metres, origin at the bottom centre, +Y up, +Z towards the player. */
 export type Screen = 'title' | 'select' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options';
 export const SCREENS: readonly Screen[] = ['title', 'select', 'hud', 'complete', 'paused'];
 /** Cards laid over the title or the complete card: the initials entry, the high scores board and the options. */
+/** How opaque the black layer behind the menus is. */
+export const SCRIM_OPACITY = 0.9;
+/** The menus: the game behind them is dimmed to 90% black (a full-view layer on a flat screen, a backing panel in AR). */
+export const MENU_SCREENS: readonly Screen[] = ['title', 'select', 'board', 'options'];
+/** The cards the board is played with: the camera fits for these, the menus are centred over a black layer. */
+export const PLAY_SCREENS: readonly Screen[] = SCREENS.filter((s) => !MENU_SCREENS.includes(s));
 export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options'];
 
 export type ButtonKind = 'primary' | 'secondary' | 'tile' | 'icon' | 'toggle' | 'arrow' | 'tab';
@@ -12,8 +18,8 @@ export type ButtonKind = 'primary' | 'secondary' | 'tile' | 'icon' | 'toggle' | 
 export type Button = { id: string; label: string; kind: ButtonKind; x: number; y: number; w: number; h: number };
 /** A display slot (not a target) in panel space; x, y is its centre. */
 export type Slot = { x: number; y: number; w: number; h: number };
-/** `track`: the rounded bed the two high scores tab segments sit in. `tabs`: on a phone the high scores tabs sit on the heading line, apart from the buttons (a hand never reaches that high; a thumb does). */
-export type Layout = { width: number; height: number; buttons: Button[]; slots?: Slot[]; tabs?: Button[]; track?: Slot };
+/** `track`: the rounded bed the two high scores tab segments sit in. */
+export type Layout = { width: number; height: number; buttons: Button[]; slots?: Slot[]; track?: Slot };
 
 /** Smallest side of any button: a fingertip target. */
 export const BUTTON_MIN_M = 0.04;
@@ -29,6 +35,11 @@ const WIDE_TAB = 0.068;
 /** A high scores tab. */
 const tabBtn = (id: string, label: string, x: number, y: number, w = WIDE_TAB, h = BH - 0.006): Button => ({ id, label, kind: 'tab', x, y, w, h });
 
+/** Buttons one over the other, centred on the panel, the last item lowest with its bottom edge at `foot`; each is `w` x `h`. */
+function stack(foot: number, items: readonly (readonly [id: string, label: string, kind: ButtonKind])[], w: number, h: number): Button[] {
+  return items.map(([id, label, kind], i) => ({ id, label, kind, x: 0, y: foot + (items.length - 1 - i) * (h + MENU_GAP) + h / 2, w, h }));
+}
+
 /** Buttons side by side, centred on the panel, on one row at height y. */
 function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: number][]): Button[] {
   let x = -(items.reduce((s, i) => s + i[3], 0) + GAP * (items.length - 1)) / 2;
@@ -41,36 +52,28 @@ function row(y: number, items: [id: string, label: string, kind: ButtonKind, w: 
 
 /**
  * `random`: the last level is the endless Random puzzle, after the daily or shared one, with its own tile; `daily`: the last base level is today's tinker puzzle; `shared`: it is a puzzle opened from a ?seed= link. `resume`: a level is solved, so the title offers Continue.
+ * `cols`: the level select's tiles in one column or two (a flat view picks by the room it has; XR always two, so the column stays in the comfort cone).
  * `over`: the level was solved past its par time, so the complete card leads with Retry. `copy`: the label of the Copy link pill on the complete card (absent: no pill). `narrow`: a phone in portrait outside XR; every card is NARROW_W wide and drawn as a bottom sheet (src/fit.ts).
  */
-export type LayoutCtx = { level: number; levels: number; daily?: boolean; shared?: boolean; random?: boolean; resume?: boolean; narrow?: boolean; copy?: string; over?: boolean; confirm?: boolean };
+export type LayoutCtx = { level: number; levels: number; daily?: boolean; shared?: boolean; random?: boolean; resume?: boolean; narrow?: boolean; copy?: string; over?: boolean; confirm?: boolean; cols?: 1 | 2 };
 
 /** Width of every card on a phone in portrait (outside XR), metres of panel space. */
 export const NARROW_W = 0.3;
-/** Phone level select: five targets to a row (Back, then the tiles), 44 x 60 mm, two rows for nine levels. */
-const NARROW_COLS = 5;
-const NARROW_TILE_H = 0.06;
-/** Room over the tiles for the "Levels" heading and the solved count. */
-const NARROW_HEAD = 0.052;
-
-const TILE_W = 0.05;
-/** With the Random tile there are ten, so the level tiles narrow a little and Random, the longest word, gets a wider one: the row is no wider than before, so the outer tile stays inside the yaw cone. */
-const TILE_W_RANDOM = 0.042;
-const RANDOM_W = 0.07; // wide enough for "Random" to be drawn at least as large as "Daily", with the run's step under it
-const TILE_H = 0.07;
 const BACK_W = 0.076;
-/** Back is navigation, not a level: a little more room sets it apart from the tiles. */
-const BACK_GAP = 0.02;
 /** The Relaxed toggle on the phone's pause card. */
 const TOGGLE_W = 0.082;
-/** The start panel's big buttons: 50 mm tall in XR and on a desktop (their top edge stays under the zone's 18 degrees), the primary 52 mm on a phone (59 px at the sheet scale). */
+/** The menu cards (start, options, high scores, level select) are one column, one phone width wide, wide or narrow. */
+const MENU_GAP = 0.012;
+/** The start panel's big buttons: 50 mm tall in XR and everywhere else; three stacked, with the words over them. */
 const START_BH = 0.05;
-const START_FOOT = 0.014;
-const START_BH_NARROW = 0.052;
-/** The start panel: 0.17 m tall wide (a little taller would push the desktop camera back at 1440 x 900), 0.208 m as a phone sheet (title, tagline and two button rows; no taller than the old title sheet, so the phone camera is unchanged). */
-export const START_H = { wide: 0.17, narrow: 0.208 } as const;
-/** The options panel: 0.15 m tall wide (heading, one static line, one button row), 0.2 m as a phone sheet (two rows). */
-export const OPTIONS_H = { wide: 0.15, narrow: 0.2 } as const;
+const START_BTN_W = 0.2;
+/** The start panel: three buttons stacked, then the tagline, title and eyebrow over them. */
+export const START_H = PAD + 3 * START_BH + 2 * MENU_GAP + 0.106;
+/** Room over the options buttons for the heading and the static line. */
+const OPTIONS_HEAD = 0.078;
+/** The level select's tiles: 44 mm tall and 6 mm apart in one column (a mouse), 50 mm and 12 mm in two (a finger or a hand); room over them for the "Levels" heading. */
+const SELECT_TILE = { 1: { w: 0.2, h: 0.044, gap: 0.006 }, 2: { w: (NARROW_W - 2 * PAD - GAP) / 2, h: 0.05, gap: GAP } } as const;
+const SELECT_HEAD = 0.058;
 /** Wide enough for "Turn the marked gear ↻ 37.5 rpm" in body type, and for the countdown ring and its time between the clock and the pause button. */
 const HUD_W = 0.3;
 
@@ -81,76 +84,34 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
   const [primaryW, secondaryW] = narrow ? [0.1, 0.072] : [0.11, 0.088];
   switch (screen) {
     case 'title': {
+      // One column, centred: Start game (or Continue), Options, High scores, top to bottom.
       const start = ['start', ctx.resume ? 'Continue' : 'Start game', 'primary'] as const;
-      const sized = (bs: Button[], h: number) => bs.map((b) => ({ ...b, h }));
-      // Wide: the three big buttons on one row, Start game the widest, so every target stays in the panel zone.
-      if (!narrow) return { width: 0.42, height: START_H.wide, buttons: sized(row(START_FOOT + START_BH / 2, [[...start, 0.13], ['options', 'Options', 'secondary', 0.09], ['scores', 'High scores', 'secondary', 0.11]]), START_BH) };
-      // Phone: Start game across the foot under the thumb, Options and High scores side by side above it.
-      const full = NARROW_W - 2 * PAD;
-      const half = (full - GAP) / 2;
-      const [a] = sized(row(PAD + START_BH_NARROW / 2, [[...start, full]]), START_BH_NARROW);
-      const [b, c] = row(PAD + START_BH_NARROW + GAP + BH / 2, [['options', 'Options', 'secondary', half], ['scores', 'High scores', 'secondary', half]]);
-      return { width: NARROW_W, height: START_H.narrow, buttons: [a!, b!, c!] };
+      return { width: NARROW_W, height: START_H, buttons: stack(PAD, [start, ['options', 'Options', 'secondary'], ['scores', 'High scores', 'secondary']], START_BTN_W, START_BH) };
     }
     case 'options': {
-      const confirm = !!ctx.confirm;
-      if (!narrow) {
-        // One row low on the card, as everywhere in the zone: Back, the two switches, Reset progress. Confirming swaps the switches for a choice.
-        const items: Parameters<typeof row>[1] = confirm
-          ? [['back', 'Back', 'secondary', 0.07], ['reset-cancel', 'Keep it', 'secondary', 0.09], ['reset-yes', 'Reset now', 'primary', 0.11]]
-          : [['back', 'Back', 'secondary', 0.07], ['relaxed', 'No timer', 'toggle', 0.088], ['sound', 'Sound', 'toggle', 0.08], ['reset', 'Reset progress', 'secondary', 0.11]];
-        return { width: 0.44, height: OPTIONS_H.wide, buttons: row(low, items) };
-      }
-      // Phone: two rows. The thumb row carries Back and Reset progress (or the choice), the switches ride above.
-      const full = NARROW_W - 2 * PAD;
-      const half = (full - GAP) / 2;
-      const up = low + BH + GAP;
-      if (confirm) {
-        const [yes, no] = row(low, [['reset-yes', 'Reset now', 'primary', 0.15], ['reset-cancel', 'Keep it', 'secondary', full - 0.15 - GAP]]);
-        const [back] = row(up, [['back', 'Back', 'secondary', 0.1]]);
-        return { width: NARROW_W, height: OPTIONS_H.narrow, buttons: [back!, no!, yes!] };
-      }
-      const [back, reset] = row(low, [['back', 'Back', 'secondary', 0.1], ['reset', 'Reset progress', 'secondary', full - 0.1 - GAP]]);
-      const [timer, sound] = row(up, [['relaxed', 'No timer', 'toggle', half], ['sound', 'Sound', 'toggle', half]]);
-      return { width: NARROW_W, height: OPTIONS_H.narrow, buttons: [back!, timer!, sound!, reset!] };
+      // One column: the two switches, Reset progress, then Back. Confirming swaps the first three for a choice.
+      const items: Parameters<typeof stack>[1] = ctx.confirm
+        ? [['reset-yes', 'Reset now', 'primary'], ['reset-cancel', 'Keep it', 'secondary'], ['back', 'Back', 'secondary']]
+        : [['relaxed', 'No timer', 'toggle'], ['sound', 'Sound', 'toggle'], ['reset', 'Reset progress', 'secondary'], ['back', 'Back', 'secondary']];
+      return { width: NARROW_W, height: PAD + items.length * BH + (items.length - 1) * MENU_GAP + OPTIONS_HEAD, buttons: stack(PAD, items, START_BTN_W, BH) };
     }
     case 'select': {
       const n = ctx.levels;
       const rnd = !!ctx.random;
       const base = rnd ? n - 1 : n; // the numbered levels and the daily or shared one; Random comes after them
       const label = (i: number) => (rnd && i === n - 1 ? 'Random' : i === base - 1 && (ctx.shared ? 'Shared' : ctx.daily && 'Daily')) || String(i + 1);
-      if (narrow) {
-        // Phone: Back then the tiles, five to a row, so nine levels make two rows that fit the width. Back takes the top
-        // left cell, where a phone keeps its back control; the tiles read left to right, then the lower row.
-        const w = (NARROW_W - 2 * PAD - (NARROW_COLS - 1) * GAP) / NARROW_COLS;
-        // Random is a bar across the width on a row of its own under the grid.
-        const rows = Math.ceil((base + 1) / NARROW_COLS);
-        const bar = rnd ? BH + GAP : 0;
-        const cell = (k: number) => ({
-          x: -NARROW_W / 2 + PAD + (k % NARROW_COLS) * (w + GAP) + w / 2,
-          y: PAD + bar + (rows - 1 - Math.floor(k / NARROW_COLS)) * (NARROW_TILE_H + GAP) + NARROW_TILE_H / 2,
-          w,
-          h: NARROW_TILE_H,
-        });
-        const back: Button = { id: 'back', label: 'Back', kind: 'secondary', ...cell(0) };
-        const tiles = Array.from({ length: base }, (_, i): Button => ({ id: `level-${i + 1}`, label: label(i), kind: 'tile', ...cell(i + 1) }));
-        if (rnd) tiles.push({ id: `level-${n}`, label: 'Random', kind: 'tile', x: 0, y: PAD + BH / 2, w: NARROW_W - 2 * PAD, h: BH });
-        return { width: NARROW_W, height: PAD + bar + rows * NARROW_TILE_H + (rows - 1) * GAP + NARROW_HEAD, buttons: [back, ...tiles] };
-      }
-      // One row, low on the card so every target stays in reach: the Back pill, a wider gap, then one tile per level.
-      const widthOf = (i: number) => (rnd ? (i === n - 1 ? RANDOM_W : TILE_W_RANDOM) : TILE_W);
-      const width = 2 * PAD + BACK_W + BACK_GAP + (n - 1) * GAP + Array.from({ length: n }, (_, i) => widthOf(i)).reduce((a, b) => a + b, 0);
-      const y = PAD + TILE_H / 2;
-      const left = -width / 2 + PAD;
-      const back: Button = { id: 'back', label: 'Back', kind: 'secondary', x: left + BACK_W / 2, y, w: BACK_W, h: BH };
-      let x = left + BACK_W + BACK_GAP;
+      // The tiles in one centred column, or two when the room is short; Back is a pill under them. The tiles read top to bottom (one column) or left to right, then down (two).
+      const cols = ctx.cols ?? 1;
+      const t = SELECT_TILE[cols];
+      const rows = Math.ceil(n / cols);
+      const foot = PAD + BH + GAP;
       const tiles = Array.from({ length: n }, (_, i): Button => {
-        const w = widthOf(i);
-        const b: Button = { id: `level-${i + 1}`, label: label(i), kind: 'tile', x: x + w / 2, y, w, h: TILE_H };
-        x += w + GAP;
-        return b;
+        const alone = cols === 2 && i === n - 1 && n % 2 === 1; // an odd last tile sits in the middle
+        const x = cols === 1 || alone ? 0 : (i % 2 === 0 ? -1 : 1) * (t.w + GAP) / 2;
+        return { id: `level-${i + 1}`, label: label(i), kind: 'tile', x, y: foot + (rows - 1 - Math.floor(i / cols)) * (t.h + t.gap) + t.h / 2, w: t.w, h: t.h };
       });
-      return { width, height: 0.15, buttons: [back, ...tiles] };
+      const back: Button = { id: 'back', label: 'Back', kind: 'secondary', x: 0, y: PAD + BH / 2, w: BACK_W, h: BH };
+      return { width: NARROW_W, height: foot + rows * t.h + (rows - 1) * t.gap + SELECT_HEAD, buttons: [back, ...tiles] };
     }
     case 'hud': {
       // The goal line runs across the top; under it the level, a time with tenths (0:04.7) and the pause button. The
@@ -239,44 +200,41 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       return { width: NARROW_W, height: 0.29, buttons, slots };
     }
     case 'board': {
+      // One column, top to bottom: the heading, the Local / Global control, the ten rows, the level switcher, Back.
       const g = boardGrid(narrow);
-      const right = g.width / 2 - PAD;
-      const backW = narrow ? 0.07 : 0.076;
-      const next = right - BH / 2;
-      const prev = right - BH - GAP - g.labelW - GAP - BH / 2;
-      // One segmented control: a track GAP from Back, two touching segments in it, and GAP to the arrows.
       const trackW = 2 * WIDE_TAB + 0.006;
-      const trackX = -g.width / 2 + PAD + backW + GAP + trackW / 2;
       return {
         width: g.width,
         height: g.height,
         buttons: [
-          { id: 'back', label: 'Back', kind: 'secondary', x: -g.width / 2 + PAD + backW / 2, y: low, w: backW, h: BH },
-          ...(g.tabs ? [] : [tabBtn('tab-local', 'Local', trackX - WIDE_TAB / 2, low), tabBtn('tab-global', 'Global', trackX + WIDE_TAB / 2, low)]),
-          { id: 'board-prev', label: 'Previous', kind: 'arrow', x: prev, y: low, w: BH, h: BH },
-          { id: 'board-next', label: 'Next', kind: 'arrow', x: next, y: low, w: BH, h: BH },
+          { id: 'back', label: 'Back', kind: 'secondary', x: 0, y: g.backY, w: 0.1, h: BH },
+          tabBtn('tab-local', 'Local', -WIDE_TAB / 2, g.tabsY, WIDE_TAB, g.tabH),
+          tabBtn('tab-global', 'Global', WIDE_TAB / 2, g.tabsY, WIDE_TAB, g.tabH),
+          { id: 'board-prev', label: 'Previous', kind: 'arrow', x: -(g.labelW / 2 + GAP + BH / 2), y: g.switchY, w: BH, h: BH },
+          { id: 'board-next', label: 'Next', kind: 'arrow', x: g.labelW / 2 + GAP + BH / 2, y: g.switchY, w: BH, h: BH },
         ],
-        ...(g.tabs ? { tabs: [tabBtn('tab-local', 'Local', g.tabs.x0 + g.tabs.local.w / 2, g.tabs.y, g.tabs.local.w, g.tabs.h), tabBtn('tab-global', 'Global', g.tabs.x0 + g.tabs.local.w + g.tabs.global.w / 2, g.tabs.y, g.tabs.global.w, g.tabs.h)], track: { x: g.tabs.x0 + g.tabs.w / 2, y: g.tabs.y, w: g.tabs.w, h: g.tabs.h } } : { track: { x: trackX, y: low, w: trackW, h: BH } }),
+        track: { x: 0, y: g.tabsY, w: trackW, h: g.tabH + 0.006 },
       };
     }
   }
 }
 
 /**
- * The best times card, over the one button row: ten rows as two columns of five, or on a phone (where a column would leave
- * too little room for a name, a step, a time and a date at 12 px) one column of ten. `y0` is the centre of the first row from
- * the card's foot, `pitch` the distance between rows, `labelW` the room for "Level 3" between the arrows, `headY` the heading's centre.
+ * The best times card, one column and one phone wide: from the foot up, Back, the level switcher, the ten rows, the Local /
+ * Global control and the heading. `y0` is the centre of the first row from the card's foot, `pitch` the distance between rows,
+ * `labelW` the room for "Level 3" between the arrows, `headY` the heading's centre.
  */
 export function boardGrid(narrow: boolean) {
-  const width = narrow ? NARROW_W : 0.48;
-  const [cols, rows] = narrow ? [1, 10] : [2, 5];
-  const gap = 0.03;
+  const [cols, rows] = [1, 10];
   const pitch = narrow ? 0.0165 : 0.0185;
-  const y0 = PAD + BH + GAP + pitch / 2 + (rows - 1) * pitch;
-  const headY = y0 + pitch / 2 + 0.024;
-  // On a phone the tab strip sits on the heading's line, just after "High scores" (44 px tall, 12 mm apart); a wide card keeps both tabs in its button row, inside the reach of a hand.
-  const tabs = narrow ? { x0: -width / 2 + PAD + 0.125, y: headY - 0.002, w: 0.13, h: 0.04, local: { w: 0.065 }, global: { w: 0.065 } } : null;
-  return { width, cols, rows, gap, pitch, y0, headY, tabs, height: headY + 0.027, colW: (width - 2 * PAD - (cols - 1) * gap) / cols, labelW: narrow ? 0.066 : 0.09 };
+  const tabH = BH - 0.006;
+  const backY = PAD + BH / 2;
+  const switchY = PAD + BH + GAP + BH / 2;
+  const rowsFoot = PAD + 2 * BH + 2 * GAP;
+  const y0 = rowsFoot + pitch / 2 + (rows - 1) * pitch;
+  const tabsY = rowsFoot + rows * pitch + GAP + 0.003 + tabH / 2;
+  const headY = tabsY + tabH / 2 + 0.026;
+  return { width: NARROW_W, cols, rows, gap: 0, pitch, y0, headY, tabsY, tabH, backY, switchY, height: headY + 0.027, colW: NARROW_W - 2 * PAD, labelW: 0.09 };
 }
 
 /** The button under a panel-space point that is within touch depth of the face, else null. */
@@ -313,6 +271,31 @@ export function panelAnchor(level: Level, pose: TrayPose = TRAY_POSE): Anchor {
   const [c, s] = [Math.cos(yaw), Math.sin(yaw)];
   const [px, py, pz] = pose.position;
   return { position: [px + off[0] * c + off[2] * s, py + off[1], pz - off[0] * s + off[2] * c], pitch, yaw };
+}
+
+/**
+ * Where a menu card (start, options, high scores, level select) hangs in XR: the card is tall, a column, so it is tilted to
+ * face the head at its middle and lowered, a half degree at a time, until every button's corners are in the panel zone.
+ */
+export function menuAnchor(l: Layout, level: Level, pose: TrayPose = TRAY_POSE): Anchor {
+  const base = panelAnchor(level, pose);
+  const yaw = pose.yaw ?? 0;
+  const [c, s] = [Math.cos(yaw), Math.sin(yaw)];
+  const [px, py, pz] = pose.position;
+  const at = (pitch: number): Anchor => {
+    const [sp, cp] = [Math.sin(pitch), Math.cos(pitch)];
+    const half = l.height / 2;
+    // The card's middle is PANEL_DISTANCE out along the pitch; its foot is half a card below that, along the card.
+    const off = [0, PANEL_DISTANCE * sp - half * cp - TRAY_POSE.position[1], -PANEL_DISTANCE * cp - half * sp - TRAY_POSE.position[2]] as const;
+    return { position: [px + off[0] * c + off[2] * s, py + off[1], pz - off[0] * s + off[2] * c], pitch, yaw };
+  };
+  const inReach = (a: Anchor) =>
+    l.buttons.every((b) => [-1, 0, 1].every((sx) => [-1, 1].every((sy) => inZone(panelToWorld(a, [b.x + (sx * b.w) / 2, b.y + (sy * b.h) / 2, 0]), PANEL_ZONE))));
+  for (let deg = 30; deg > -45; deg -= 0.5) {
+    const a = at((deg * Math.PI) / 180);
+    if (inReach(a)) return a;
+  }
+  return base;
 }
 
 export function panelToWorld(a: Anchor, p: Vec3): Vec3 {

@@ -1,5 +1,5 @@
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace } from 'three';
-import { boardGrid, clock, clockTenths, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
+import { MENU_SCREENS, SCRIM_OPACITY, boardGrid, clock, clockTenths, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
 import { formatDate, type Entry } from './scores';
 import { C } from './palette';
 import { rpmLabel, type Goal } from './goal';
@@ -42,6 +42,8 @@ export type PanelCtx = {
   hover: string | null;
   goal: Goal | null;
   fault?: keyof typeof FAULT_WORDS | null;
+  /** The level select's tiles in one column or two. */
+  cols?: 1 | 2;
   /** A phone in portrait outside XR: the narrow layouts and the phone type scale. */
   narrow?: boolean;
   /** The puzzle code of the level on the complete card (a tinker level), null for a hand-made one. */
@@ -192,7 +194,7 @@ function tile(g: Draw, b: Button, x: number, y: number, w: number, h: number, ct
   // Random says where the run stands: "Step 3" in muted type under its name, or beside it on the phone's wide bar.
   if (isRandom(ctx, i) && ctx.next !== undefined) {
     const step = `Step ${ctx.next}`;
-    if (w > 2 * h) {
+    if (w > 3 * h) {
       text(g, b.label, x - mm(24), y, font(600, size, SERIF), C.ink);
       text(g, step, x + mm(46), y + 1, font(700, T.body), C.muted);
     } else {
@@ -201,9 +203,12 @@ function tile(g: Draw, b: Button, x: number, y: number, w: number, h: number, ct
     }
     return;
   }
-  text(g, b.label, x, y - (best == null ? 0 : mm(8)), word ? font(600, size, SERIF) : font(700, T.xl), C.ink);
+  // A short tile (the single column's) has the label and the best time side by side; a tall one stacks them.
+  const side = best != null && h < 0.05 * PX;
+  text(g, b.label, x - (side ? mm(34) : 0), y - (best == null || side ? 0 : mm(8)), word ? font(600, size, SERIF) : font(700, T.xl), C.ink);
   if (best == null) return;
-  text(g, clock(best), x, y + mm(16), font(700, T.body), C.muted);
+  if (side) text(g, clock(best), x + mm(24), y + 1, font(700, T.body), C.muted);
+  else text(g, clock(best), x, y + mm(16), font(700, T.body), C.muted);
   check(g, x + w / 2 - mm(9), y - h / 2 + mm(10));
 }
 
@@ -428,8 +433,8 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   const name = random ? `Random · Step ${ctx.step ?? 1}` : shared ? 'Shared puzzle' : daily ? 'Daily' : `Level ${level}`;
   switch (screen) {
     case 'title': {
-      // The phone's second button row lifts the words: the same stack, a little tighter to the card's 0.208 m.
-      const [eyebrowAt, titleAt, taglineAt] = ctx.narrow ? [0.195, 0.168, 0.139] : [0.152, 0.118, 0.082];
+      // The words hang from the card's top, over the stacked buttons.
+      const [eyebrowAt, titleAt, taglineAt] = [l.height - 0.018, l.height - 0.052, l.height - 0.088];
       // The eyebrow with a short amber rule at each side, the big serif title, one line of tagline over the buttons.
       const eyeY = y(eyebrowAt);
       text(g, 'A CLOCKWORK PUZZLE', cx, eyeY, font(700, T.eyebrow), C.muted, 'center', 3);
@@ -481,14 +486,12 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
     case 'board': {
       const b = ctx.board!;
       const grid = boardGrid(!!ctx.narrow);
-      text(g, 'High scores', left(0.016), y(grid.headY), font(600, T.heading, SERIF), C.ink, 'left');
-      // The tab strip (Local, Global) is two buttons, drawn with the rest. A quiet note says when the global board is not there:
-      // on the heading's line at the right, or on a phone in the free half of the first row.
-      // On a phone it is a line of its own over the rows (they start one lower, and the tenth waits); wide, it is on the heading's line at the right.
-      const lowered = !!b.note && !!ctx.narrow;
+      text(g, 'High scores', cx, y(grid.headY), font(600, T.heading, SERIF), C.ink);
+      // A quiet note says when the global board is not there: it takes the first row's place, centred, and the tenth waits.
+      const lowered = !!b.note;
       if (b.note) {
-        const [nx, ny] = lowered ? at(-l.width / 2 + 0.016, grid.y0) : [right(0.016), y(grid.headY)];
-        text(g, b.note, nx, ny + 1, font(500, ctx.narrow ? 10.5 : 11.5), C.muted, lowered ? 'left' : 'right');
+        const [nx, ny] = at(0, grid.y0);
+        text(g, b.note, nx, ny + 1, font(500, ctx.narrow ? 10.5 : 11.5), C.muted);
       }
       // The level switcher's name, between its arrows, shrunk to fit.
       const [prev, next] = ['board-prev', 'board-next'].map((id) => l.buttons.find((x) => x.id === id)!) as [Button, Button];
@@ -509,7 +512,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       (lowered ? b.entries.slice(0, grid.rows - 1) : b.entries).forEach((e, n) => {
         const i = n + (lowered ? 1 : 0);
         const rowY = grid.y0 - (i % grid.rows) * grid.pitch;
-        const x0 = -l.width / 2 + 0.016 + Math.floor(i / grid.rows) * (grid.colW + grid.gap);
+        const x0 = -l.width / 2 + 0.016;
         const put = (s: string, dx: number, f: string, color: string, align: CanvasTextAlign) => {
           const [px, py] = at(x0 + dx, rowY);
           text(g, s, px, py + 1, f, color, align);
@@ -596,7 +599,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
     g.fillStyle = C.deep;
     g.fill();
   }
-  for (const b of [...l.buttons, ...(l.tabs ?? [])]) button(g, b, at, ctx);
+  for (const b of l.buttons) button(g, b, at, ctx);
   T = WIDE;
 }
 
@@ -611,6 +614,10 @@ function canvasPlane(): { mesh: Mesh; g: Draw; tex: CanvasTexture } {
   mesh.visible = false;
   return { mesh, g, tex };
 }
+
+/** The backing panel's margin round the card, and how far behind it it sits, metres. */
+const BACKING_PAD = 0.02;
+const BACKING_Z = 0.004;
 
 function resize(p: { mesh: Mesh; g: Draw; tex: CanvasTexture }, w: number, h: number, centreY: number) {
   const [cw, ch] = [Math.round(w * PX) + 2 * MARGIN, Math.round(h * PX) + 2 * MARGIN];
@@ -635,7 +642,11 @@ export function createPanels() {
   const panel = canvasPlane();
   const hint = canvasPlane();
   const note = canvasPlane();
-  root.add(panel.mesh, hint.mesh, note.mesh);
+  // In AR the menus can't blank the view (passthrough stays): a 90% black panel sits just behind the card instead.
+  const backing = canvasPlane();
+  backing.mesh.renderOrder = 9;
+  backing.mesh.position.z = -BACKING_Z;
+  root.add(backing.mesh, panel.mesh, hint.mesh, note.mesh);
   let key = '';
   let hasRing = false;
   let current: { screen: Screen; layout: Layout } | null = null;
@@ -676,6 +687,10 @@ export function createPanels() {
     get current() {
       return current;
     },
+    /** Whether the AR backing panel is up behind the card (the test hook reads it). */
+    get backing() {
+      return backing.mesh.visible;
+    },
     get labels() {
       return labels;
     },
@@ -693,12 +708,14 @@ export function createPanels() {
       root.scale.setScalar(a.scale ?? 1);
       // The phone card (scaled, just in front of the eye) draws over everything; in XR a real hand still hides the card.
       (panel.mesh.material as MeshBasicMaterial).depthTest = a.scale === undefined;
+      (backing.mesh.material as MeshBasicMaterial).depthTest = a.scale === undefined;
     },
     show(screen: Screen | null, ctx: PanelCtx) {
       const next = screen && JSON.stringify([screen, { ...ctx, time: clock(ctx.time) }]);
       if (next === key) return;
       key = next ?? '';
       panel.mesh.visible = screen !== null;
+      if (!screen) backing.mesh.visible = false;
       current = null;
       if (!screen) return;
       const l = layout(screen, { ...ctx, over: ctx.outcome === 'over' });
@@ -711,6 +728,18 @@ export function createPanels() {
       labels = drawn.map((d) => ({ text: d.text, x: (d.x - MARGIN) / PX - l.width / 2, y: l.height - (d.y - MARGIN) / PX, size: d.px / PX, x0: (d.x0 - MARGIN) / PX - l.width / 2, x1: (d.x1 - MARGIN) / PX - l.width / 2 }));
       drawn = null;
       panel.tex.needsUpdate = true;
+      backing.mesh.visible = !!ctx.xr && MENU_SCREENS.includes(screen);
+      if (backing.mesh.visible) {
+        const [bw, bh] = [l.width + 2 * BACKING_PAD, l.height + 2 * BACKING_PAD];
+        resize(backing, bw, bh, l.height / 2);
+        backing.mesh.position.z = -BACKING_Z;
+        backing.g.clearRect(0, 0, backing.g.canvas.width, backing.g.canvas.height);
+        pill(backing.g, backing.g.canvas.width / 2, backing.g.canvas.height / 2, bw * PX, bh * PX, mm(24));
+        backing.g.globalAlpha = SCRIM_OPACITY;
+        backing.g.fillStyle = C.scrim;
+        backing.g.fill();
+        backing.tex.needsUpdate = true;
+      }
       hint.mesh.position.y = l.height + PILL_GAP + hintH / 2;
       note.mesh.position.y = hint.mesh.position.y + hintH + PILL_GAP;
     },

@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { APP_TITLE, createWorldOptions } from './config';
 import { DEFAULT_PLACEMENT, toHeadFrame, type Head } from './anchor';
 import { startSession } from './enter';
-import { BoxGeometry, Color, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
+import { BoxGeometry, Color, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
 import { grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle, type Hand } from './grab';
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
@@ -13,7 +13,7 @@ import { trackMr } from './mr';
 import { tuneForSoftwareGl } from './render';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
-import { SCREENS, buttonAt, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
+import { MENU_SCREENS, PLAY_SCREENS, SCRIM_OPACITY, buttonAt, layout, menuAnchor, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
 import { createPanels, RING, SMALL_TABLE_TEXT, type PanelCtx } from './panels';
 import { createGhostHand, ghostAt, ghostTwistAt } from './ghost';
 import { TWEEN_MS, easeOut, tweenAt } from './tween';
@@ -34,7 +34,7 @@ import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
 import { goalOf, goalText } from './goal';
 import { createGoalBadge } from './badge';
-import { DESKTOP_EYE, DESKTOP_TARGET, desktopDistance, faceView, isPhone, phoneCard, phoneReserve, phoneShift, viewContent } from './fit';
+import { DESKTOP_EYE, DESKTOP_TARGET, desktopDistance, faceView, isPhone, menuCard, phoneCard, phoneReserve, phoneShift, viewContent } from './fit';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('#app container missing');
@@ -205,12 +205,8 @@ world.scene.add(panels.root);
 let anchor: Anchor = panelAnchor(level);
 /** The camera's backward axis (from what it looks at towards the eye). */
 const cameraBack = (): Vec3 => world.camera.getWorldDirection(new Vector3()).negate().toArray();
-const PLAY_SCREENS = SCREENS.filter((s) => s !== 'select');
-/**
- * The cards the camera fits for: the wide level select alone, or the others (so it holds still between them). A card laid over
- * the flow's own is fitted for on the desktop; on a phone the board keeps the view it has, and the sheet sits over its foot.
- */
-const fitScreens = (): readonly Screen[] => (overlay && !phone() ? [overlay.kind] : flow.name === 'select' ? ['select'] : PLAY_SCREENS);
+/** The cards the camera fits for: the ones played with. The menus are centred in the view over a black layer instead. */
+const fitScreens = (): readonly Screen[] => PLAY_SCREENS;
 const xrEntry = document.getElementById('xr-entry')!;
 /** The page header's foot in px: the wordmark and the Enter MR column, plus a little air. */
 const headerBottom = () => Math.max(heading?.getBoundingClientRect().bottom ?? 0, xrEntry.getBoundingClientRect().bottom) + 8;
@@ -229,21 +225,57 @@ function raiseView(): number {
   world.camera.setViewOffset(w, h, 0, shift, w, h);
   return shift;
 }
+/** The black layer behind the menus on a flat screen: a camera-facing quad under the cards (renderOrder 10), over the scene. */
+const scrim = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ color: C.scrim, transparent: true, opacity: SCRIM_OPACITY, depthTest: false, depthWrite: false }));
+scrim.renderOrder = 5;
+scrim.frustumCulled = false;
+scrim.visible = false;
+world.scene.add(scrim);
+/** The menu card up now, if one is. */
+const menuUp = () => (panels.panelMesh.visible && panels.current && MENU_SCREENS.includes(panels.current.screen) ? panels.current : null);
+/** Page pixels per metre of panel space, at most, for a menu card on a desktop screen, and the air kept over and under it. */
+const MENU_MAX_PX = 1700;
+const MENU_MARGIN = 72;
+/** A single column of level tiles needs this many pixels per metre or the words get small; below it, two columns. */
+const SELECT_MIN_PX = 1150;
+/** One column of tiles if the screen has the room, else two; XR is always two (the column would climb out of the comfort cone). */
+const selectCols = (): 1 | 2 => {
+  if (world.renderer.xr.isPresenting) return 2;
+  const tall = layout('select', { level: 0, levels: levels.length, cols: 1 }).height;
+  return (window.innerHeight - 2 * MENU_MARGIN) / tall >= SELECT_MIN_PX ? 1 : 2;
+};
 /**
  * In XR the card tilts to face the head; on desktop it lies face on to the preview camera, so it reads square. On a phone
- * it is a bottom sheet held in front of the camera, a phone width wide, whatever the orbit or zoom.
+ * it is a bottom sheet held in front of the camera, a phone width wide, whatever the orbit or zoom. A menu is the exception
+ * outside XR: it is centred in the view; in XR it hangs lower, to keep its buttons in reach.
  */
 const placePanels = () => {
   const a = panelAnchor(level, currentPose());
+  const menu = menuUp();
+  const eye = world.camera.getWorldPosition(new Vector3()).toArray();
+  const view = { eye, back: cameraBack(), fovDeg: world.camera.fov, width: window.innerWidth, height: window.innerHeight };
   if (phone()) {
-    const eye = world.camera.getWorldPosition(new Vector3()).toArray();
-    anchor = phoneCard({ eye, back: cameraBack(), fovDeg: world.camera.fov, width: window.innerWidth, height: window.innerHeight, shift: raiseView() });
+    const shift = raiseView();
+    anchor = menu ? menuCard({ ...view, shift, card: menu.layout, maxPx: MENU_MAX_PX, margin: MENU_MARGIN }) : phoneCard({ ...view, shift });
   } else {
     if (world.camera.view?.enabled) world.camera.clearViewOffset();
-    anchor = world.renderer.xr.isPresenting ? a : faceView(a, cameraBack());
+    if (world.renderer.xr.isPresenting) anchor = menu ? menuAnchor(menu.layout, level, currentPose()) : a;
+    else anchor = menu ? menuCard({ ...view, card: menu.layout, maxPx: MENU_MAX_PX, margin: MENU_MARGIN }) : faceView(a, cameraBack());
   }
   panels.setAnchor(anchor);
+  placedFor = menu && `${menu.screen}${menu.layout.height}`;
+  // Flat: a full-view black layer; XR keeps the passthrough, so its menus get the backing panel behind the card instead.
+  scrim.visible = !!menu && !world.renderer.xr.isPresenting;
+  if (scrim.visible) {
+    const d = 0.2;
+    const h = 2 * d * Math.tan((world.camera.fov * Math.PI) / 360);
+    scrim.position.set(...view.eye).addScaledVector(new Vector3(...view.back), -d);
+    scrim.quaternion.copy(world.camera.getWorldQuaternion(new Quaternion()));
+    scrim.scale.set(3 * h * (window.innerWidth / window.innerHeight), 3 * h, 1); // oversize: a phone's raised view is offset from the middle
+  }
 };
+/** Which menu card (and size) the anchor was last placed for; null for a card that is not a menu. */
+let placedFor: string | null = null;
 placePanels();
 world.renderer.xr.addEventListener('sessionstart', placePanels);
 controls.addEventListener('change', placePanels);
@@ -635,7 +667,7 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
 const live = () => flow.name === 'title' || flow.name === 'playing';
 /** The complete card waits while the automaton and the running train play the reward. */
 const COMPLETE_DELAY_MS = 2000;
-const shownButtons = (): Button[] => (panels.panelMesh.visible ? [...(panels.current?.layout.buttons ?? []), ...(panels.current?.layout.tabs ?? [])] : []);
+const shownButtons = (): Button[] => (panels.panelMesh.visible ? [...(panels.current?.layout.buttons ?? [])] : []);
 
 /** The loose gear nearest a world point, if one is within reach and the board is live. */
 function gearNear(world: Vec3): string | null {
@@ -1211,7 +1243,10 @@ function showPanel(now = performance.now()): void {
     goal: badge.root.visible ? goal() : null,
     fault: faultKind(fault),
     narrow: phone(),
+    cols: selectCols(),
   });
+  // A menu is centred in the view and a full-view layer sits under it: place it as soon as it shows, and follow the camera while it does.
+  if (menuUp() || placedFor) placePanels();
 }
 
 // The world is built and the first card is up: the loading card in index.html fades out of the way.
@@ -1461,6 +1496,11 @@ window.__chrono = Object.freeze({
       const corners = ([[-1, -1], [1, -1], [-1, 1], [1, 1]] as const).map(([sx, sy]) => toScreen(panelToWorld(anchor, [b.x + (sx * b.w) / 2, b.y + (sy * b.h) / 2, 0])));
       return { id: b.id, label: b.label, world: w, screen: toScreen(w), rect: boxOf(corners)! };
     });
+  },
+  /** The black layer behind the menus: `full` over a flat view, `backing` panel behind the card in XR, absent in play. */
+  get scrim() {
+    const mode = scrim.visible ? 'full' : panels.backing ? 'backing' : null;
+    return { mode, opacity: (scrim.material as MeshBasicMaterial).opacity, backingOpacity: SCRIM_OPACITY };
   },
   get card() {
     const c = panels.panelMesh.visible ? panels.current : null;

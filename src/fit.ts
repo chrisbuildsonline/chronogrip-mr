@@ -1,7 +1,7 @@
 import { LEVELS, type Level } from './levels';
 import { BIRD, DIAL_AT, KNOB_TOP } from './clockwork';
 import { BOARD_MARGIN, TRAY_HALF, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
-import { NARROW_W, SCREENS, layout, panelAnchor, panelToWorld, type Anchor, type Screen } from './ui';
+import { NARROW_W, PLAY_SCREENS, layout, panelAnchor, panelToWorld, type Anchor, type Screen } from './ui';
 
 /**
  * Desktop preview framing (outside XR). The tuned three-quarter view: from above, behind and a little right of the seated
@@ -95,6 +95,25 @@ export function faceView(a: Anchor, back: Vec3): Anchor {
  */
 export const PHONE = { side: 16, bottom: 16, gap: 12, depth: 0.2 } as const;
 
+/**
+ * A menu card on a flat screen: face on, centred in the view (`shift` px as for phoneCard), drawn `PHONE.depth` in front of
+ * the eye, at the most `maxPx` page pixels per metre of panel space and small enough to leave `margin` px clear above and
+ * below and PHONE.side at the sides. The menus sit on a black layer, so the board does not need to show round them.
+ */
+export function menuCard(o: { eye: Vec3; back: Vec3; fovDeg: number; width: number; height: number; shift?: number; card: { width: number; height: number }; maxPx: number; margin: number }): Anchor {
+  const [, up, z] = axes(o.back);
+  const tanV = Math.tan((o.fovDeg * Math.PI) / 360);
+  const d = PHONE.depth;
+  const pxPerMetre = o.height / (2 * d * tanV);
+  const px = Math.min(o.maxPx, (o.width - 2 * PHONE.side) / o.card.width, (o.height - 2 * o.margin) / o.card.height);
+  const ndcY = (-2 * (o.shift ?? 0)) / o.height;
+  const at = (k: number) => o.eye[k]! - z[k]! * d + up[k]! * ndcY * d * tanV;
+  const turned = { ...faceView({ position: [at(0), at(1), at(2)], pitch: 0, yaw: 0 }, o.back), scale: px / pxPerMetre };
+  // The card's centre, not its foot, is the point put at the view's middle.
+  const [cx, cy, cz] = panelToWorld(turned, [0, o.card.height / 2, 0]);
+  return { ...turned, position: [2 * turned.position[0] - cx, 2 * turned.position[1] - cy, 2 * turned.position[2] - cz] };
+}
+
 /** A phone in portrait: narrow, and tall enough to keep the board above a bottom-sheet card. */
 export const isPhone = (width: number, height: number) => width < 500 && height >= 1.4 * width;
 
@@ -140,7 +159,7 @@ const BOARD_THICKNESS = 0.018;
  * strip), the escapement dial, the bird standing on its bracket, and the cards of `screens` (default all) turned face on
  * to a camera looking along -`back`. `levels` is how many tiles the select card shows.
  */
-export function viewContent(level: Level, levels: number, pose: TrayPose, back: Vec3, screens: readonly Screen[] = SCREENS): Vec3[] {
+export function viewContent(level: Level, levels: number, pose: TrayPose, back: Vec3, screens: readonly Screen[] = PLAY_SCREENS): Vec3[] {
   const out: Vec3[] = [];
   const nearY = -TRAY_HALF.y - BOARD_MARGIN;
   const far = ledgeFar(level);

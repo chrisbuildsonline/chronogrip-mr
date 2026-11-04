@@ -13,6 +13,8 @@ export const C = {
   tint: '#f3dcae',
   tintInk: '#7a4e0e',
   shadow: 'rgba(20,12,4,0.35)',
+  /** World only, never text: the black 90% layer behind the menus (src/main.ts overlay, src/panels.ts backing). */
+  scrim: '#000000',
   /** World only: the warm red a jammed gear is tinted and the goal ring turns when the target runs the wrong way. */
   jam: '#cf4128',
   /** The same red dark enough for words and the badge's arrow on cream: "Jammed:", "Wrong way:". */

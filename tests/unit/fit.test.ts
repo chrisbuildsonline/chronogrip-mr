@@ -3,8 +3,8 @@ import { PerspectiveCamera, Vector3 } from 'three';
 import { LEVELS, type Level } from '../../src/levels';
 import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { TRAY_POSE, type Vec3 } from '../../src/seat';
-import { NARROW_W, SCREENS, layout, panelAnchor, panelToWorld, type Screen } from '../../src/ui';
-import { DESKTOP_EYE, DESKTOP_TARGET, PHONE, desktopDistance, faceView, fitDistance, isPhone, phoneCard, phonePx, phoneReserve, phoneShift, viewContent } from '../../src/fit';
+import { NARROW_W, PLAY_SCREENS, layout, panelAnchor, panelToWorld, type Screen } from '../../src/ui';
+import { DESKTOP_EYE, DESKTOP_TARGET, PHONE, desktopDistance, faceView, fitDistance, isPhone, menuCard, phoneCard, phonePx, phoneReserve, phoneShift, viewContent } from '../../src/fit';
 
 const NO_MARGIN = { top: 0, right: 0, bottom: 0, left: 0 };
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -70,15 +70,14 @@ describe('desktopDistance', () => {
     }
   });
 
-  it('fits the level on the board and the card on show: at phone width the wide select card and level 5 strip back off more', () => {
+  it('fits the level on the board and the card on show: at phone width the level 5 strip backs off more than the level 1 strip', () => {
     const at = (level: Level, screens?: Screen[]) =>
       desktopDistance({ target: DESKTOP_TARGET, dir, base, fovDeg: 50, width: 375, height: 812, margin, header: header(375), points: viewContent(level, 9, TRAY_POSE, dir, screens) });
-    const play = SCREENS.filter((s) => s !== 'select');
-    const l1 = at(LEVELS[0]!, play);
+    const play = PLAY_SCREENS;
+    const l1 = at(LEVELS[0]!, [...play]);
     expect(l1).toBeGreaterThan(base);
-    expect(at(LEVELS[0]!, ['select'])).toBeGreaterThan(1.1 * l1);
-    expect(at(LEVELS[4]!, play)).toBeGreaterThan(1.1 * l1);
-    expect(at(LEVELS[0]!)).toBe(at(LEVELS[0]!, ['select'])); // default: every card, and select is the widest
+    expect(at(LEVELS[4]!, [...play])).toBeGreaterThan(1.1 * l1);
+    expect(at(LEVELS[0]!)).toBe(l1); // default: the cards played with; the menus are centred over a black layer, not fitted
   });
 
   it('keeps everything under the header where it reaches the corners, but not when it fits between them', () => {
@@ -94,10 +93,10 @@ describe('desktopDistance', () => {
 });
 
 describe('viewContent', () => {
-  it('spans the 9-tile select card, the board and the bird off its right edge', () => {
+  it('spans the board, the cards played with and the bird off its right edge', () => {
     const pts = viewContent(LEVELS[0]!, 9, TRAY_POSE, unit(sub(DESKTOP_EYE, DESKTOP_TARGET)));
     const xs = pts.map((p) => p[0]);
-    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(0.674);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(0.5);
     expect(Math.max(...xs)).toBeGreaterThan(0.252 + TRAY_POSE.position[0]); // the bird
   });
 });
@@ -176,10 +175,10 @@ describe('phone portrait', () => {
 
   it('the board, dial and bird fit above the card on show, on every level', () => {
     const base = len(sub(DESKTOP_EYE, DESKTOP_TARGET));
-    const play = SCREENS.filter((s) => s !== 'select');
+    const play = PLAY_SCREENS;
     for (const level of levels) {
       for (const [width, height] of [[375, 812], [390, 844]] as const) {
-        for (const screens of [play, ['select'] as Screen[]]) {
+        for (const screens of [play]) {
           const bottom = phoneReserve(width, screens, levels.length);
           const tallest = Math.max(...screens.map((s) => layout(s, { level: 0, levels: levels.length, daily: true, narrow: true }).height));
           expect(bottom).toBeCloseTo(PHONE.bottom + PHONE.gap + tallest * phonePx(width), 6);
@@ -224,5 +223,51 @@ describe('faceView', () => {
     const f = faceView(a, unit(sub([0, 0, 0], a.position)));
     expect(f.yaw).toBeCloseTo(a.yaw, 6);
     expect(f.pitch).toBeCloseTo(a.pitch, 6);
+  });
+});
+
+describe('menuCard', () => {
+  const back = unit(sub(DESKTOP_EYE, DESKTOP_TARGET));
+  const project = (width: number, height: number, p: Vec3, shift = 0) => {
+    const cam = new PerspectiveCamera(50, width / height, 0.01, 100);
+    cam.position.set(...DESKTOP_EYE);
+    cam.lookAt(...DESKTOP_TARGET);
+    cam.setViewOffset(width, height, 0, shift, width, height);
+    cam.updateMatrixWorld();
+    const v = new Vector3(...p).project(cam);
+    return [((v.x + 1) / 2) * width, ((1 - v.y) / 2) * height] as const;
+  };
+  const card = (width: number, height: number, c: { width: number; height: number }, shift = 0) =>
+    menuCard({ eye: DESKTOP_EYE, back, fovDeg: 50, width, height, shift, card: c, maxPx: 1700, margin: 72 });
+
+  it('puts the middle of the card on the middle of the view, desktop and phone, raised view included', () => {
+    for (const [w, h, shift] of [[1440, 900, 0], [375, 812, 0], [375, 812, 90]] as const) {
+      const l = layout('title', { level: 0, levels: 10 });
+      const [x, y] = project(w, h, panelToWorld(card(w, h, l, shift), [0, l.height / 2, 0]), shift);
+      expect(x, `${w}x${h} x`).toBeCloseTo(w / 2, 3);
+      expect(y, `${w}x${h} y`).toBeCloseTo(h / 2, 3);
+    }
+  });
+
+  it('keeps the card inside the view with the air kept over and under it, at most maxPx per metre', () => {
+    for (const [w, h] of [[1440, 900], [375, 812], [1280, 600]] as const) {
+      const l = layout('board', { level: 0, levels: 10, narrow: w < 500 });
+      const a = card(w, h, l);
+      const top = project(w, h, panelToWorld(a, [0, l.height, 0]));
+      const foot = project(w, h, panelToWorld(a, [0, 0, 0]));
+      expect(top[1], `${w}x${h} top`).toBeGreaterThanOrEqual(72 - 0.5);
+      expect(foot[1], `${w}x${h} foot`).toBeLessThanOrEqual(h - 72 + 0.5);
+      const side = project(w, h, panelToWorld(a, [l.width / 2, l.height / 2, 0]));
+      expect(side[0] - w / 2, `${w}x${h} half width`).toBeLessThanOrEqual(w / 2 - PHONE.side + 0.5);
+      expect((foot[1] - top[1]) / l.height, `${w}x${h} px per metre`).toBeLessThanOrEqual(1700 + 1);
+    }
+  });
+
+  it('a phone card is as wide as the phone sheet (the type stays 12 px or more)', () => {
+    const l = layout('select', { level: 0, levels: 10, narrow: true, cols: 2 });
+    const a = card(375, 812, l);
+    const [xl] = project(375, 812, panelToWorld(a, [-l.width / 2, l.height / 2, 0]));
+    const [xr] = project(375, 812, panelToWorld(a, [l.width / 2, l.height / 2, 0]));
+    expect((xr - xl) / l.width).toBeCloseTo(phonePx(375), 0);
   });
 });

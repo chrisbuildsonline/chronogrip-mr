@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LEVELS } from '../../src/levels';
-import { PANEL_ZONE, layout, panelAnchor, panelToWorld, boardGrid, NARROW_W } from '../../src/ui';
+import { PANEL_ZONE, layout, menuAnchor, panelToWorld, boardGrid, NARROW_W } from '../../src/ui';
 import { inZone, type Vec3 } from '../../src/seat';
 import { tinkerLevel, dailySeed } from '../../src/tinker';
 import { loadSoundOn, saveSoundOn, createSound } from '../../src/sound';
@@ -36,35 +36,36 @@ describe('start panel layout', () => {
     }
   });
 
-  it('on a phone every button is 44 px or more tall at the sheet scale and the primary sits lowest, full width', () => {
+  it('is one centred column, Start game over Options over High scores, whatever the screen', () => {
+    for (const narrow of [false, true]) {
+      const l = layout('title', { ...ctx, narrow });
+      expect(l.width).toBe(NARROW_W);
+      expect(new Set(l.buttons.map((b) => b.x)), `narrow ${narrow}: one x centre`).toEqual(new Set([0]));
+      const ys = l.buttons.map((b) => b.y);
+      expect(ys, 'Start game is highest').toEqual([...ys].sort((p, q) => q - p));
+      expect(new Set(ys).size).toBe(3);
+    }
+  });
+
+  it('every button is 50 mm tall (44 px or more at the phone sheet scale), inside the card, 12 mm apart', () => {
     const l = layout('title', { ...ctx, narrow: true });
-    expect(l.width).toBe(NARROW_W);
     for (const w of [360, 375, 390, 430]) {
       for (const b of l.buttons) expect(b.h * phonePx(w), `${w} ${b.id}`).toBeGreaterThanOrEqual(44);
     }
-    const [start, ...rest] = l.buttons;
-    for (const b of rest) expect(start!.y, 'Start game is lowest, under the thumb').toBeLessThan(b.y);
-    expect(start!.w).toBeGreaterThan(0.25);
     for (const b of l.buttons) {
-      expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(l.width / 2 - 0.008 + 1e-9);
-      expect(b.y - b.h / 2).toBeGreaterThanOrEqual(0.008 - 1e-9);
+      expect(b.h).toBeGreaterThanOrEqual(0.05);
+      expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(l.width / 2 - 0.016 + 1e-9);
+      expect(b.y - b.h / 2).toBeGreaterThanOrEqual(0.016 - 1e-9);
+      expect(b.y + b.h / 2).toBeLessThanOrEqual(l.height);
     }
-    for (const a of l.buttons) for (const b of l.buttons) if (a !== b) expect(Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= 0.012 - 1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= 0.012 - 1e-9).toBe(true);
+    for (const a of l.buttons) for (const b of l.buttons) if (a !== b) expect(Math.abs(a.y - b.y) - (a.h + b.h) / 2).toBeGreaterThanOrEqual(0.012 - 1e-9);
   });
 
-  it('wide: the three buttons are big, one row, and the primary is the widest', () => {
-    const l = layout('title', ctx);
-    expect(new Set(l.buttons.map((b) => b.y)).size).toBe(1);
-    for (const b of l.buttons) expect(b.h).toBeGreaterThanOrEqual(0.05);
-    expect(l.buttons[0]!.w).toBe(Math.max(...l.buttons.map((b) => b.w)));
-    for (const b of l.buttons) expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(l.width / 2 - 0.016 + 1e-9);
-  });
-
-  it('every target on the start panel and the options panel (also confirming) sits in the XR panel zone above every level', () => {
+  it('in XR the menu card hangs low enough that every button, edge to edge, is in the panel zone and 60 cm reach, above every level', () => {
     for (const level of levels) {
-      const a = panelAnchor(level);
-      for (const [screen, extra] of [['title', {}], ['title', { resume: true }], ['options', {}], ['options', { confirm: true }]] as const) {
+      for (const [screen, extra] of [['title', {}], ['title', { resume: true }], ['options', {}], ['options', { confirm: true }], ['board', {}], ['select', { cols: 2 }]] as const) {
         const l = layout(screen, { ...ctx, ...extra });
+        const a = menuAnchor(l, level);
         for (const b of l.buttons) {
           for (const x of [b.x - b.w / 2, b.x, b.x + b.w / 2]) {
             for (const y of [b.y - b.h / 2, b.y + b.h / 2]) {
@@ -77,28 +78,43 @@ describe('start panel layout', () => {
       }
     }
   });
+
+  it('in XR the start buttons keep their 50 mm and the card is tilted to face the head', () => {
+    const l = layout('title', { ...ctx, xr: true } as never);
+    const a = menuAnchor(l, levels[0]!);
+    for (const b of l.buttons) expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(0.05);
+    const mid = panelToWorld(a, [0, l.height / 2, 0]);
+    const n = panelToWorld(a, [0, l.height / 2, 1]).map((v, i) => v - mid[i]!);
+    const cos = -(n[0]! * mid[0] + n[1]! * mid[1] + n[2]! * mid[2]) / Math.hypot(...mid);
+    expect(cos).toBeGreaterThan(0.99);
+  });
 });
 
 describe('options panel layout', () => {
-  it('collects Back, No timer, Sound and Reset progress; confirming swaps in Keep it and Reset now', () => {
+  it('collects No timer, Sound, Reset progress and Back in one column; confirming swaps in Reset now and Keep it', () => {
     for (const narrow of [false, true]) {
       const l = layout('options', { ...ctx, narrow });
       expect(l.buttons.map((b) => [b.id, b.label, b.kind]), `narrow ${narrow}`).toEqual([
-        ['back', 'Back', 'secondary'],
         ['relaxed', 'No timer', 'toggle'],
         ['sound', 'Sound', 'toggle'],
         ['reset', 'Reset progress', 'secondary'],
+        ['back', 'Back', 'secondary'],
       ]);
       const c = layout('options', { ...ctx, narrow, confirm: true });
       expect(c.buttons.map((b) => [b.id, b.label, b.kind])).toEqual([
-        ['back', 'Back', 'secondary'],
-        ['reset-cancel', 'Keep it', 'secondary'],
         ['reset-yes', 'Reset now', 'primary'],
+        ['reset-cancel', 'Keep it', 'secondary'],
+        ['back', 'Back', 'secondary'],
       ]);
+      for (const k of [l, c]) {
+        expect(new Set(k.buttons.map((b) => b.x))).toEqual(new Set([0]));
+        const ys = k.buttons.map((b) => b.y);
+        expect(ys, 'top to bottom').toEqual([...ys].sort((p, q) => q - p));
+      }
     }
   });
 
-  it('on a phone every button is 44 px or more tall and inside the card, 12 mm apart', () => {
+  it('every button is 44 px or more tall at the phone sheet scale, inside the card, 12 mm apart', () => {
     for (const confirm of [false, true]) {
       const l = layout('options', { ...ctx, narrow: true, confirm });
       expect(l.width).toBe(NARROW_W);
@@ -108,47 +124,40 @@ describe('options panel layout', () => {
         expect(b.y - b.h / 2).toBeGreaterThanOrEqual(0.008 - 1e-9);
         expect(b.y + b.h / 2).toBeLessThanOrEqual(l.height);
       }
-      for (const a of l.buttons) for (const b of l.buttons) if (a !== b) expect(Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= 0.012 - 1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= 0.012 - 1e-9, `${a.id} ${b.id}`).toBe(true);
+      for (const a of l.buttons) for (const b of l.buttons) if (a !== b) expect(Math.abs(a.y - b.y) - (a.h + b.h) / 2, `${a.id} ${b.id}`).toBeGreaterThanOrEqual(0.012 - 1e-9);
     }
-  });
-
-  it('is no taller on a phone than the start panel, so the board keeps its room', () => {
-    expect(layout('options', { ...ctx, narrow: true }).height).toBeLessThanOrEqual(layout('title', { ...ctx, narrow: true }).height);
   });
 });
 
 describe('high scores board', () => {
-  it('puts one segmented control on the heading line of a phone card: a track of two pill segments, 44 px tall, after the heading and inside the padding', () => {
-    const g = boardGrid(true);
-    const l = layout('board', { level: 0, levels: 10, daily: true, random: true, narrow: true });
-    const [a, b] = l.tabs!;
-    expect([a!.id, b!.id]).toEqual(['tab-local', 'tab-global']);
-    for (const s of [a!, b!]) {
-      expect(s.w, 'a pill, not a circle').toBeGreaterThan(s.h);
-      expect(s.h, '44 px at about 1143 px per metre').toBeGreaterThanOrEqual(0.0385);
-      expect(s.x - s.w / 2).toBeGreaterThanOrEqual(l.track!.x - l.track!.w / 2 - 1e-9);
-      expect(s.x + s.w / 2).toBeLessThanOrEqual(l.track!.x + l.track!.w / 2 + 1e-9);
+  it('stacks, top to bottom: the Local / Global control, the ten rows, the level switcher, Back; all centred', () => {
+    for (const narrow of [false, true]) {
+      const g = boardGrid(narrow);
+      const l = layout('board', { level: 0, levels: 10, daily: true, random: true, narrow });
+      const by = (id: string) => l.buttons.find((b) => b.id === id)!;
+      const [back, a, b, prev, next] = [by('back'), by('tab-local'), by('tab-global'), by('board-prev'), by('board-next')];
+      expect(l.width).toBe(NARROW_W);
+      expect(g).toMatchObject({ cols: 1, rows: 10 });
+      expect(back.x).toBe(0);
+      expect(l.track!.x).toBe(0);
+      expect(a.x + b.x, 'the two segments are centred').toBeCloseTo(0, 9);
+      expect(prev.x + next.x, 'the arrows are centred').toBeCloseTo(0, 9);
+      const rowsTop = g.y0 + g.pitch / 2;
+      const rowsFoot = g.y0 - (g.rows - 1) * g.pitch - g.pitch / 2;
+      expect(l.track!.y - l.track!.h / 2, 'the control is over the rows').toBeGreaterThanOrEqual(rowsTop + 0.012 - 1e-9);
+      expect(prev.y + prev.h / 2, 'the switcher is under the rows').toBeLessThanOrEqual(rowsFoot - 0.012 + 1e-9);
+      expect(back.y + back.h / 2, 'Back is the lowest').toBeLessThanOrEqual(prev.y - prev.h / 2 - 0.012 + 1e-9);
     }
-    expect(l.track!.x - l.track!.w / 2, 'after the 18 mm serif heading').toBeGreaterThanOrEqual(-g.width / 2 + 0.016 + 0.12);
-    expect(l.track!.x + l.track!.w / 2, 'inside the padding').toBeLessThanOrEqual(g.width / 2 - 0.016 + 1e-9);
-    expect(l.track!.y + l.track!.h / 2).toBeLessThanOrEqual(g.height - 0.008);
   });
 
-  it('keeps one segmented control in the button row of a wide card: pill segments of 4 cm or more, 12 mm from Back and the arrow', () => {
-    expect(boardGrid(false).tabs).toBeNull();
-    const l = layout('board', { level: 0, levels: 10, daily: true, random: true });
-    const by = (id: string) => l.buttons.find((b) => b.id === id)!;
-    const [back, a, b, prev] = [by('back'), by('tab-local'), by('tab-global'), by('board-prev')];
-    for (const s of [a, b]) {
+  it('has pill segments 44 px or more tall at the phone sheet scale, inside their track', () => {
+    const l = layout('board', { level: 0, levels: 10, daily: true, random: true, narrow: true });
+    for (const s of l.buttons.filter((x) => x.kind === 'tab')) {
       expect(s.w, 'a pill, not a circle').toBeGreaterThan(s.h);
-      expect(Math.min(s.w, s.h)).toBeGreaterThanOrEqual(0.04);
+      expect(s.h * phonePx(375)).toBeGreaterThanOrEqual(44);
       expect(s.x - s.w / 2).toBeGreaterThanOrEqual(l.track!.x - l.track!.w / 2 - 1e-9);
       expect(s.x + s.w / 2).toBeLessThanOrEqual(l.track!.x + l.track!.w / 2 + 1e-9);
     }
-    expect(l.track!.x - l.track!.w / 2 - (back.x + back.w / 2)).toBeGreaterThanOrEqual(0.012 - 1e-9);
-    expect(prev.x - prev.w / 2 - (l.track!.x + l.track!.w / 2)).toBeGreaterThanOrEqual(0.012 - 1e-9);
-    expect(l.track!.h, 'no taller than the button row').toBeLessThanOrEqual(0.046 + 1e-9);
-    expect(a.x).toBeLessThan(b.x);
   });
 });
 

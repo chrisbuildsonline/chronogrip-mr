@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { LEVELS } from '../../src/levels';
 import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { TRAY_POSE, inZone, ledgeFar, trayToWorld, type Vec3 } from '../../src/seat';
-import { BUTTON_MIN_M, NARROW_W, OVERLAY_SCREENS, PANEL_ZONE, SCREENS, type Button, boardGrid, buttonAt, clock, clockTenths, layout, panelAnchor, panelToWorld, pokeHit, worldToPanel } from '../../src/ui';
+import { BUTTON_MIN_M, MENU_SCREENS, NARROW_W, OVERLAY_SCREENS, PANEL_ZONE, SCREENS, type Button, boardGrid, buttonAt, clock, clockTenths, layout, menuAnchor, panelAnchor, panelToWorld, pokeHit, worldToPanel } from '../../src/ui';
 
+const phonePx375 = (375 - 32) / NARROW_W;
 const pitch = (p: Vec3) => (Math.atan2(p[1], Math.hypot(p[0], p[2])) * 180) / Math.PI;
 const yaw = (p: Vec3) => Math.atan2(p[0], -p[2]);
 
@@ -85,7 +86,7 @@ describe('phone layouts (narrow, outside XR)', () => {
 
   it('every target is at least 4 cm, 12 mm apart and inside the padding', () => {
     for (const s of SCREENS) {
-      const l = narrow(s);
+      const l = layout(s, { ...ctx, narrow: true, cols: 2 });
       for (const b of l.buttons) {
         expect(Math.min(b.w, b.h), `${s} ${b.id}`).toBeGreaterThanOrEqual(BUTTON_MIN_M);
         expect(Math.abs(b.x) + b.w / 2, `${s} ${b.id}`).toBeLessThanOrEqual(l.width / 2 - 0.008 + 1e-9);
@@ -100,20 +101,23 @@ describe('phone layouts (narrow, outside XR)', () => {
     }
   });
 
-  it('level select puts Back and the nine tiles in two rows of five, Back first', () => {
-    const sel = narrow('select');
-    const rows = [...new Set(sel.buttons.map((b) => b.y.toFixed(6)))];
-    expect(rows).toHaveLength(2);
-    const top = sel.buttons.filter((b) => b.y.toFixed(6) === rows[0]);
-    expect(top.map((b) => b.id)).toEqual(['back', 'level-1', 'level-2', 'level-3', 'level-4']);
-    // Reading order: left to right, then the lower row.
-    expect(sel.buttons[1]!.y).toBeGreaterThan(sel.buttons[5]!.y);
-    expect(sel.buttons[5]!.x).toBeCloseTo(sel.buttons[0]!.x, 9);
+  it('level select puts the nine tiles in two centred columns of five rows, reading left to right then down, Back under them', () => {
+    const sel = layout('select', { ...ctx, narrow: true, cols: 2 });
+    expect(sel.buttons.map((b) => b.id)).toEqual(['back', ...Array.from({ length: 9 }, (_, i) => `level-${i + 1}`)]);
+    const [back, ...tiles] = sel.buttons;
+    expect(new Set(tiles.map((t) => t.y.toFixed(6))).size).toBe(5);
+    expect(tiles[0]!.x).toBeCloseTo(-tiles[1]!.x, 9); // the two columns are centred on the card
+    expect(tiles[0]!.y).toBe(tiles[1]!.y);
+    expect(tiles[0]!.y).toBeGreaterThan(tiles[2]!.y);
+    expect(tiles[8]!.x, 'an odd last tile sits in the middle').toBe(0);
+    expect(back!.x).toBe(0);
+    expect(back!.y).toBeLessThan(Math.min(...tiles.map((t) => t.y)));
+    for (const t of tiles) expect(t.h * phonePx375).toBeGreaterThanOrEqual(44);
   });
 
   it('the wide cards stay as they were when narrow is off', () => {
     for (const s of SCREENS) expect(layout(s, { ...ctx, narrow: false })).toEqual(layout(s, ctx));
-    expect(layout('select', ctx).width).toBeCloseTo(0.674, 9);
+    expect(layout('select', ctx).width).toBe(NARROW_W);
   });
 });
 
@@ -138,23 +142,36 @@ describe('level select with the daily', () => {
     expect(sel.buttons.filter((b) => b.kind === 'tile')).toHaveLength(9);
   });
 
-  it('every target is at least 4 cm, 12 mm apart, inside the panel', () => {
-    for (const b of sel.buttons) {
-      expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(BUTTON_MIN_M);
-      expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(sel.width / 2 - 0.016 + 1e-9);
-      expect(b.y - b.h / 2).toBeGreaterThanOrEqual(0.016 - 1e-9);
-      expect(b.y + b.h / 2).toBeLessThanOrEqual(sel.height - 0.016 + 1e-9);
-    }
-    for (const a of sel.buttons) for (const b of sel.buttons) {
-      if (a === b) continue;
-      const apart = Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= 0.012 - 1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= 0.012 - 1e-9;
-      expect(apart).toBe(true);
+  it('every target is at least 4 cm, inside the panel and clear of its neighbours: 6 mm in one column, 12 mm in two', () => {
+    for (const [cols, gap] of [[1, 0.006], [2, 0.012]] as const) {
+      const l = layout('select', { level: 0, levels: LEVELS.length + 1, daily: true, cols });
+      for (const b of l.buttons) {
+        expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(BUTTON_MIN_M);
+        expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(l.width / 2 - 0.016 + 1e-9);
+        expect(b.y - b.h / 2).toBeGreaterThanOrEqual(0.016 - 1e-9);
+        expect(b.y + b.h / 2).toBeLessThanOrEqual(l.height - 0.016 + 1e-9);
+      }
+      for (const a of l.buttons) for (const b of l.buttons) {
+        if (a === b) continue;
+        const apart = Math.abs(a.x - b.x) - (a.w + b.w) / 2 >= gap - 1e-9 || Math.abs(a.y - b.y) - (a.h + b.h) / 2 >= gap - 1e-9;
+        expect(apart, `${cols} ${a.id} ${b.id}`).toBe(true);
+      }
     }
   });
 
-  it('every target is within reach above every level, the daily included', () => {
+  it('one column: every tile shares one x centre and the ids climb down the card, Back last and lowest', () => {
+    const l = layout('select', { level: 0, levels: LEVELS.length + 2, daily: true, random: true, cols: 1 });
+    const tiles = l.buttons.filter((b) => b.kind === 'tile');
+    expect(tiles).toHaveLength(10);
+    expect(new Set(tiles.map((t) => t.x))).toEqual(new Set([0]));
+    tiles.forEach((t, i) => i && expect(t.y).toBeLessThan(tiles[i - 1]!.y));
+    expect(l.buttons.find((b) => b.id === 'back')!.y).toBeLessThan(tiles.at(-1)!.y);
+  });
+
+  it('every target is within reach above every level, the daily included (two columns, the XR shape)', () => {
+    const sel = layout('select', { level: 0, levels: LEVELS.length + 1, daily: true, cols: 2 });
     for (const level of [...LEVELS, tinkerLevel(dailySeed(new Date(2026, 9, 30))), tinkerLevel(dailySeed(new Date(2027, 0, 1)))]) {
-      const a = panelAnchor(level);
+      const a = menuAnchor(sel, level);
       for (const b of sel.buttons) {
         const w = panelToWorld(a, [b.x, b.y, 0]);
         expect(inZone(w, PANEL_ZONE)).toBe(true);
@@ -175,8 +192,8 @@ describe('level select with Random', () => {
     expect(layout('select', { level: 0, levels: N - 1, daily: true }).buttons.some((b) => b.label === 'Random')).toBe(false);
   });
 
-  it('keeps every target 4 cm or more, 12 mm apart and inside the panel, wide and on a phone', () => {
-    for (const sel of [wide(), wide({ narrow: true })]) {
+  it('keeps every target 4 cm or more, 12 mm apart (two columns) and inside the panel, wide and on a phone', () => {
+    for (const sel of [wide({ cols: 2 }), wide({ cols: 2, narrow: true })]) {
       for (const b of sel.buttons) {
         expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(BUTTON_MIN_M);
         expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(sel.width / 2 - 0.016 + 1e-9);
@@ -191,11 +208,12 @@ describe('level select with Random', () => {
     }
   });
 
-  it('is no wider than the nine tile row was, and every target stays inside the comfort cone above every level', () => {
-    expect(wide().width).toBeLessThanOrEqual(0.674 + 0.011);
+  it('is one phone wide, and every target stays inside the comfort cone above every level (two columns)', () => {
+    expect(wide().width).toBe(NARROW_W);
     for (const level of [...LEVELS, tinkerLevel(dailySeed(new Date(2026, 10, 4)))]) {
-      const a = panelAnchor(level);
-      for (const b of wide().buttons) {
+      const sel = wide({ cols: 2 });
+      const a = menuAnchor(sel, level);
+      for (const b of sel.buttons) {
         const w = panelToWorld(a, [b.x, b.y, 0]);
         expect(inZone(w, PANEL_ZONE), `${level.id} ${b.id}`).toBe(true);
         expect(Math.hypot(...w)).toBeLessThanOrEqual(0.6);
@@ -203,12 +221,13 @@ describe('level select with Random', () => {
     }
   });
 
-  it('on a phone Random is a bar on a row of its own under the grid', () => {
-    const sel = wide({ narrow: true });
-    const bar = sel.buttons.find((b) => b.id === 'level-10')!;
-    expect(bar.w).toBeGreaterThan(0.2);
-    expect(sel.buttons.filter((b) => b !== bar).every((b) => b.y - b.h / 2 > bar.y + bar.h / 2)).toBe(true);
-    expect(sel.width).toBe(NARROW_W);
+  it('Random is the last tile of the column, or the right one on the last row of two', () => {
+    const one = wide({ cols: 1 });
+    expect(one.buttons.filter((b) => b.kind === 'tile').at(-1)).toMatchObject({ id: 'level-10', x: 0 });
+    const two = wide({ cols: 2 });
+    const rnd = two.buttons.find((b) => b.id === 'level-10')!;
+    expect(rnd.x).toBeGreaterThan(0);
+    expect(two.buttons.find((b) => b.id === 'level-9')!.y).toBe(rnd.y);
   });
 
   it('the Random complete card leads with Next puzzle; over par Retry leads and Next puzzle follows', () => {
@@ -286,12 +305,16 @@ describe('panel placement', () => {
       const edge = trayToWorld(0, ledgeFar(level));
       const edgeAt = (yawRad: number): Vec3 => [-edge[2] * Math.tan(yawRad), edge[1], edge[2]];
       for (const s of SCREENS) {
-        const { width, buttons } = layout(s, { level: 0, levels: 5 });
+        const l = layout(s, { level: 0, levels: 5, cols: 2 });
+        const { width, buttons } = l;
+        // The menu cards are tall columns: they hang lower (menuAnchor), over the board's ledge, on a black backing panel.
+        const at = MENU_SCREENS.includes(s) ? menuAnchor(l, level) : a;
         for (const b of buttons) {
-          const w = panelToWorld(a, [b.x, b.y, 0]);
+          const w = panelToWorld(at, [b.x, b.y, 0]);
           expect(inZone(w, PANEL_ZONE)).toBe(true);
           expect(Math.hypot(...w)).toBeLessThanOrEqual(0.6);
         }
+        if (MENU_SCREENS.includes(s)) continue;
         for (const x of [-width / 2, 0, width / 2]) {
           const bottom = panelToWorld(a, [x, 0, 0]);
           expect(pitch(bottom)).toBeGreaterThan(pitch(edgeAt(yaw(bottom))) + 0.5);
@@ -342,10 +365,8 @@ describe('best times and initials cards', () => {
   it('has the buttons each card needs, in the same order on a phone', () => {
     for (const narrow of [false, true]) {
       expect(layout('initials', { ...ctx, narrow }).buttons.map((b) => b.id)).toEqual(['up-0', 'down-0', 'up-1', 'down-1', 'up-2', 'down-2', 'save', 'skip']);
-      // The tabs are in the button row on a wide card (in a hand's reach); on a phone they are on the heading line, apart.
       const board = layout('board', { ...ctx, narrow });
-      expect(board.buttons.map((b) => b.id)).toEqual(narrow ? ['back', 'board-prev', 'board-next'] : ['back', 'tab-local', 'tab-global', 'board-prev', 'board-next']);
-      expect((board.tabs ?? []).map((b) => b.id)).toEqual(narrow ? ['tab-local', 'tab-global'] : []);
+      expect(board.buttons.map((b) => b.id)).toEqual(['back', 'tab-local', 'tab-global', 'board-prev', 'board-next']);
       expect(layout('initials', { ...ctx, narrow }).buttons.filter((b) => b.kind === 'primary').map((b) => b.id), 'one primary').toEqual(['save']);
     }
     expect(OVERLAY_SCREENS).toEqual(['initials', 'board', 'options']);
@@ -410,14 +431,17 @@ describe('best times and initials cards', () => {
       const edge = trayToWorld(0, ledgeFar(level));
       for (const s of [...OVERLAY_SCREENS, 'title'] as const) {
         const l = layout(s, { ...ctx, resume: true });
+        // The menus hang low (menuAnchor) on a black backing, over the ledge; the initials card keeps to the clear sky above the board.
+        const menu = MENU_SCREENS.includes(s);
+        const at = menu ? menuAnchor(l, level) : a;
         for (const b of l.buttons) {
           for (const x of [b.x - b.w / 2, b.x, b.x + b.w / 2]) {
-            const w = panelToWorld(a, [x, b.y, 0]);
+            const w = panelToWorld(at, [x, b.y, 0]);
             expect(inZone(w, PANEL_ZONE), `${level.id} ${s} ${b.id}`).toBe(true);
             expect(Math.hypot(...w), `${level.id} ${s} ${b.id} reach`).toBeLessThanOrEqual(0.6);
           }
         }
-        for (const x of [-l.width / 2, 0, l.width / 2]) {
+        for (const x of menu ? [] : [-l.width / 2, 0, l.width / 2]) {
           const bottom = panelToWorld(a, [x, 0, 0]);
           const edgeAt: Vec3 = [-edge[2] * Math.tan(yaw(bottom)), edge[1], edge[2]];
           expect(pitch(bottom), `${level.id} ${s}`).toBeGreaterThan(pitch(edgeAt) + 0.5);
@@ -426,29 +450,28 @@ describe('best times and initials cards', () => {
     }
   });
 
-  it('the start panel is one row of three in the zone, and two rows on a phone with Start game lowest', () => {
+  it('the start panel is one column of three, Continue on top', () => {
     const wide = layout('title', { ...ctx, resume: true });
     expect(wide.buttons.map((b) => b.label)).toEqual(['Continue', 'Options', 'High scores']);
-    expect(new Set(wide.buttons.map((b) => b.y)).size).toBe(1);
-    expect(wide.width).toBe(0.42);
+    expect(new Set(wide.buttons.map((b) => b.y)).size).toBe(3);
+    expect(wide.width).toBe(NARROW_W);
     const phone = layout('title', { ...ctx, resume: true, narrow: true });
     expect(phone.buttons.map((b) => b.id)).toEqual(['start', 'options', 'scores']);
-    expect(new Set(phone.buttons.map((b) => b.y)).size).toBe(2);
-    expect(phone.buttons[0]!.y, 'Start is the lowest').toBe(Math.min(...phone.buttons.map((b) => b.y)));
+    expect(phone.buttons.map((b) => b.y)).toEqual(wide.buttons.map((b) => b.y));
     for (const b of phone.buttons) expect(Math.abs(b.x) + b.w / 2).toBeLessThanOrEqual(phone.width / 2 - 0.008 + 1e-9);
   });
 
-  it('the board holds ten rows (two columns of five; on a phone one of ten) inside the card, over the button row and under the heading', () => {
-    expect(boardGrid(false)).toMatchObject({ cols: 2, rows: 5 });
+  it('the board holds ten rows in one column inside the card, over the buttons and under the control and heading', () => {
+    expect(boardGrid(false)).toMatchObject({ cols: 1, rows: 10 });
     expect(boardGrid(true)).toMatchObject({ cols: 1, rows: 10 });
     for (const narrow of [false, true]) {
       const g = boardGrid(narrow);
       expect(g.cols * g.rows).toBe(10);
       const l = layout('board', { ...ctx, narrow });
       expect(l.height).toBeCloseTo(g.height, 9);
-      const buttonsTop = Math.max(...l.buttons.map((b) => b.y + b.h / 2));
+      const lowerTop = Math.max(...l.buttons.filter((b) => b.y < g.y0 - (g.rows - 1) * g.pitch).map((b) => b.y + b.h / 2));
       const lastRow = g.y0 - (g.rows - 1) * g.pitch;
-      expect(lastRow - g.pitch / 2, 'rows clear the buttons').toBeGreaterThanOrEqual(buttonsTop + 0.012 - 1e-9);
+      expect(lastRow - g.pitch / 2, 'rows clear the buttons under them').toBeGreaterThanOrEqual(lowerTop + 0.012 - 1e-9);
       expect(g.headY - 0.009, 'the heading clears the first row').toBeGreaterThan(g.y0 + g.pitch / 2);
       expect(g.headY + 0.009).toBeLessThanOrEqual(g.height - 0.016);
       expect(g.cols * g.colW + (g.cols - 1) * g.gap + 0.032).toBeCloseTo(g.width, 9);
