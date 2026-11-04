@@ -98,12 +98,13 @@ describe('start panel layout', () => {
 });
 
 describe('options panel layout', () => {
-  it('collects No timer, Sound, Reset progress and Back in one column; confirming swaps in Reset now and Keep it', () => {
+  it('collects No timer, Sound, Music, Reset progress and Back in one column; confirming swaps in Reset now and Keep it', () => {
     for (const narrow of [false, true]) {
       const l = layout('options', { ...ctx, narrow });
       expect(l.buttons.map((b) => [b.id, b.label, b.kind]), `narrow ${narrow}`).toEqual([
         ['relaxed', 'No timer', 'toggle'],
         ['sound', 'Sound', 'toggle'],
+        ['music', 'Music', 'toggle'],
         ['reset', 'Reset progress', 'secondary'],
         ['back', 'Back', 'secondary'],
       ]);
@@ -206,6 +207,6 @@ describe('sound setting', () => {
     s.click();
     s.grind();
     s.chime();
-    expect(s.counts).toEqual({ ticks: 0, clicks: 0, grinds: 0, chimes: 0 });
+    expect(s.counts).toEqual({ ticks: 0, clicks: 0, grinds: 0, chimes: 0, notes: 0 });
   });
 });

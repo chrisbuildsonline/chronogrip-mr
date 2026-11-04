@@ -41,6 +41,6 @@ describe('createSound before unlock', () => {
       s.suspend();
       s.resume();
     }).not.toThrow();
-    expect(s.counts).toEqual({ ticks: 0, clicks: 0, grinds: 0, chimes: 0 });
+    expect(s.counts).toEqual({ ticks: 0, clicks: 0, grinds: 0, chimes: 0, notes: 0 });
   });
 });

@@ -22,6 +22,7 @@ import { C } from './palette';
 import type { GearSpin } from './train';
 import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
 import { createSound, loadSoundOn, saveSoundOn, ticksBetween } from './sound';
+import { loadMusicOn, saveMusicOn } from './music';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
 import { carried, clearedWords, loadRun, nextIndex, resultOf, saveRun, solvedLevel, startRun, type Run } from './run';
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
@@ -216,6 +217,9 @@ const sound = createSound();
 /** Options: sound on or off, saved across visits. */
 let soundOn = loadSoundOn(storage);
 sound.setMuted(!soundOn);
+/** Options: the background music, on or off, saved across visits. Plays only after the first gesture, and not while Sound is off. */
+let musicOn = loadMusicOn(storage);
+sound.setMusic(musicOn);
 
 const panels = createPanels();
 world.scene.add(panels.root);
@@ -557,6 +561,10 @@ function pressOverlay(id: string): void {
     else if (id === 'relaxed') {
       relaxed = !relaxed;
       saveRelaxed(storage, relaxed);
+    } else if (id === 'music') {
+      musicOn = !musicOn;
+      sound.setMusic(musicOn);
+      saveMusicOn(storage, musicOn);
     } else if (id === 'sound') {
       soundOn = !soundOn;
       sound.setMuted(!soundOn);
@@ -1258,6 +1266,7 @@ function showPanel(now = performance.now()): void {
     time: levelClock.seconds,
     relaxed,
     sound: soundOn,
+    music: musicOn,
     confirm: overlay?.kind === 'options' && overlay.confirm,
     xr: world.renderer.xr.isPresenting,
     timer: relaxed || screenOf(flow) !== 'hud' ? null : { par, ...timerView(levelClock.seconds, par) }, // only the HUD carries it, so no other card redraws as it counts
@@ -1493,8 +1502,11 @@ window.__chrono = Object.freeze({
   get soundOn() {
     return soundOn;
   },
+  get musicOn() {
+    return musicOn;
+  },
   get options() {
-    return overlay?.kind === 'options' ? { confirm: overlay.confirm, relaxed, sound: soundOn } : null;
+    return overlay?.kind === 'options' ? { confirm: overlay.confirm, relaxed, sound: soundOn, music: musicOn } : null;
   },
   // info.autoReset (the default) zeroes the counters at the start of each render, so these are the last frame's.
   get render() {

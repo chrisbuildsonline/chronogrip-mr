@@ -70,7 +70,7 @@ interface ChronoHook {
   /** Live: world orientation [x, y, z, w] of each tracked wrist joint, else null. */
   readonly wrists: { readonly left: readonly [number, number, number, number] | null; readonly right: readonly [number, number, number, number] | null };
   /** Live: audio context state and how many of each sound have played. */
-  readonly audio: { readonly state: 'none' | 'suspended' | 'running' | 'closed'; readonly ticks: number; readonly clicks: number; readonly grinds: number; readonly chimes: number };
+  readonly audio: { readonly state: 'none' | 'suspended' | 'running' | 'closed'; readonly ticks: number; readonly clicks: number; readonly grinds: number; readonly chimes: number; /** Music notes scheduled so far (the bed's melody and pad). */ readonly notes: number };
   /** Live: draw calls and triangles of the last rendered frame. */
   readonly render: { readonly calls: number; readonly triangles: number };
   /**
@@ -152,8 +152,10 @@ interface ChronoHook {
   readonly scores: { readonly initials: string; readonly boards: Readonly<Record<string, readonly { readonly name: string; readonly ms: number; readonly date: string; readonly cleared: number }[]>> };
   /** Live: whether sound is on (Options; saved as chronogrip.sound.v1). */
   readonly soundOn: boolean;
+  /** Live: whether the background music is on (Options; saved as chronogrip.music.v1). */
+  readonly musicOn: boolean;
   /** Live: the Options card while it is up (whether Reset progress awaits its confirm, the No timer and Sound switches), else null. */
-  readonly options: { readonly confirm: boolean; readonly relaxed: boolean; readonly sound: boolean } | null;
+  readonly options: { readonly confirm: boolean; readonly relaxed: boolean; readonly sound: boolean; readonly music: boolean } | null;
   /** Live: the initials card while it is up (the board it is for, the rank it would take, the three letters, the slot typing fills next, 3 once all are in), else null. */
   readonly initials: { readonly board: string; readonly rank: number; readonly letters: string; readonly cursor: number } | null;
   /** Live: the note shown for an invalid ?seed= while it is up, else null. */

@@ -81,7 +81,7 @@ for (const size of SIZES) {
     await click(page, 'options');
     await cardIs(page, 'options');
     await dark(page, 'options');
-    await column(page, ['relaxed', 'sound', 'reset', 'back'], 'options');
+    await column(page, ['relaxed', 'sound', 'music', 'reset', 'back'], 'options');
     await centred(page, size, 'options');
     await page.screenshot({ path: `${OUT}/options-${size.name}.png` });
     await click(page, 'back');

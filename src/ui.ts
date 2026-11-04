@@ -91,10 +91,10 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       return { width: NARROW_W, height: startHeight(items.length), buttons: stack(PAD, items, START_BTN_W, START_BH) };
     }
     case 'options': {
-      // One column: the two switches, Reset progress, then Back. Confirming swaps the first three for a choice.
+      // One column: the three switches, Reset progress, then Back. Confirming swaps the first three for a choice.
       const items: Parameters<typeof stack>[1] = ctx.confirm
         ? [['reset-yes', 'Reset now', 'primary'], ['reset-cancel', 'Keep it', 'secondary'], ['back', 'Back', 'secondary']]
-        : [['relaxed', 'No timer', 'toggle'], ['sound', 'Sound', 'toggle'], ['reset', 'Reset progress', 'secondary'], ['back', 'Back', 'secondary']];
+        : [['relaxed', 'No timer', 'toggle'], ['sound', 'Sound', 'toggle'], ['music', 'Music', 'toggle'], ['reset', 'Reset progress', 'secondary'], ['back', 'Back', 'secondary']];
       return { width: NARROW_W, height: PAD + items.length * BH + (items.length - 1) * MENU_GAP + OPTIONS_HEAD, buttons: stack(PAD, items, START_BTN_W, BH) };
     }
     case 'picker': {

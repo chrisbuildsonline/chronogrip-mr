@@ -89,8 +89,8 @@ test('desktop 1440x900: the start panel has three buttons, and each reaches its 
   // Options: the settings in one place, with a static grab line, and Back.
   await click(page, 'options');
   await cardIs(page, 'options');
-  expect(await ids(page)).toEqual(['relaxed', 'sound', 'reset', 'back']);
-  expect(await labelsOf(page)).toEqual(['No timer', 'Sound', 'Reset progress', 'Back']);
+  expect(await ids(page)).toEqual(['relaxed', 'sound', 'music', 'reset', 'back']);
+  expect(await labelsOf(page)).toEqual(['No timer', 'Sound', 'Music', 'Reset progress', 'Back']);
   expect(await words(page)).toEqual(expect.arrayContaining(['Options', 'Grab a gear: click and drag it.']));
   await page.screenshot({ path: `${OUT}/options-1440.png` });
   await click(page, 'back');
@@ -149,11 +149,11 @@ test('desktop: No timer and Sound persist after a reload, and sound off keeps th
   expect(await page.evaluate(() => ({ relaxed: window.__chrono!.timer.relaxed, sound: window.__chrono!.soundOn }))).toEqual({ relaxed: false, sound: true });
   await click(page, 'options');
   await cardIs(page, 'options');
-  expect(await page.evaluate(() => window.__chrono!.options)).toEqual({ confirm: false, relaxed: false, sound: true });
+  expect(await page.evaluate(() => window.__chrono!.options)).toEqual({ confirm: false, relaxed: false, sound: true, music: true });
   await click(page, 'relaxed');
   await click(page, 'sound');
   await page.waitForFunction(() => window.__chrono!.timer.relaxed && !window.__chrono!.soundOn);
-  expect(await page.evaluate(() => window.__chrono!.options)).toEqual({ confirm: false, relaxed: true, sound: false });
+  expect(await page.evaluate(() => window.__chrono!.options)).toEqual({ confirm: false, relaxed: true, sound: false, music: true });
   expect(await store(page, RELAXED)).toBe('1');
   expect(await store(page, SOUND)).toBe('0');
   await frames(page);
@@ -214,7 +214,7 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   await click(page, 'reset-cancel');
   await cardIs(page, 'options');
   expect(await page.evaluate(() => window.__chrono!.options)).toMatchObject({ confirm: false });
-  expect(await ids(page)).toEqual(['relaxed', 'sound', 'reset', 'back']);
+  expect(await ids(page)).toEqual(['relaxed', 'sound', 'music', 'reset', 'back']);
   expect(await page.evaluate(() => window.__chrono!.run)).toEqual({ kind: 'campaign', cleared: 2, ms: 85000 });
 
   // Back leaves the confirm too: opening Options again starts from the plain card.

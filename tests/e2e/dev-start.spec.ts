@@ -29,7 +29,7 @@ test('dev server: the start panel shows its three buttons inside the comfort zon
   await pinch(page, 'right', 0);
   await nudge(page, CLEAR); // off the card: the next pinch must start on nothing, not press the button under the hand
   const options = await page.evaluate(() => window.__chrono!.buttons());
-  expect(options.map((b) => b.id)).toEqual(['relaxed', 'sound', 'reset', 'back']);
+  expect(options.map((b) => b.id)).toEqual(['relaxed', 'sound', 'music', 'reset', 'back']);
   for (const b of options) expect(inZone(b.world, PANEL_ZONE), `${b.id} in the panel zone`).toBe(true);
   expect(await page.evaluate(() => window.__chrono!.labels().map((l) => l.text))).toContain('Grab a gear: pinch it, carry it, let go.');
   await page.screenshot({ path: 'test-results/start/dev-options.png' });

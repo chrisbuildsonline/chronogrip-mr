@@ -43,6 +43,8 @@ export type PanelCtx = {
   relaxed?: boolean;
   /** The Options panel: the Sound switch's state, whether Reset progress is waiting for its confirm, and whether the player is in XR (the grab line says pinch). */
   sound?: boolean;
+  /** The Music switch's state (Sound off silences it too). */
+  music?: boolean;
   confirm?: boolean;
   xr?: boolean;
   /** The HUD's countdown ring: par, whole seconds left and over, share of par left. Absent in Relaxed mode. */
@@ -322,7 +324,7 @@ function button(g: Draw, b: Button, at: (x: number, y: number) => [number, numbe
     g.beginPath();
     g.arc(x, y, h / 2, 0, Math.PI * 2);
   } else pill(g, x, y, w, h);
-  const on = b.kind === 'toggle' && !!(b.id === 'sound' ? ctx.sound : ctx.relaxed);
+  const on = b.kind === 'toggle' && !!(b.id === 'sound' ? ctx.sound : b.id === 'music' ? ctx.music : ctx.relaxed);
   g.fillStyle = b.kind === 'primary' ? (hover ? C.inkHover : C.ink) : on ? C.tint : hover ? C.deepHover : C.deep;
   g.fill();
   if (hover) {
