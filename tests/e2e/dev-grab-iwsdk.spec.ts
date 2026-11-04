@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures';
-import { begin, toSelect } from './start';
+import { begin, choose } from './start';
 import { LEVELS } from '../../src/levels';
 import { CLEAR, axleAt, carry, device, enterWithHands, gearAt, movePinchTo, nudge, pinch, pinchAt, poke, type Device } from './hands';
 
@@ -104,9 +104,7 @@ test('dev server (iwsdk): the headset menu mid-carry puts the gear back, and the
 
 test("dev server (iwsdk): restarting and changing level leave only the new level's gears, back at their start spots", async ({ page }) => {
   const errors = await enter(page, '');
-  await toSelect(page, (id) => poke(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'select', undefined, { timeout: 10_000 });
-  await poke(page, 'level-2');
+  await choose(page, (id) => poke(page, id), 2);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1, undefined, { timeout: 10_000 });
   await pinch(page, 'right', 0);
   const [g2, a2] = Object.entries(LEVELS[1]!.solution)[0]!;
@@ -133,9 +131,7 @@ test("dev server (iwsdk): restarting and changing level leave only the new level
   await setVisibility(page, 'visible-blurred');
   await page.waitForFunction(() => window.__chrono!.paused, undefined, { timeout: 10_000 });
   await setVisibility(page, 'visible');
-  await poke(page, 'levels');
-  await page.waitForFunction(() => window.__chrono!.flow === 'select', undefined, { timeout: 10_000 });
-  await poke(page, 'level-3');
+  await choose(page, (id) => poke(page, id), 3);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 2, undefined, { timeout: 10_000 });
   const l3 = await page.evaluate(() => ({ ids: Object.keys(window.__chrono!.gears).sort(), count: window.__chrono!.gearCount, placements: window.__chrono!.placements }));
   expect(l3.ids).toEqual(LEVELS[2]!.tray.map((g) => g.id).sort());

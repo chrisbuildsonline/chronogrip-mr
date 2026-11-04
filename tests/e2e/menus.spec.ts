@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures';
-import { toSelect } from './start';
+
 
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/menus';
@@ -109,50 +109,35 @@ for (const size of SIZES) {
     expect(errors).toEqual([]);
   });
 
-  test(`${size.name}: the stage select is a centred column of tiles (two when the screen is short), readable, and the layer goes when a level starts`, async ({ page }) => {
+  test(`${size.name}: the Random level picker is a centred column on the dark layer, and the layer goes when a level starts and comes back with the menu`, async ({ page }) => {
     const errors = await open(page, size);
     await cardIs(page, 'title');
-    await toSelect(page, (id) => click(page, id));
-    await cardIs(page, 'select');
-    await dark(page, 'select');
-    const all = await rects(page);
-    const tiles = all.filter((b) => b.id.startsWith('level-'));
-    expect(tiles.map((t) => t.id)).toEqual(Array.from({ length: 10 }, (_, i) => `level-${i + 1}`)); // 1-8, Daily, Random
-    const labels = await page.evaluate(() => window.__chrono!.buttons().filter((b) => b.id.startsWith('level-')).map((b) => b.label));
-    expect(labels.slice(-2)).toEqual(['Daily', 'Random']);
-    const xs = [...new Set(tiles.map((t) => Math.round(centreX(t.rect))))];
-    const card = (await page.evaluate(() => window.__chrono!.viewBoxes().card))!;
-    if (size.width > 500) {
-      // The room is there: one column, one x centre, climbing down in order.
-      expect(xs.length, 'one column').toBe(1);
-      await column(page, tiles.map((t) => t.id), 'select');
-      expect(Math.abs(xs[0]! - centreX(card))).toBeLessThanOrEqual(1);
-    } else {
-      // A short phone screen: two columns, centred as a pair, reading left to right then down.
-      expect(xs.length, 'two columns').toBe(2);
-      expect((xs[0]! + xs[1]!) / 2, 'the pair is centred').toBeCloseTo(centreX(card), -1);
-      tiles.forEach((t, i) => i && expect(centreY(t.rect) >= centreY(tiles[i - 1]!.rect) - 1, `${t.id} reads after ${tiles[i - 1]!.id}`).toBe(true));
-    }
-    await centred(page, size, 'select');
-    // Every tile and Back is reachable: wholly on screen and at least 44 px each way; the words are 12 px or more.
-    for (const b of all) {
+    await click(page, 'random');
+    await cardIs(page, 'picker');
+    await dark(page, 'picker');
+    await column(page, ['easy', 'medium', 'hard', 'expert', 'back'], 'picker');
+    await centred(page, size, 'picker');
+    // Every button is reachable: wholly on screen and at least 44 px each way; the words are 12 px or more.
+    for (const b of await rects(page)) {
       expect(b.rect[2] - b.rect[0], `${b.id} wide`).toBeGreaterThanOrEqual(44);
       expect(b.rect[3] - b.rect[1], `${b.id} tall`).toBeGreaterThanOrEqual(44);
     }
     for (const l of await page.evaluate(() => window.__chrono!.labels())) expect(l.height, `"${l.text}" is 12 px or more`).toBeGreaterThanOrEqual(12);
-    await page.screenshot({ path: `${OUT}/select-${size.name}.png` });
+    await page.screenshot({ path: `${OUT}/picker-${size.name}.png` });
+    await click(page, 'back');
+    await cardIs(page, 'title');
 
-    // A level starts: the layer is gone; Pause then Levels brings the menu, and the layer, back.
-    await click(page, 'level-1');
+    // New Game plays at once: the layer is gone; Pause shows no layer; Main menu brings the title, and the layer, back.
+    await click(page, 'start');
     await page.waitForFunction(() => window.__chrono!.flow === 'playing');
     await page.waitForFunction(() => !window.__chrono!.cameraMoving);
     expect((await scrim(page)).mode, 'no layer in play').toBeNull();
     await click(page, 'pause');
     await cardIs(page, 'paused');
     expect((await scrim(page)).mode, 'no layer on the pause card').toBeNull();
-    await click(page, 'levels');
-    await cardIs(page, 'select');
-    await dark(page, 'select again');
+    await click(page, 'menu');
+    await cardIs(page, 'title');
+    await dark(page, 'title again');
     expect(errors).toEqual([]);
   });
 }

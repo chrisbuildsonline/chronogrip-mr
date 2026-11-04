@@ -1,7 +1,6 @@
 import { expect, test, type Page } from './fixtures';
-import { choose, toSelect } from './start';
+import { choose } from './start';
 import { LEVELS } from '../../src/levels';
-import { dailySeed, tinkerLevel } from '../../src/tinker';
 import { calibrateByMouse } from './calibrate';
 
 /** Screenshots land here for a look by eye (gitignored). */
@@ -112,27 +111,14 @@ test('desktop: the target gear carries a goal badge that turns amber once the tr
   expect(errors).toEqual([]);
 });
 
-const NEXT: Record<string, string> = { l6: 'l7', l7: 'l8', l8: tinkerLevel(dailySeed(new Date())).id };
+const NEXT: Record<string, string> = { l6: 'l7', l7: 'l8', l8: 'l9' };
 
 for (const [i, level] of LEVELS.entries()) {
   if (i < 5) continue;
   test(`desktop: level ${i + 1} (${level.name}) solves through to its complete card, and Next goes on`, async ({ page }) => {
     const errors = await open(page);
-    await toSelect(page, (id) => click(page, id));
-    await page.waitForFunction(() => window.__chrono!.flow === 'select');
-    const tiles = await page.evaluate(() => window.__chrono!.buttons().filter((b) => b.id.startsWith('level-')).map((b) => b.label));
-    expect(tiles).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', 'Daily', 'Random']);
-    if (i === 5) {
-      await frames(page);
-      await page.screenshot({ path: `${OUT}/select.png` });
-      // The ten-tile card is the widest: it must stay clear of the Enter MR note in the top right corner.
-      const note = (await page.locator('#enter-note').boundingBox())!;
-      const corners = await page.evaluate(() => window.__chrono!.panelCorners());
-      expect(Math.max(...corners.map(([x]) => x))).toBeLessThan(note.x - 8);
-    }
-
-    await click(page, `level-${i + 1}`);
-    await page.waitForFunction((id) => window.__chrono!.flow === 'playing' && window.__chrono!.levelId === id, level.id);
+    await choose(page, () => Promise.resolve(), i + 1);
+    expect(await page.evaluate(() => window.__chrono!.levelId)).toBe(level.id);
     const goal = await page.evaluate(() => window.__chrono!.goal!);
     expect(goal.dir).toBe(level.target.rpm > 0 ? 'ccw' : 'cw');
     expect(goal.rpm).toBe(Math.abs(level.target.rpm));

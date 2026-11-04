@@ -1,7 +1,8 @@
 import { expect, test, type Page } from './fixtures';
 import { LEVELS } from '../../src/levels';
 import { decodeSeed } from '../../src/seed';
-import { randomLevel, unpackSeed } from '../../src/random';
+import { puzzleFor } from '../../src/random';
+import { tinkerLevel } from '../../src/tinker';
 import { formatDate } from '../../src/scores';
 import { clockTenths } from '../../src/ui';
 import { calibrateByMouse } from './calibrate';
@@ -79,7 +80,7 @@ async function startLevel1(page: Page) {
 async function randomSolution(page: Page) {
   const seedCode = (await page.evaluate(() => window.__chrono!.seedCode))!;
   const n = decodeSeed(seedCode)!;
-  return randomLevel(unpackSeed(n).step, n).solution;
+  return puzzleFor(n, tinkerLevel).solution;
 }
 
 /** Every word is on the card, readable, and no two words on a line run into each other. */
@@ -196,7 +197,7 @@ test('desktop: Enter saves the initials; Skip saves nothing, and the empty board
   expect((await scores(page)).boards.l1).toHaveLength(1);
 });
 
-test('desktop: the empty board, the switcher through L1..L8 and Random, and it opens on the level last played', async ({ page }) => {
+test('desktop: the empty board, the switcher through L1..L20 and the four Random levels, and it opens on the level last played', async ({ page }) => {
   const errors = await open(page);
   await click(page, 'scores');
   await cardIs(page, 'board');
@@ -204,32 +205,28 @@ test('desktop: the empty board, the switcher through L1..L8 and Random, and it o
   expect(await words(page)).toContain('No times yet. Solve level 1 to set one.');
   await page.screenshot({ path: `${OUT}/board-empty-1440.png` });
   const seen: string[] = [];
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 24; i++) {
     await click(page, 'board-next');
     await frames(page);
-    seen.push((await words(page)).find((x) => /^(Level \d|Random)$/.test(x))!);
+    seen.push((await words(page)).find((x) => /^(Level \d+|Random · \w+)$/.test(x))!);
   }
-  expect(seen).toEqual(['Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8', 'Random', 'Level 1']);
+  expect(seen).toEqual([...Array.from({ length: 19 }, (_, i) => `Level ${i + 2}`), 'Random · Easy', 'Random · Medium', 'Random · Hard', 'Random · Expert', 'Level 1']);
   await click(page, 'board-prev');
   await frames(page);
-  expect(await words(page)).toContain('Random');
-  expect(await words(page)).toContain('No times yet. Solve a Random puzzle to set one.');
+  expect(await words(page)).toContain('Random · Expert');
+  expect(await words(page)).toContain('No times yet. Solve a Random · Expert puzzle to set one.');
   await click(page, 'board-prev');
   await frames(page);
-  expect(await words(page)).toContain('No times yet. Solve level 8 to set one.');
+  expect(await words(page)).toContain('Random · Hard');
   await page.keyboard.press('Escape'); // Esc is Back
   await cardIs(page, 'title');
 
   // Starting level 1 (touching a gear or pressing Start) leaves the board; going back, it opens on the level last played.
   await begin(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
+  await choose(page, (id) => click(page, id), 3);
   await click(page, 'pause');
-  await click(page, 'levels');
-  await click(page, 'level-3');
-  await page.waitForFunction(() => window.__chrono!.levelIndex === 2);
-  await click(page, 'pause');
-  await click(page, 'levels');
-  await click(page, 'back');
+  await click(page, 'menu');
   await cardIs(page, 'title');
   await click(page, 'scores');
   await cardIs(page, 'board');
@@ -271,35 +268,34 @@ test('desktop: against a full board, a solve faster than the slowest asks at its
   expect(errors).toEqual([]);
 });
 
-test('desktop: a Random solve is saved with its step and shows as "Step N"', async ({ page }) => {
+test('desktop: a Random level solve is saved on its difficulty board and shows there', async ({ page }) => {
   const errors = await open(page);
-  await choose(page, (id) => click(page, id), LEVELS.length + 2);
+  await click(page, 'random');
+  await click(page, 'easy');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await solve(page, await randomSolution(page));
   await cardIs(page, 'initials');
   const w = await words(page);
-  expect(w).toContain('Random · Step 1');
+  expect(w).toContain('Random · Easy');
   expect(w).toContain('#1 BEST TIMES');
-  expect(await initials(page)).toMatchObject({ board: 'random', rank: 1 });
+  expect(await initials(page)).toMatchObject({ board: 'random-easy', rank: 1 });
   await page.keyboard.type('rnd');
   await page.keyboard.press('Enter');
   await cardIs(page, 'complete');
-  const saved = (await scores(page)).boards.random!;
+  const saved = (await scores(page)).boards['random-easy']!;
   expect(saved).toHaveLength(1);
-  expect(saved[0]).toMatchObject({ name: 'RND', step: 1 });
-  // The Random run moved on a step or more; its saved board keeps the step that was solved.
-  expect((await page.evaluate(() => window.__chrono!.random)).next).toBeGreaterThan(1);
+  expect(saved[0]).toMatchObject({ name: 'RND' });
+  expect(saved[0]).not.toHaveProperty('step');
 
   await page.reload();
   await page.waitForFunction(() => window.__chrono?.ready === true);
   await click(page, 'scores');
   await cardIs(page, 'board');
-  await click(page, 'board-prev'); // L1 wraps back to Random
+  for (let i = 0; i < 4; i++) await click(page, 'board-prev'); // L1 wraps back through Expert, Hard, Medium to Easy
   await frames(page);
   const shown = await words(page);
-  expect(shown).toContain('Random');
+  expect(shown).toContain('Random · Easy');
   expect(shown).toContain('RND');
-  expect(shown).toContain('Step 1');
   expect(shown).toContain(clockTenths(saved[0]!.ms / 1000));
   await wordsClear(page, 'random board 1440', 9, 4);
   await page.screenshot({ path: `${OUT}/board-random-1440.png` });
@@ -307,7 +303,7 @@ test('desktop: a Random solve is saved with its step and shows as "Step N"', asy
 });
 
 test('desktop: a full board shows one column of ten, ranked, with the date', async ({ page }) => {
-  await seed(page, { version: 1, initials: 'ZED', boards: { l1: full(8000), random: Array.from({ length: 10 }, (_, i) => ({ name: 'BOB', step: 12 - (i >> 1), ms: 61000 + i * 1000, date: '2026-11-04' })) } });
+  await seed(page, { version: 1, initials: 'ZED', boards: { l1: full(8000), 'random-expert': Array.from({ length: 10 }, (_, i) => ({ name: 'BOB', ms: 61000 + i * 1000, date: '2026-11-04' })) } });
   const errors = await open(page);
   await click(page, 'scores');
   await cardIs(page, 'board');
@@ -330,14 +326,15 @@ test('desktop: a full board shows one column of ten, ranked, with the date', asy
   await page.screenshot({ path: `${OUT}/board-full-1440.png` });
   await click(page, 'board-prev');
   await frames(page);
-  expect((await words(page)).filter((x) => x === 'Step 12')).toHaveLength(2);
+  expect(await words(page)).toContain('Random · Expert');
+  expect((await words(page)).filter((x) => x === 'BOB')).toHaveLength(10);
   await wordsClear(page, 'full random 1440', 9, 4);
   await page.screenshot({ path: `${OUT}/board-full-random-1440.png` });
   expect(errors).toEqual([]);
 });
 
 test('phone 375 x 812: the start panel fits its three buttons, and the board is legible with Back under the thumb', async ({ page }) => {
-  await seed(page, { version: 1, initials: 'ZED', boards: { l1: full(8000), random: Array.from({ length: 10 }, (_, i) => ({ name: 'BOB', step: 12 - (i >> 1), ms: 61000 + i * 1000, date: '2026-11-04' })) } });
+  await seed(page, { version: 1, initials: 'ZED', boards: { l1: full(8000), 'random-expert': Array.from({ length: 10 }, (_, i) => ({ name: 'BOB', ms: 61000 + i * 1000, date: '2026-11-04' })) } });
   const errors = await open(page, '/', PHONE);
   await cardIs(page, 'title');
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
@@ -380,7 +377,7 @@ test('phone 375 x 812: the start panel fits its three buttons, and the board is 
   await page.screenshot({ path: `${OUT}/board-375.png` });
   await click(page, 'board-prev');
   await frames(page);
-  expect(await words(page)).toContain('Random');
+  expect(await words(page)).toContain('Random · Expert');
   await wordsClear(page, 'random board 375', 12, 4);
   await page.screenshot({ path: `${OUT}/board-random-375.png` });
   await click(page, 'board-next');

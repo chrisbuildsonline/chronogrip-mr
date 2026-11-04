@@ -1,8 +1,7 @@
-import { beginByMouse } from './start';
 import { expect, test, type Page } from './fixtures';
 import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
-import { begin, choose } from './start';
+import { begin, beginByMouse, choose } from './start';
 
 const audio = (page: Page) => page.evaluate(() => ({ ...window.__chrono!.audio }));
 

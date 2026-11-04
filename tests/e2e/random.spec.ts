@@ -1,14 +1,13 @@
 import { expect, test, type Page } from './fixtures';
-import { begin, choose, toSelect } from './start';
-import { LEVELS } from '../../src/levels';
-import { decodeSeed, encodeSeed } from '../../src/seed';
-import { MAX_STEP, randomLevel, unpackSeed } from '../../src/random';
+import { decodeSeed } from '../../src/seed';
+import { DIFFICULTY_LEVEL, difficultyOf, puzzleFor } from '../../src/random';
+import { tinkerLevel } from '../../src/tinker';
 import { calibrateByMouse } from './calibrate';
 
-/** Screenshots land here for a look by eye (gitignored with dist). */
-const OUT = 'dist/f29-shots';
-const SLOT = LEVELS.length + 2; // the Random tile: after the eight levels and the daily
-const KEY = 'chronogrip.random.v1';
+/** The generated Random levels as shipped: none of the hand-made ones. */
+test.use({ classic: false });
+
+const OUT = 'test-results/random';
 
 async function open(page: Page, path = '/', size = { width: 1440, height: 900 }) {
   await page.setViewportSize(size);
@@ -30,15 +29,9 @@ async function click(page: Page, id: string) {
 
 const frames = (page: Page) => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 const words = (page: Page) => page.evaluate(() => window.__chrono!.labels().map((l) => l.text));
-const random = (page: Page) => page.evaluate(() => window.__chrono!.random);
-
 const screen = (page: Page, kind: 'gears' | 'axles', id: string) =>
   page.evaluate(([k, i]) => window.__chrono!.toScreen(window.__chrono![k as 'gears' | 'axles'][i!]!), [kind, id] as const);
 
-/**
- * Screen positions are only true once the camera has stopped (a phone eases the view when a card changes) and the gear is
- * at rest; so wait on that state, then check the pinch took the gear before dragging it.
- */
 async function place(page: Page, gear: string, axle: string) {
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
   await frames(page);
@@ -52,316 +45,111 @@ async function place(page: Page, gear: string, axle: string) {
   await page.waitForFunction(([g, a]) => window.__chrono!.placements[g!] === a, [gear, axle]);
 }
 
-/** The puzzle on the board, rebuilt from its code the way a friend opening the link would get it. */
-async function onBoard(page: Page) {
-  const code = (await page.evaluate(() => window.__chrono!.seedCode))!;
-  const seed = decodeSeed(code)!;
-  return { code, seed, level: randomLevel(unpackSeed(seed).step, seed) };
-}
+/** What the puzzle on the board looks like: where its axles are, what goes on them, how many gears. */
+const layoutOf = (page: Page) => page.evaluate(() => JSON.stringify({ axles: window.__chrono!.axles, solution: window.__chrono!.solution, gears: window.__chrono!.gearCount }));
 
-/** Plays the Random puzzle up now to its complete card. */
 async function solve(page: Page) {
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  const { level } = await onBoard(page);
-  for (const [gear, axle] of Object.entries(level.solution)) await place(page, gear, axle);
+  const solution = await page.evaluate(() => window.__chrono!.solution);
+  for (const [gear, axle] of Object.entries(solution)) await place(page, gear, axle);
   await calibrateByMouse(page);
-  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'restart'));
+  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next' || b.id === 'restart'));
   await frames(page);
 }
 
-/** On the level select card: "Random" is drawn at least as tall as "Daily", inside its own tile, with the run's step under or beside it. */
-async function readsAsBigAsDaily(page: Page) {
-  const labels = await page.evaluate(() => window.__chrono!.labels());
-  const [random, daily] = [labels.find((l) => l.text === 'Random')!, labels.find((l) => l.text === 'Daily')!];
-  expect(random.height, 'Random is as tall as Daily').toBeGreaterThanOrEqual(daily.height - 0.5);
-  expect(random.height, 'Random is readable').toBeGreaterThanOrEqual(12);
-  const tile = (await page.evaluate(() => window.__chrono!.buttons())).find((b) => b.id === `level-${SLOT}`)!;
-  expect(random.left).toBeGreaterThanOrEqual(tile.rect[0]);
-  expect(random.right).toBeLessThanOrEqual(tile.rect[2]);
-  const step = labels.find((l) => /^Step \d+$/.test(l.text))!;
-  expect(step, 'the run\'s step is on the tile').toBeDefined();
-  expect(step.left).toBeGreaterThanOrEqual(tile.rect[0]);
-  expect(step.right).toBeLessThanOrEqual(tile.rect[2]);
-}
-
-/** Nothing on the HUD overlaps: the heading, the time, the countdown ring and its words, side by side. */
-async function hudClear(page: Page, at: string) {
-  await page.waitForFunction(() => !window.__chrono!.cameraMoving);
-  await frames(page);
-  const labels = await page.evaluate(() => window.__chrono!.labels());
-  const corners = await page.evaluate(() => window.__chrono!.panelCorners());
-  const [x0, x1] = [Math.min(...corners.map((c) => c[0])), Math.max(...corners.map((c) => c[0]))];
-  const { ringSpan, ring } = await page.evaluate(() => window.__chrono!.timer);
-  const card = (await page.evaluate(() => window.__chrono!.card))!;
-  expect(ring, `${at}: the ring is up`).toBe(true);
-  const px = (m: number) => x0 + (m / card.width) * (x1 - x0);
-  // The level time is the leftmost clock reading; the ring's own seconds-left sits further right.
-  const time = labels.filter((l) => /^\d+:\d\d/.test(l.text)).sort((a, b) => a.left - b.left)[0]!;
-  expect(time, `${at}: a time`).toBeDefined();
-  expect(time.right, `${at}: the time ${time.text} stops short of the ring`).toBeLessThanOrEqual(px(ringSpan[0]) - 4);
-  const word = labels.find((l) => l.text === 'LEFT' || l.text === 'OVER')!;
-  expect(word.left, `${at}: the ring's words start after it`).toBeGreaterThanOrEqual(px(ringSpan[1]));
-  for (const a of labels) {
-    for (const b of labels) {
-      if (a === b || Math.abs(a.y - b.y) >= (a.height + b.height) / 2) continue; // only words that share a line can run into each other
-      // 10 px apart at least: "RANDOM" 6 px from "TIME" reads as one word.
-      expect(a.right + 10 <= b.left || b.right + 10 <= a.left, `${at}: "${a.text}" and "${b.text}" keep apart`).toBe(true);
-    }
-  }
-  // The heading under the eyebrow (Step 12, Puzzle, Daily, the level number) is there and as readable as the other HUD words.
-  const eyebrow = labels.find((l) => /^(RANDOM|SHARED|LEVEL)/.test(l.text))!;
-  expect(eyebrow.height, `${at}: "${eyebrow.text}" is 12 px or more`).toBeGreaterThanOrEqual(12);
-  if (eyebrow.text.startsWith('RANDOM')) {
-    // Random's step is in its eyebrow line ("RANDOM · STEP 12"), with the time under it at the left.
-    expect(eyebrow.text, `${at}: the step`).toMatch(/^RANDOM · STEP \d+$/);
-    expect(Math.abs(time.left - eyebrow.left), `${at}: the time sits under the eyebrow`).toBeLessThan(3);
-  } else {
-    const heading0 = labels.find((l) => Math.abs(l.left - eyebrow.left) < 3 && l.y > eyebrow.y && l.y - eyebrow.y < 3 * eyebrow.height);
-    expect(heading0, `${at}: a heading under "${eyebrow.text}"`).toBeDefined();
-    expect(heading0!.height, `${at}: "${heading0!.text}" is 12 px or more`).toBeGreaterThanOrEqual(12);
-  }
-  const pause = (await page.evaluate(() => window.__chrono!.buttons())).find((b) => b.id === 'pause')!;
-  for (const l of labels.filter((l) => l.left > word.left - 1 && l.y >= word.y - word.height)) expect(l.right + 4, `${at}: "${l.text}" stops short of the pause button`).toBeLessThanOrEqual(pause.rect[0]);
-  const heading = labels.filter((l) => l.text !== time.text && l.y > time.y - time.height && l.y < time.y + time.height && l.right < time.left);
-  for (const h of heading) expect(h.right, `${at}: "${h.text}" stops short of the time`).toBeLessThanOrEqual(time.left - 4);
-  for (const l of labels) expect(l.right, `${at}: "${l.text}" is on the card`).toBeLessThanOrEqual(x1);
-}
-
-async function openRandom(page: Page) {
-  await toSelect(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'select');
-  await click(page, `level-${SLOT}`);
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-}
-
-test('desktop: Random is a tile after the daily; three solves in a row climb, and the code reopens the same puzzle', async ({ page }) => {
+test('desktop: Random level opens a picker (Easy, Medium, Hard, Expert), Hard plays a generated puzzle, and Play again is a new one at the same difficulty', async ({ page }) => {
   const errors = await open(page);
-  await toSelect(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'select');
-  await frames(page);
-  const tiles = await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label));
-  expect(tiles).toEqual(['Back', '1', '2', '3', '4', '5', '6', '7', '8', 'Daily', 'Random']);
-  expect(await words(page)).toContain('0 of 9 solved'); // Random is endless, not a tenth level
-  await readsAsBigAsDaily(page);
-  await page.screenshot({ path: `${OUT}/select-1440x900.png` });
-  await click(page, `level-${SLOT}`);
+  await click(page, 'random');
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'picker');
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Easy', 'Medium', 'Hard', 'Expert', 'Back']);
+  expect(await words(page)).toContain('Random level');
+  await page.screenshot({ path: `${OUT}/picker.png` });
+  await click(page, 'hard');
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
+  expect(await page.evaluate(() => window.__chrono!.random)).toMatchObject({ mode: true, difficulty: 'hard' });
+  expect(await words(page)).toContain('RANDOM · HARD');
+  const first = await layoutOf(page);
+  const code = (await page.evaluate(() => window.__chrono!.seedCode))!;
+  // The puzzle is as hard as Hard says: its measured difficulty is nearer level 15's than level 3's.
+  const level = puzzleFor(decodeSeed(code)!, tinkerLevel);
+  expect(Math.abs(difficultyOf(level) - 22.5), 'near the Hard target').toBeLessThan(6);
+  expect(DIFFICULTY_LEVEL.hard).toBe(15);
+  await page.screenshot({ path: `${OUT}/hard-play.png` });
 
-  const seen: number[] = [];
-  let last = '';
-  for (let i = 0; i < 3; i++) {
-    await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-    const r = await random(page);
-    expect(r).toMatchObject({ mode: true, slot: SLOT - 1 });
-    seen.push(r.step);
-    const hud = await words(page);
-    expect(hud).toEqual(expect.arrayContaining([`RANDOM · STEP ${r.step}`]));
-    expect(hud.some((w) => /^Level/.test(w) || w === 'Daily' || w === 'Puzzle')).toBe(false);
-    const { code, seed } = await onBoard(page);
-    expect(unpackSeed(seed).step).toBe(r.step); // the code carries the step
-    expect(code).not.toBe(last);
-    last = code;
-
-    await solve(page);
-    const done = await words(page);
-    expect(done).toContain(`Random · Step ${r.step} complete`);
-    expect(done).toContain(`Puzzle code ${code}`);
-    const buttons = await page.evaluate(() => window.__chrono!.buttons().map((b) => [b.id, b.label]));
-    expect(buttons).toEqual([['next', 'Next puzzle'], ['restart', 'Restart'], ['copy', 'Copy link']]);
-    if (i === 0) await page.screenshot({ path: `${OUT}/complete-1440x900.png` });
-    await click(page, 'next');
+  await solve(page);
+  // A first solve makes the board: Skip the initials, then the card offers Play again and Menu.
+  if ((await page.evaluate(() => window.__chrono!.card!.screen)) === 'initials') {
+    expect((await page.evaluate(() => window.__chrono!.initials))!.board).toBe('random-hard');
+    await click(page, 'skip');
   }
-  // Fast solves on the clock: each jumps two steps, so the steps climb.
-  expect(seen).toEqual([1, 3, 5]);
-  expect((await random(page)).next).toBe(7); // the third solve moved the run on to 7, and the fourth puzzle is its first
-  // Nothing from Random went into level progress.
-  expect(await page.evaluate(() => Object.keys(window.__chrono!.progress.best))).toEqual([]);
-  expect(await page.evaluate(() => localStorage.getItem('chronogrip.progress.v1'))).toBeNull();
-  expect(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), KEY)).toEqual({ step: 7, slow: false });
-  expect(errors).toEqual([]);
-});
-
-test('desktop: the puzzle code on the complete card opens that exact Random puzzle via ?seed=', async ({ page }) => {
-  const errors = await open(page);
-  await openRandom(page);
-  const want = await onBoard(page);
-  await solve(page);
-  expect(await words(page)).toContain(`Puzzle code ${want.code}`);
-  const gears = await page.evaluate(() => ({ id: window.__chrono!.levelId, gears: window.__chrono!.gearCount, axles: Object.keys(window.__chrono!.axles) }));
-  await page.goto(`/?seed=${want.code.toLowerCase()}`);
-  await page.waitForFunction(() => window.__chrono?.ready === true);
-  const got = await page.evaluate(() => ({ id: window.__chrono!.levelId, gears: window.__chrono!.gearCount, axles: Object.keys(window.__chrono!.axles), code: window.__chrono!.seedCode, note: window.__chrono!.seedNote }));
-  expect(got).toEqual({ ...gears, code: want.code, note: null });
-  expect(got.id).toBe(want.level.id);
-  // It opens as a shared puzzle and plays through with the very same solution.
-  await begin(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  expect(await words(page)).toEqual(expect.arrayContaining(['SHARED', 'Puzzle']));
-  for (const [gear, axle] of Object.entries(want.level.solution)) await place(page, gear, axle);
-  await calibrateByMouse(page);
-  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'restart'));
-  expect(errors).toEqual([]);
-});
-
-test('desktop: the step is saved, picked up on a reload and by the Random tile; over par twice eases it', async ({ page }) => {
-  const errors = await open(page);
-  await page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ step: 6, slow: false })), KEY);
-  await page.reload();
-  await page.waitForFunction(() => window.__chrono?.ready === true);
-  await openRandom(page);
-  expect(await random(page)).toMatchObject({ mode: true, step: 6, next: 6 });
-
-  // Over par: hold, marked slow. The Retry keeps the same puzzle and does not count twice.
-  await page.evaluate(() => window.__chrono!.advanceClock(1000));
-  const first = (await onBoard(page)).code;
-  await solve(page);
-  expect(await words(page)).toContain('OVER TIME');
-  expect(await random(page)).toMatchObject({ step: 6, next: 6, slow: true });
-  await click(page, 'restart'); // Retry
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  expect((await onBoard(page)).code).toBe(first);
-  await page.evaluate(() => window.__chrono!.advanceClock(1000));
-  await solve(page);
-  expect(await random(page)).toMatchObject({ next: 6, slow: true });
-  await page.screenshot({ path: `${OUT}/complete-over-1440x900.png` });
-  // Next puzzle after a slow solve is the same step; a second slow solve on a new puzzle eases.
+  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'));
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(expect.arrayContaining(['Play again', 'Menu']));
+  expect(await words(page)).toContain('Random · Hard complete');
   await click(page, 'next');
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  expect(await random(page)).toMatchObject({ step: 6 });
-  await page.evaluate(() => window.__chrono!.advanceClock(1000));
-  await solve(page);
-  expect(await random(page)).toMatchObject({ next: 5, slow: false });
-  expect(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), KEY)).toEqual({ step: 5, slow: false });
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelTime >= 0);
+  expect(await page.evaluate(() => window.__chrono!.random)).toMatchObject({ mode: true, difficulty: 'hard' });
+  expect(await layoutOf(page), 'Play again is a new puzzle').not.toBe(first);
   expect(errors).toEqual([]);
 });
 
-test('desktop: with No timer a solve is just one step on', async ({ page }) => {
+test('desktop: each difficulty plays and the pause card has Main menu, not Choose level', async ({ page }) => {
   const errors = await open(page);
-  await click(page, 'options');
-  await click(page, 'relaxed');
-  await page.waitForFunction(() => window.__chrono!.timer.relaxed);
-  await click(page, 'back');
-  await openRandom(page);
-  expect(await random(page)).toMatchObject({ step: 1 });
-  await solve(page);
-  expect(await random(page)).toMatchObject({ next: 2, slow: false });
-  expect(await words(page)).not.toContain('OVER TIME');
-  await click(page, 'next');
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  expect(await random(page)).toMatchObject({ step: 2 });
-  expect(errors).toEqual([]);
-});
-
-test('desktop: corrupt storage starts the run at step 1 without a console error', async ({ page }) => {
-  await page.addInitScript((k) => localStorage.setItem(k, '{"step":'), KEY);
-  const errors = await open(page);
-  await openRandom(page);
-  expect(await random(page)).toMatchObject({ step: 1, next: 1 });
-  expect(errors).toEqual([]);
-});
-
-test('desktop: Random never changes the hand-made levels, the daily or the title', async ({ page }) => {
-  const errors = await open(page);
-  expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1');
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['New Game', 'Random level', 'Options', 'High scores']);
-  await choose(page, (id) => click(page, id), 9);
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  expect(await words(page)).toContain('Daily');
-  expect((await random(page)).mode).toBe(false);
-  expect(errors).toEqual([]);
-});
-
-test('phone 375x812: nothing on the HUD overlaps, for Random at its widest and for the other kinds of level', async ({ page }) => {
-  await page.addInitScript((k) => localStorage.setItem(k, JSON.stringify({ step: 12, slow: false })), KEY);
-  const errors = await open(page, '/', { width: 375, height: 812 });
-  const cases: [string, () => Promise<void>][] = [
-    ['Random step 12', async () => void (await choose(page, (id) => click(page, id), SLOT))],
-    ['Level 8', async () => void (await choose(page, (id) => click(page, id), 8))],
-    ['Daily', async () => void (await choose(page, (id) => click(page, id), 9))],
-  ];
-  for (const [name, go] of cases) {
+  for (const d of ['easy', 'medium', 'expert']) {
     await page.goto('/');
     await page.waitForFunction(() => window.__chrono?.ready === true);
-    await go();
+    await click(page, 'random');
+    await click(page, d);
     await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-    // The widest times: tenths under 10 s (0:08.8), and past ten minutes (12:34).
-    for (const s of [0, 8.8, 754]) {
-      await page.evaluate((k) => window.__chrono!.advanceClock(k), s);
-      await hudClear(page, `${name} at +${s}s`);
-    }
-    if (name.startsWith('Random')) {
-      expect(await words(page)).toEqual(expect.arrayContaining(['RANDOM · STEP 12']));
-      await page.screenshot({ path: `${OUT}/hud-375x812.png` });
-    }
+    expect(await page.evaluate(() => window.__chrono!.random)).toMatchObject({ mode: true, difficulty: d });
   }
-  // A shared puzzle's heading is "Puzzle", also beside the time.
-  const code = encodeSeed(424242);
-  await page.goto(`/?seed=${code}`);
-  await page.waitForFunction(() => window.__chrono?.ready === true);
-  await begin(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  await hudClear(page, 'Shared');
+  await click(page, 'pause');
+  await page.waitForFunction(() => window.__chrono!.flow === 'paused');
+  const labels = await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label));
+  expect(labels).toEqual(['Resume', 'Restart', 'Main menu', 'No timer']);
+  expect(labels).not.toContain('Choose level');
+  await click(page, 'menu');
+  await page.waitForFunction(() => window.__chrono!.flow === 'title');
   expect(errors).toEqual([]);
 });
 
-test('phone 375x812: the Random bar and the Next puzzle sheet fit', async ({ page }) => {
-  const size = { width: 375, height: 812 };
-  const errors = await open(page, '/', size);
-  await toSelect(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'select');
-  await page.waitForFunction(() => !window.__chrono!.cameraMoving);
+test('desktop: a Random level solve is saved on its own difficulty board; the old Random board is gone', async ({ page }) => {
+  const errors = await open(page);
+  await click(page, 'random');
+  await click(page, 'medium');
+  await solve(page);
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'initials');
+  expect(await page.evaluate(() => window.__chrono!.initials)).toMatchObject({ board: 'random-medium', rank: 1 });
+  await click(page, 'save');
+  const boards = (await page.evaluate(() => window.__chrono!.scores)).boards;
+  expect(boards['random-medium']).toHaveLength(1);
+  expect(boards['random-easy']).toHaveLength(0);
+  expect(boards['random']).toBeUndefined();
+  expect(errors).toEqual([]);
+});
+
+test('phone 375x812: the Random level picker and a Random level card fit', async ({ page }) => {
+  const errors = await open(page, '/', { width: 375, height: 812 });
+  await click(page, 'random');
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'picker');
+  await frames(page);
+  for (const b of await page.evaluate(() => window.__chrono!.buttons())) {
+    expect(b.rect[3] - b.rect[1], b.id).toBeGreaterThanOrEqual(44);
+    expect(b.rect[0] >= 0 && b.rect[2] <= 375 && b.rect[1] >= 0 && b.rect[3] <= 812, `${b.id} on screen`).toBe(true);
+  }
+  for (const l of await page.evaluate(() => window.__chrono!.labels())) expect(l.height, `"${l.text}"`).toBeGreaterThanOrEqual(12);
+  await page.screenshot({ path: `${OUT}/picker-375.png` });
+  await click(page, 'easy');
+  await solve(page);
+  if ((await page.evaluate(() => window.__chrono!.card!.screen)) === 'initials') await click(page, 'skip');
+  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'));
   await frames(page);
   const corners = await page.evaluate(() => window.__chrono!.panelCorners());
   const [x0, x1] = [Math.min(...corners.map((c) => c[0])), Math.max(...corners.map((c) => c[0]))];
-  const bar = (await page.evaluate(() => window.__chrono!.buttons())).find((b) => b.id === `level-${SLOT}`)!;
-  expect(bar.label).toBe('Random');
-  for (const b of await page.evaluate(() => window.__chrono!.buttons())) {
-    expect(b.rect[3] - b.rect[1], b.id).toBeGreaterThanOrEqual(44);
-    expect(b.rect[0] >= x0 && b.rect[2] <= x1 && b.rect[1] >= 0 && b.rect[3] <= size.height, `${b.id} on the sheet`).toBe(true);
-  }
-  const word = (await page.evaluate(() => window.__chrono!.labels())).find((l) => l.text === 'Random')!;
-  expect(word.height).toBeGreaterThanOrEqual(12);
-  expect(word.left).toBeGreaterThanOrEqual(bar.rect[0]);
-  expect(word.right).toBeLessThanOrEqual(bar.rect[2]);
-  await readsAsBigAsDaily(page);
-  await page.screenshot({ path: `${OUT}/select-375x812.png` });
-  await click(page, `level-${SLOT}`);
-
-  await solve(page);
-  await page.waitForFunction(() => !window.__chrono!.cameraMoving);
-  await frames(page);
-  const labels = await page.evaluate(() => window.__chrono!.labels());
-  const cc = await page.evaluate(() => window.__chrono!.panelCorners());
-  const [c0, c1] = [Math.min(...cc.map((c) => c[0])), Math.max(...cc.map((c) => c[0]))];
-  expect(labels.map((l) => l.text)).toContain('Random · Step 1 complete');
-  for (const l of labels) {
-    expect(l.left, `"${l.text}" inside the sheet`).toBeGreaterThanOrEqual(c0);
-    expect(l.right, `"${l.text}" inside the sheet`).toBeLessThanOrEqual(c1);
+  for (const l of await page.evaluate(() => window.__chrono!.labels())) {
+    expect(l.left, `"${l.text}" inside the sheet`).toBeGreaterThanOrEqual(x0);
+    expect(l.right, `"${l.text}" inside the sheet`).toBeLessThanOrEqual(x1);
     expect(l.height, `"${l.text}" is 12 px or more`).toBeGreaterThanOrEqual(12);
   }
-  for (const a of labels) {
-    for (const b of labels) {
-      if (a === b || Math.abs(a.y - b.y) > Math.max(a.height, b.height) * 0.8) continue;
-      expect(a.right <= b.left || b.right <= a.left, `"${a.text}" and "${b.text}" do not overlap`).toBe(true);
-    }
-  }
-  // The title stops short of the time and the amber check that comes before it on a pass (about 15 px).
-  const title = labels.find((l) => l.text === 'Random · Step 1 complete')!;
-  const time = labels.find((l) => /^\d+:\d\d/.test(l.text))!;
-  expect(title.right, 'the title clears the check and the time').toBeLessThanOrEqual(time.left - 18);
-  for (const b of await page.evaluate(() => window.__chrono!.buttons())) {
-    const text = labels.find((l) => l.text === b.label)!;
-    expect(text.left, `${b.id} label inside its pill`).toBeGreaterThanOrEqual(b.rect[0]);
-    expect(text.right, `${b.id} label inside its pill`).toBeLessThanOrEqual(b.rect[2]);
-    expect(b.rect[0] >= c0 && b.rect[2] <= c1, `${b.id} inside the sheet`).toBe(true);
-  }
-  await page.screenshot({ path: `${OUT}/complete-375x812.png` });
-  await click(page, 'next');
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  expect((await random(page)).step).toBe(3);
-  await page.waitForFunction(() => !window.__chrono!.cameraMoving);
-  await frames(page);
-  expect(await words(page)).toEqual(expect.arrayContaining(['RANDOM · STEP 3']));
-  await hudClear(page, 'Random step 3');
-  expect(MAX_STEP).toBeGreaterThan(3);
+  await page.screenshot({ path: `${OUT}/complete-375.png` });
   expect(errors).toEqual([]);
 });

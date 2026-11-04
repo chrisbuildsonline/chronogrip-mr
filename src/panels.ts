@@ -399,7 +399,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
     }
     case 'options': {
       const sure = !!ctx.confirm;
-      const line = sure ? 'Clears levels and Random. Best times stay.' : ctx.xr ? 'Grab a gear: pinch it, carry it, let go.' : ctx.narrow ? 'Grab a gear: touch and drag it.' : 'Grab a gear: click and drag it.';
+      const line = sure ? 'Clears solved levels. Best times stay.' : ctx.xr ? 'Grab a gear: pinch it, carry it, let go.' : ctx.narrow ? 'Grab a gear: touch and drag it.' : 'Grab a gear: click and drag it.';
       text(g, sure ? 'Reset progress?' : 'Options', cx, y(l.height - 0.028), font(600, T.heading, SERIF), C.ink);
       g.font = font(500, T.body);
       text(g, line, cx, y(l.height - 0.056), font(500, T.body * Math.min(1, (W - mm(2 * 16)) / g.measureText(line).width)), C.muted);

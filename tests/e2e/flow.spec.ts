@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures';
-import { begin, toSelect } from './start';
+import { begin, choose } from './start';
 import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
 
@@ -74,14 +74,10 @@ test('desktop: title, start, solve level 1, complete card, next loads level 2', 
   expect(errors).toEqual([]);
 });
 
-test('desktop: level select reaches level 3; a hidden tab pauses and resume keeps the board', async ({ page }) => {
+test('desktop: level 3 plays; a hidden tab pauses and resume keeps the board', async ({ page }) => {
   const errors = await open(page);
-  await toSelect(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'select');
-  await page.waitForTimeout(300);
-  await page.screenshot({ path: 'test-results/f9-select.png' });
-  await click(page, 'level-3');
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 2);
+  await choose(page, () => Promise.resolve(), 3);
+  expect(await page.evaluate(() => window.__chrono!.levelIndex)).toBe(2);
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l3');
 
   await place(page, 'p', 'b');

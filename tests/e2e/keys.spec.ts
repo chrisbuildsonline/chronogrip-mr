@@ -40,13 +40,11 @@ test('desktop: the canvas is labelled, Enter is the card primary, Esc pauses and
   await page.keyboard.press('Enter');
   await expect.poll(() => flowOf(page)).toBe('playing');
 
-  // Pause, open Levels from the pause card, then Esc on level select goes back to the title.
+  // Pause, then Main menu on the pause card goes back to the title.
   await page.keyboard.press('Escape');
-  await hasButton(page, 'levels');
-  const [x, y] = await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'levels')!.screen);
+  await hasButton(page, 'menu');
+  const [x, y] = await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'menu')!.screen);
   await page.mouse.click(x, y);
-  await expect.poll(() => flowOf(page)).toBe('select');
-  await page.keyboard.press('Escape');
   await expect.poll(() => flowOf(page)).toBe('title');
 
   expect(errors).toEqual([]);

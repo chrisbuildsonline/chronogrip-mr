@@ -1,7 +1,6 @@
 import { test, type Page } from '@playwright/test';
-import { toSelect } from '../e2e/start';
+
 import { GHOST_PERIOD_S } from '../../src/ghost';
-import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from '../e2e/calibrate';
 
 // The README screenshots, at full resolution (?shots keeps the pixel ratio up on software GL). Run with `bun run screenshots`.
@@ -72,11 +71,9 @@ test('README screenshots: title, a gear in hand mid-puzzle, level complete', asy
   await shotWhen(page, 'title', `(now / 1000 / ${GHOST_PERIOD_S}) % 1 > 0.36 && (now / 1000 / ${GHOST_PERIOD_S}) % 1 < 0.44`);
 
   // Mid-puzzle on level 2: one gear placed, the next carried by the mouse towards its axle, the axles it fits pulsing amber.
-  await toSelect(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'select');
-  await click(page, 'level-2');
+  await page.evaluate(() => window.__chrono!.jump(2));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1);
-  const [[firstGear, firstAxle], [gear, axle]] = Object.entries(LEVELS[1]!.solution) as [string, string][];
+  const [[firstGear, firstAxle], [gear, axle]] = Object.entries(await page.evaluate(() => window.__chrono!.solution)) as [string, string][];
   await place(page, firstGear!, firstAxle!);
   await page.waitForFunction((g) => window.__chrono!.placements[g!] !== undefined, firstGear);
   const from = await screen(page, 'gears', gear!);

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures';
-import { toSelect } from './start';
+
 import { LEVELS } from '../../src/levels';
 import { DESKTOP_EYE, DESKTOP_TARGET, faceView } from '../../src/fit';
 import { TRAY_POSE, type Vec3 } from '../../src/seat';
@@ -78,7 +78,7 @@ async function phoneCard(page: Page, w: number, h: number, name: Screen | 'calib
 
   const boxes = await page.evaluate(() => window.__chrono!.viewBoxes());
   const c = boxes.card!;
-  if (name === 'title' || name === 'select') {
+  if (name === 'title' || name === 'picker') {
     // A menu: centred in the view over the black layer, clear of the header, no bottom sheet and no board to keep clear of.
     expect(c[0] >= 0 && c[1] >= 0 && c[2] <= w && c[3] <= h, `${at}: card on screen`).toBe(true);
     expect(Math.abs((c[0] + c[2]) / 2 - w / 2), `${at}: card centred across`).toBeLessThanOrEqual(2);
@@ -109,7 +109,7 @@ async function phoneCard(page: Page, w: number, h: number, name: Screen | 'calib
 }
 
 for (const [w, h] of [[375, 812], [390, 844]] as const) {
-  test(`phone ${w}x${h}: every card is a bottom sheet with 44 px buttons and 12 px words; every level tile in two columns, Random last, and clickable`, async ({ page }) => {
+  test(`phone ${w}x${h}: every card is a bottom sheet with 44 px buttons and 12 px words; the Random level picker`, async ({ page }) => {
     const errors = await open(page, w, h);
     // The page header's words are 12 px or more too.
     for (const sel of ['#title', '#enter-mr', '#enter-note']) {
@@ -118,27 +118,15 @@ for (const [w, h] of [[375, 812], [390, 844]] as const) {
     }
 
     await phoneCard(page, w, h, 'title');
-    await toSelect(page, (id) => click(page, id));
-    await page.waitForFunction(() => window.__chrono!.flow === 'select');
-    await phoneCard(page, w, h, 'select');
-    const tiles = (await page.evaluate(() => window.__chrono!.buttons())).filter((b) => b.id.startsWith('level-'));
-    expect(tiles.map((t) => t.id)).toEqual(Array.from({ length: 10 }, (_, i) => `level-${i + 1}`));
-    expect(new Set(tiles.map((t) => Math.round(t.screen[0]))).size, 'tiles in two columns').toBe(2);
-    expect(new Set(tiles.map((t) => Math.round(t.screen[1]))).size, 'five rows').toBe(5);
-    expect(tiles[9]!.label, 'Random is the last tile').toBe('Random');
-    expect(tiles[9]!.screen[1]).toBeGreaterThanOrEqual(Math.max(...tiles.slice(0, 9).map((t) => t.screen[1])) - 0.5);
+    // Random level opens the difficulty picker: a centred column of Easy, Medium, Hard, Expert and Back, 44 px buttons.
+    await click(page, 'random');
+    await page.waitForFunction(() => window.__chrono!.card?.screen === 'picker');
+    await phoneCard(page, w, h, 'picker');
+    expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['easy', 'medium', 'hard', 'expert', 'back']);
+    await click(page, 'back');
+    await page.waitForFunction(() => window.__chrono!.card?.screen === 'title');
 
-    // Every tile is a working target: each one opens its level, and Pause, Levels comes back.
-    for (let i = 1; i <= 10; i++) {
-      await click(page, `level-${i}`);
-      await page.waitForFunction((k) => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === k, i - 1);
-      await click(page, 'pause');
-      await page.waitForFunction(() => window.__chrono!.flow === 'paused');
-      await click(page, 'levels');
-      await page.waitForFunction(() => window.__chrono!.flow === 'select');
-    }
-
-    await click(page, 'level-1');
+    await click(page, 'start');
     await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 0);
     const hud = await phoneCard(page, w, h, 'hud');
     expect(hud.map((l) => l.text), 'the goal line is on the HUD').toContain('Turn the marked gear');
@@ -174,10 +162,10 @@ test('desktop 1440x900: the cards are the wide ones, placed and sized as before'
     const eye = await page.evaluate(() => window.__chrono!.cameraAt);
     eye.forEach((v, k) => expect(v, 'tuned eye').toBeCloseTo(DESKTOP_EYE[k]!, 4));
     const level = await page.evaluate(() => window.__chrono!.levelIndex);
-    const wide = layout(name, { level, levels: LEVELS.length + 2, daily: true, random: true });
+    const wide = layout(name, { level, levels: 21, random: true });
     const card = await page.evaluate(() => window.__chrono!.card);
     expect(card).toEqual({ screen: name, width: wide.width, height: wide.height });
-    if (name === 'title' || name === 'select') {
+    if (name === 'title' || name === 'picker') {
       // A menu is centred in the view over the black layer, not anchored above the board.
       const c = (await page.evaluate(() => window.__chrono!.viewBoxes())).card!;
       expect(Math.abs((c[0] + c[2]) / 2 - 720), `${name} centred across`).toBeLessThanOrEqual(2);
@@ -203,10 +191,12 @@ test('desktop 1440x900: the cards are the wide ones, placed and sized as before'
     await page.screenshot({ path: `${OUT}/1440x900-${name}.png` });
   };
   await check('title');
-  await toSelect(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'select');
-  await check('select');
-  await click(page, 'level-1');
+  await click(page, 'random');
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'picker');
+  await check('picker');
+  await click(page, 'back');
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'title');
+  await click(page, 'start');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await check('hud');
   await click(page, 'pause');

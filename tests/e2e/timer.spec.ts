@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures';
 import { LEVELS } from '../../src/levels';
 import { encodeSeed } from '../../src/seed';
-import { dailySeed, tinkerLevel } from '../../src/tinker';
+import { tinkerLevel } from '../../src/tinker';
 import { clock } from '../../src/ui';
 import { parFor } from '../../src/timer';
 import { calibrateByMouse } from './calibrate';
@@ -98,7 +98,7 @@ test('desktop: solved under par is a pass, saved, with the par on the card and R
   const w = await words(page);
   expect(w).toEqual(expect.arrayContaining(['SOLVED', 'Level 1 complete', `PAR ${clock(L1_PAR)}`]));
   expect(w).not.toContain('OVER TIME');
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['next', 'restart', 'levels']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['next', 'restart']);
   expect(await page.evaluate(() => window.__chrono!.outcome)).toBe('pass');
   expect(await page.evaluate(() => window.__chrono!.outcomes)).toEqual({ l1: 'pass' });
   expect(await page.evaluate(() => Object.keys(window.__chrono!.progress.best))).toEqual(['l1']);
@@ -125,7 +125,7 @@ test('desktop: running out the clock still wakes the bird; the card says over ti
   expect(w).toEqual(expect.arrayContaining(['OVER TIME', 'Level 1 complete', `PAR ${clock(L1_PAR)}`]));
   expect(w).not.toContain('SOLVED');
   const buttons = await page.evaluate(() => window.__chrono!.buttons().map((b) => [b.id, b.label]));
-  expect(buttons).toEqual([['restart', 'Retry'], ['next', 'Next'], ['levels', 'Levels']]);
+  expect(buttons).toEqual([['restart', 'Retry'], ['next', 'Next']]);
   expect(await page.evaluate(() => window.__chrono!.outcome)).toBe('over');
   expect(await page.evaluate(() => window.__chrono!.outcomes)).toEqual({ l1: 'over' });
   expect(await page.evaluate(() => Object.keys(window.__chrono!.progress.best))).toEqual(['l1']); // the best time is kept either way
@@ -173,7 +173,7 @@ test('desktop: Relaxed hides the ring, never says over time, persists across a r
   const w = await words(page);
   expect(w).toContain('SOLVED');
   expect(w.some((x) => /over time|^PAR/i.test(x))).toBe(false);
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['next', 'restart', 'levels']);
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.id))).toEqual(['next', 'restart']);
   expect(await page.evaluate(() => window.__chrono!.outcome)).toBeNull();
   expect(await page.evaluate(() => window.__chrono!.outcomes)).toEqual({}); // relaxed runs are not marked
   expect(await page.evaluate(() => Object.keys(window.__chrono!.progress.best))).toEqual(['l1']);
@@ -195,15 +195,14 @@ test('desktop: Relaxed hides the ring, never says over time, persists across a r
   expect(errors).toEqual([]);
 });
 
-test('desktop: the daily and a shared ?seed= puzzle get the par of their own difficulty', async ({ page }) => {
+test('desktop: a shared ?seed= puzzle gets the par of its own difficulty, and level 1 the floor', async ({ page }) => {
   const seed = 424242;
   const errors = await open(page, `/?seed=${encodeSeed(seed)}`);
   expect((await timer(page)).par).toBe(parFor(tinkerLevel(seed)));
   const errors2 = await open(page, '/');
   expect((await timer(page)).par).toBe(L1_PAR);
-  await choose(page, (id) => click(page, id), LEVELS.length + 1);
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  expect((await timer(page)).par).toBe(parFor(tinkerLevel(dailySeed(new Date()))));
+  await begin(page, (id) => click(page, id));
+  expect((await timer(page)).par).toBe(L1_PAR);
   expect(await words(page)).toContain('LEFT');
   expect([...errors, ...errors2]).toEqual([]);
 });

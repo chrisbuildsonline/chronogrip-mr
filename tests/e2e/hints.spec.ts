@@ -1,8 +1,7 @@
 import { expect, test, type Page } from './fixtures';
-import { beginByMouse } from './start';
+import { begin, beginByMouse } from './start';
 import { GHOST_TWIST_S } from '../../src/ghost';
 import { LEVELS } from '../../src/levels';
-import { begin } from './start';
 
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/hints';

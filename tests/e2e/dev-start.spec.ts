@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { toSelect } from './start';
+
 import { PANEL_ZONE } from '../../src/ui';
 import { inZone } from '../../src/seat';
 import { CLEAR, enterWithHands, flow, nudge, pinch, poke } from './hands';
@@ -55,10 +55,16 @@ test('dev server: the start panel shows its three buttons inside the comfort zon
   await poke(page, 'back');
   await cardIs(page, 'title');
 
-  // New Game plays level 1; Choose level on the pause card is the list.
-  await toSelect(page, (id) => poke(page, id));
-  await cardIs(page, 'select');
-  expect(await card(page)).toBe('select');
-  expect(await flow(page)).toBe('select');
+  // Random level opens the difficulty picker, in the zone; New Game plays level 1 at once.
+  await poke(page, 'random');
+  await cardIs(page, 'picker');
+  const picker = await page.evaluate(() => window.__chrono!.buttons());
+  expect(picker.map((b) => b.id)).toEqual(['easy', 'medium', 'hard', 'expert', 'back']);
+  for (const b of picker) expect(inZone(b.world, PANEL_ZONE), `${b.id} in the panel zone`).toBe(true);
+  await poke(page, 'back');
+  await cardIs(page, 'title');
+  await poke(page, 'start');
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing', undefined, { timeout: 10_000 });
+  expect(await card(page)).toBe('hud');
   expect(errors).toEqual([]);
 });

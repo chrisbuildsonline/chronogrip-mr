@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures';
 import { RENDER_BUDGET } from '../../src/budget';
-import { LEVELS } from '../../src/levels';
-import { toSelect } from './start';
+import { CAMPAIGN } from '../../src/random';
+
 
 async function click(page: Page, id: string) {
   await page.waitForFunction((b) => window.__chrono!.buttons().some((x) => x.id === b), id);
@@ -12,7 +12,10 @@ async function click(page: Page, id: string) {
 /** Two rendered frames, so the counters are those of the level now on the board. */
 const frames = (page: Page) => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 
-test('every level and the daily stay inside the render budget while playing', async ({ page }) => {
+// The campaign as it ships: every level generated, none of the hand-made ones.
+test.use({ classic: false });
+
+test('every campaign level stays inside the render budget while playing', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(`console: ${m.text()}`);
@@ -21,13 +24,10 @@ test('every level and the daily stay inside the render budget while playing', as
   await page.goto('/');
   await page.waitForFunction(() => window.__chrono?.ready === true);
 
-  // Every hand-made level, then the daily.
-  for (let i = 0; i < LEVELS.length + 1; i++) {
-    if (i === 0) await toSelect(page, (id) => click(page, id)); // the start panel into a level, then Choose level on the pause card
-    else await click(page, 'levels');
-    await page.waitForFunction(() => window.__chrono!.flow === 'select');
-    await click(page, `level-${i + 1}`);
-    await page.waitForFunction((n) => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === n, i);
+  // Every campaign level, three generated puzzles each (a new one every time a level starts).
+  for (let i = 0; i < CAMPAIGN * 3; i++) {
+    await page.evaluate((n) => window.__chrono!.jump(n), (i % CAMPAIGN) + 1);
+    await page.waitForFunction((n) => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === n, i % CAMPAIGN);
     await frames(page);
     const r = await page.evaluate(() => ({ id: window.__chrono!.levelId, ...window.__chrono!.render, workshop: window.__chrono!.scenery.parts.includes('workbench') }));
     // The workshop backdrop (src/scenery.ts) is up, so its cost is inside the numbers below.
@@ -35,9 +35,6 @@ test('every level and the daily stay inside the render budget while playing', as
     expect(r.calls, `${r.id} draw calls`).toBeGreaterThan(0);
     expect(r.calls, `${r.id} draw calls`).toBeLessThanOrEqual(RENDER_BUDGET.calls);
     expect(r.triangles, `${r.id} triangles`).toBeLessThanOrEqual(RENDER_BUDGET.triangles);
-    // Pause, then Levels, takes the next pass to level select.
-    await click(page, 'pause');
-    await page.waitForFunction(() => window.__chrono!.flow === 'paused');
   }
   expect(errors).toEqual([]);
 });

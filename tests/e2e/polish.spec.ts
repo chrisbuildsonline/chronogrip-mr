@@ -106,12 +106,7 @@ test('desktop 1280x720: every panel in frame, a real time on a quick solve, shot
   const time = await page.evaluate(() => window.__chrono!.levelTime);
   expect(time).toBeGreaterThan(0);
 
-  await click(page, 'levels');
-  await page.waitForFunction(() => window.__chrono!.flow === 'select');
-  await inFrame(page, 'select');
-  await shot(page, '6-select');
-
-  await click(page, 'level-2');
+  await page.evaluate(() => window.__chrono!.jump(2));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1);
   await shot(page, '7-level2');
 
@@ -129,10 +124,7 @@ test('desktop 1280x720: every panel in frame, a real time on a quick solve, shot
   await inFrame(page, 'complete on level 2');
   await shot(page, '8b-complete-level2');
 
-  await click(page, 'levels');
-  await page.waitForFunction(() => window.__chrono!.flow === 'select');
-  await inFrame(page, 'select on level 2');
-  await click(page, 'level-5');
+  await page.evaluate(() => window.__chrono!.jump(5));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 4);
   await shot(page, '9-level5');
   console.log('render level 5', await page.evaluate(() => window.__chrono!.render));

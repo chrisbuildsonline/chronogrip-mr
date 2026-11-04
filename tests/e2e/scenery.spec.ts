@@ -1,5 +1,6 @@
 import { expect, test, type Page } from './fixtures';
-import { toSelect } from './start';
+import { choose } from './start';
+
 import { RENDER_BUDGET } from '../../src/budget';
 import { LEVELS } from '../../src/levels';
 
@@ -47,9 +48,7 @@ test('desktop 1440x900: a warm workshop behind the tray, title and a level in pl
   const errors = await open(page, 1440, 900);
   await expectWorkshop(page);
   await page.screenshot({ path: `${OUT}/desktop-title.png` });
-  await toSelect(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'select');
-  await click(page, 'level-2');
+  await choose(page, () => Promise.resolve(), 2);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await frames(page, 6);
   await expectWorkshop(page);
@@ -61,9 +60,7 @@ test('phone 375x812: the workshop backs the tray without crowding the card', asy
   const errors = await open(page, 375, 812);
   await expectWorkshop(page);
   await page.screenshot({ path: `${OUT}/phone-title.png` });
-  await toSelect(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'select');
-  await click(page, 'level-2');
+  await choose(page, () => Promise.resolve(), 2);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await frames(page, 6);
   await expectWorkshop(page);
@@ -73,9 +70,7 @@ test('phone 375x812: the workshop backs the tray without crowding the card', asy
 
 test('level 5 with the workshop up stays inside the render budget', async ({ page }) => {
   await open(page, 1440, 900);
-  await toSelect(page, (id) => click(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'select');
-  await click(page, `level-${LEVELS.findIndex((l) => l.id === 'l5') + 1}`);
+  await choose(page, () => Promise.resolve(), LEVELS.findIndex((l) => l.id === 'l5') + 1);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelId === 'l5');
   await frames(page, 4);
   await expectWorkshop(page);

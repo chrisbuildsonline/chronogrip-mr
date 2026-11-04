@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures';
-import { toSelect } from './start';
+
 import { LEVELS } from '../../src/levels';
 import { calibrateByMouse } from './calibrate';
 
@@ -97,14 +97,15 @@ for (const [w, h] of [[375, 812], [768, 1024], [1440, 900]] as const) {
 
     await fits(page, w, h, 'title');
     await square(page, w, h);
-    await toSelect(page, (id) => click(page, id));
-    await page.waitForFunction(() => window.__chrono!.flow === 'select');
-    await fits(page, w, h, 'select');
+    // The menus are centred over the dark layer, so the camera holds still for them: the picker does not move it.
+    await click(page, 'random');
+    await page.waitForFunction(() => window.__chrono!.card?.screen === 'picker');
+    await fits(page, w, h, 'picker');
     await square(page, w, h);
-    // The menus are centred over the dark layer, so the camera holds still for them: no easing back for the select card.
-    const select = dist(await page.evaluate(() => window.__chrono!.cameraAt));
-    expect(select).toBeCloseTo(dist(eye), 4);
-    await click(page, 'level-1');
+    expect(dist(await page.evaluate(() => window.__chrono!.cameraAt))).toBeCloseTo(dist(eye), 4);
+    await click(page, 'back');
+    await page.waitForFunction(() => window.__chrono!.card?.screen === 'title');
+    await click(page, 'start');
     await page.waitForFunction(() => window.__chrono!.flow === 'playing');
     await fits(page, w, h, 'hud');
     const [gear, axle] = Object.entries(LEVELS[0]!.solution)[0]!;
@@ -116,9 +117,7 @@ for (const [w, h] of [[375, 812], [768, 1024], [1440, 900]] as const) {
 
     // Level 5 has the widest parts strip: the camera refits for it on load, and backs off again only where it must.
     const before = dist(await page.evaluate(() => window.__chrono!.cameraAt));
-    await click(page, 'levels');
-    await page.waitForFunction(() => window.__chrono!.flow === 'select');
-    await click(page, 'level-5');
+    await page.evaluate(() => window.__chrono!.jump(5));
     await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 4);
     await fits(page, w, h, 'level5');
     const after = dist(await page.evaluate(() => window.__chrono!.cameraAt));

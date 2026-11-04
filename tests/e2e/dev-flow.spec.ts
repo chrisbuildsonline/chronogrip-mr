@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { begin, toSelect } from './start';
+import { begin, choose } from './start';
 import { LEVELS } from '../../src/levels';
 import { twistRight, twistToTarget } from './calibrate';
 import { CLEAR, axleAt, carry, device, enterWithHands, flow, gearAt, movePinchTo, nudge, pinch, pinchAt, poke, type Device } from './hands';
@@ -60,9 +60,7 @@ test('dev server: poke Start, the ghost hand shows until the first grab, solve l
 
 test('dev server: the headset menu pauses mid-level; the board and the clock hold until Resume; session end pauses', async ({ page }) => {
   const errors = await enterWithHands(page);
-  await toSelect(page, (id) => poke(page, id));
-  await page.waitForFunction(() => window.__chrono!.flow === 'select', undefined, { timeout: 10_000 });
-  await poke(page, 'level-2');
+  await choose(page, (id) => poke(page, id), 2);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1, undefined, { timeout: 10_000 });
   await pinch(page, 'right', 0);
 
