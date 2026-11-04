@@ -235,7 +235,23 @@ speeds and the bird flaps in time; the complete card shows 2 s later.
   and the room environment (0.75).
 - Contact shadows, no shadow maps: a soft radial disc under every gear (one instanced draw call; a lifted gear's spreads)
   and a wide soft one under the whole tray.
-- Render budget (src/budget.ts): at most 100 draw calls and 60k triangles a frame; level 5 draws 53 calls, 34k triangles (the goal badge and ring add two calls on every level).
+- Render budget (src/budget.ts): at most 100 draw calls and 60k triangles a frame; level 5 draws 67 calls, 36.6k triangles on desktop with the workshop scenery (56 and 34.7k without it; the scenery adds 11 calls and 1.9k triangles, and in MR only the four props).
+
+## Scenery (src/scenery.ts, tests/unit/scenery.test.ts, tests/e2e/scenery.spec.ts, tests/e2e/dev-scenery.spec.ts)
+A low-poly clockmaker's workshop, built in code (no models), all colours from the `SCENE` palette in src/palette.ts.
+- Desktop and phone (inline): a plank workbench whose top sits 4 mm under the tray's lowest edge, two wedge cheeks holding
+  the tilted tray up, a back wall of dark plank 0.95 m behind the head with a wainscot and rail, four shelves (honey and
+  glass jars, a leaning row of books, a small clock with a brass bell, a hammer, a tin), loose props on the bench (books,
+  honey jar, mug, brass gear) and a desk lamp on the left. Walnut and plaster stay dark and low in saturation so the cream
+  panels and the brass gears read first; the lamp, its halo (additive, from a generated glow texture) and the wall wash
+  carry the warm highlight. There is no scene light for the lamp (a point light costs every gear and panel pixel on software GL); the glow is faked. A dark fog (1.6-3.6 m) lets the wall
+  recede on a phone's longer eye distance. `scene.background` stays null; the page's walnut vignette shows past the wall.
+- Cost: vertex-coloured, flat-shaded and merged, one mesh per part and material: 11 meshes, 1.9k triangles (the MR props: 4 meshes, 620 triangles).
+- MR (immersive-ar): passthrough is the only background. No backdrop, wall, shelves, fog, lamp light or `scene.background`
+  (the lamp is only its glow meshes, hidden with the group). Four small props (oil can,
+  screwdriver, loupe, spare-gear dish, each under 12 cm) stand on the real table, 26-45 cm to either side of the tray's
+  centre, outside the comfort cone and the panels' cone at every table height, and only once a table plane places the tray.
+  Their colours avoid the brass hue the "table found" ring is measured by.
 
 ## Desktop
 The same in-world panels, clicked with the mouse (ray cast). The HTML chrome is only the small serif wordmark (top left)
