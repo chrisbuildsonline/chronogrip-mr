@@ -1,4 +1,4 @@
-import { CanvasTexture, Color, MeshPhysicalMaterial, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, Vector2, type Texture } from 'three';
+import { CanvasTexture, Color, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, Vector2, type Texture } from 'three';
 import { C } from './palette';
 
 /**
@@ -105,16 +105,16 @@ function track<M extends MeshStandardMaterial>(m: M): M {
   return m;
 }
 /** The backdrops are dim, warm LDR images, so a metal reads them stronger than 1. */
-const ENV_INTENSITY = 8;
+const ENV_INTENSITY = 10;
 
 /** Polished brass: metalness 1, roughness about 0.3, a warm colour, a subtle brushing. */
 export const brass = (repeat = 40): MeshStandardMaterial =>
-  track(new MeshPhysicalMaterial({ color: new Color(C.brass), metalness: 1, roughness: 0.4, roughnessMap: brushedAt(repeat).roughness, normalMap: brushedAt(repeat).normal, normalScale: new Vector2(0.25, 0.25), envMapIntensity: 1 }));
+  track(new MeshStandardMaterial({ color: new Color(C.brass), metalness: 0.62, roughness: 0.48, roughnessMap: brushedAt(repeat).roughness, normalMap: brushedAt(repeat).normal, normalScale: new Vector2(0.25, 0.25), envMapIntensity: 1 }));
 
 /** Darker aged brass for plates and plinths. */
 export const bronze = (repeat = 3): MeshStandardMaterial =>
-  track(new MeshPhysicalMaterial({ color: 0x7d5f33, metalness: 1, roughness: 0.5, roughnessMap: brushedAt(repeat).roughness, normalMap: brushedAt(repeat).normal, normalScale: new Vector2(0.25, 0.25), envMapIntensity: 1 }));
+  track(new MeshStandardMaterial({ color: 0x7d5f33, metalness: 1, roughness: 0.5, roughnessMap: brushedAt(repeat).roughness, normalMap: brushedAt(repeat).normal, normalScale: new Vector2(0.25, 0.25), envMapIntensity: 1 }));
 
 /** Cooler steel for axles, screws and springs. */
 export const steel = (repeat = 40): MeshStandardMaterial =>
-  track(new MeshPhysicalMaterial({ color: 0x9aa3ab, metalness: 1, roughness: 0.5, roughnessMap: brushedAt(repeat).roughness, normalMap: brushedAt(repeat).normal, normalScale: new Vector2(0.2, 0.2), envMapIntensity: 1 }));
+  track(new MeshStandardMaterial({ color: 0x9aa3ab, metalness: 1, roughness: 0.5, roughnessMap: brushedAt(repeat).roughness, normalMap: brushedAt(repeat).normal, normalScale: new Vector2(0.2, 0.2), envMapIntensity: 1 }));

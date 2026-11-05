@@ -7,6 +7,9 @@ import { LEVELS } from '../../src/levels';
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/scenery';
 
+/** The least mean luminance a gear may render at: polished brass measures 55 to 90, near-black brown about 25. */
+const BRASS_FLOOR = 40;
+
 const FACES = ['px.jpg', 'nx.jpg', 'py.jpg', 'ny.jpg', 'pz.jpg', 'nz.jpg'];
 
 const frames = (page: Page, n = 3) =>
@@ -96,11 +99,67 @@ test('the metals are polished brass lit by the stage environment', async ({ page
   const errors = await open(page, 1440, 900);
   await expectBackdrop(page);
   const m = await page.evaluate(() => window.__chrono!.metals);
-  expect(m.metalness).toBe(1);
+  expect(m.metalness).toBeGreaterThanOrEqual(0.55); // some diffuse brass stays, so no gear goes black
+  expect(m.metalness).toBeLessThan(1);
   expect(m.roughness).toBeGreaterThanOrEqual(0.28);
-  expect(m.roughness).toBeLessThanOrEqual(0.45);
+  expect(m.roughness).toBeLessThanOrEqual(0.55);
   expect(m.roughnessMap && m.normalMap).toBe(true);
   expect(m.environment).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+/** Mean luminance (0-255) of regions of one screenshot, measured in the page. */
+async function brightness(page: Page, regions: { x: number; y: number; w: number; h: number }[]) {
+  const b64 = (await page.screenshot()).toString('base64');
+  return page.evaluate(
+    async ([data, rs]) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${data as string}`;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const g = c.getContext('2d')!;
+      g.drawImage(img, 0, 0);
+      return (rs as { x: number; y: number; w: number; h: number }[]).map((r) => {
+        const px = g.getImageData(Math.round(r.x), Math.round(r.y), Math.round(r.w), Math.round(r.h)).data;
+        let sum = 0;
+        for (let i = 0; i < px.length; i += 4) sum += 0.2126 * px[i]! + 0.7152 * px[i + 1]! + 0.0722 * px[i + 2]!;
+        return sum / (px.length / 4);
+      });
+    },
+    [b64, regions] as const,
+  );
+}
+
+test('every brass gear reads as brass, never near black, from three orbit angles', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors = await open(page, 1440, 900);
+  await choose(page, () => Promise.resolve(), 5);
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing');
+  await page.waitForFunction(() => !window.__chrono!.cameraMoving);
+  const seen: string[] = [];
+  for (const [i, drag] of [[0, 0], [1, 140], [2, -300]] as const) {
+    if (drag) {
+      await page.mouse.move(720, 120);
+      await page.mouse.down();
+      await page.mouse.move(720 + drag, 120, { steps: 6 });
+      await page.mouse.up();
+    }
+    await frames(page, 8);
+    const gears = (await page.evaluate(() => window.__chrono!.gearScreens)).filter((g) => {
+      const half = Math.max(6, Math.min(30, g.r));
+      return g.x - half >= 0 && g.y - half >= 0 && g.x + half <= 1440 && g.y + half <= 900 && !(g.y < 260 && g.x > 400 && g.x < 830); // not under the HUD panel
+    });
+    const lums = await brightness(page, gears.map((g) => { const half = Math.max(6, Math.min(30, g.r)); return { x: g.x - half, y: g.y - half, w: 2 * half, h: 2 * half }; }));
+    gears.forEach((g, k) => {
+      seen.push(`angle ${i} ${g.id}: ${lums[k]!.toFixed(0)}`);
+      expect(lums[k]!, `angle ${i} gear ${g.id}`).toBeGreaterThan(BRASS_FLOOR);
+    });
+    await page.screenshot({ path: `${OUT}/orbit-${i}.png` });
+  }
+  console.log(seen.join('\n'));
+  expect(seen.length).toBeGreaterThan(6);
   expect(errors).toEqual([]);
 });
 

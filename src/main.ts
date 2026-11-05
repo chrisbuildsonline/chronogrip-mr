@@ -13,7 +13,7 @@ import { MENU_BACKDROP, MENU_THEME, RANDOM_PICK, STAGES, dOf, kindOf, parOf, sta
 import { createScenery } from './scenery';
 import { woodSet } from './wood';
 import { trackMr } from './mr';
-import { isSoftwareGl, tuneForSoftwareGl } from './render';
+import { fullResolution, isSoftwareGl, tuneForSoftwareGl } from './render';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
 import { MENU_SCREENS, PLAY_SCREENS, SCRIM_OPACITY, buttonAt, clockTenths, layout, menuAnchor, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
@@ -158,8 +158,9 @@ let level: Level = levels[levelIndex]!;
 par = parHere(levelIndex, level);
 tuneForSoftwareGl(world.renderer);
 const built = buildScene(level, world.scene, world.renderer);
+// (README screenshots, ?shots, keep the lit bench on software GL too.)
 // The bench and a rendered panorama behind the tray on desktop and phone; in immersive-ar only a few props on the real table (src/scenery.ts).
-const scenery = createScenery(world.scene, isSoftwareGl(world.renderer) ? null : woodSet('bench', isPhone(window.innerWidth, window.innerHeight), world.renderer), new PMREMGenerator(world.renderer));
+const scenery = createScenery(world.scene, isSoftwareGl(world.renderer) && !fullResolution(location.search) ? null : woodSet('bench', isPhone(window.innerWidth, window.innerHeight), world.renderer), new PMREMGenerator(world.renderer));
 /**
  * The rendered panorama behind the tray: the attic (c2) on every menu, the stage's own while a level is on. One at a time: a
  * new one replaces the old (freeing its texture) once it has loaded, and a switch made while one is loading wins.
@@ -1740,6 +1741,17 @@ window.__chrono = Object.freeze({
     return { metalness: g.metalness, roughness: g.roughness, roughnessMap: !!g.roughnessMap, normalMap: !!g.normalMap, environment: g.envMap !== null, intensity: g.envMapIntensity };
   },
   get trayWood() {
+  /** Every gear's centre and its width on screen in CSS pixels, for the test that samples how bright the brass renders. */
+  get gearScreens() {
+    return [...built.gears].map(([id, m]) => {
+      m.updateWorldMatrix(true, false);
+      const c = m.getWorldPosition(new Vector3());
+      const [x, y] = toScreen(c.toArray());
+      const r = (m.geometry.boundingSphere?.radius ?? 0.02) * 0.8;
+      const [x2] = toScreen(c.clone().add(new Vector3(1, 0, 0).transformDirection(world.camera.matrixWorld).multiplyScalar(r)).toArray());
+      return { id, x, y, r: Math.abs(x2 - x) };
+    });
+  },
     const m = built.wood;
     return { physical: m.isMeshPhysicalMaterial, map: !!m.map, normalMap: !!m.normalMap, roughnessMap: !!m.roughnessMap, anisotropy: m.map?.anisotropy ?? 0, normalScale: m.normalScale.x, clearcoat: m.clearcoat };
   },

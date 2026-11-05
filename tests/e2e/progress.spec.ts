@@ -144,3 +144,19 @@ test('phone 375x812: the compact "E · 2/20" sits under the logo, clear of the l
   await page.screenshot({ path: `${OUT}/phone.png` });
   expect(errors).toEqual([]);
 });
+
+for (const width of [520, 720, 1024, 1225, 1440]) {
+  test(`${width} px wide: the progress header is fully on screen and clear of Enter MR`, async ({ page }) => {
+    const errors = await open(page, { width, height: 900 });
+    await newGame(page, (id) => click(page, id));
+    await page.waitForFunction(() => window.__chrono!.progress !== null);
+    await expect(page.locator('#progress')).toBeVisible();
+    const [box, enter] = await Promise.all(['#progress', '#enter-mr'].map((q) => page.locator(q).boundingBox()));
+    expect(box!.x, 'inside the left edge').toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width, 'inside the right edge').toBeLessThanOrEqual(width);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    const apart = box!.x + box!.width <= enter!.x || enter!.x + enter!.width <= box!.x || box!.y + box!.height <= enter!.y || enter!.y + enter!.height <= box!.y;
+    expect(apart, 'no overlap with the button').toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
