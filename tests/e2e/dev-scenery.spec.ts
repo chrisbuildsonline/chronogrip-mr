@@ -123,3 +123,20 @@ test('immersive-ar: the animated stage backdrop is gone while the session runs a
   await page.waitForFunction(() => window.__chrono!.ambient?.stage === 'easy');
   expect(errors).toEqual([]);
 });
+
+test.describe('a Quest browser', () => {
+  test.use({ userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/35.0.0.1.36 SamsungBrowser/4.0 Chrome/126.0.0.0 VR Safari/537.36' });
+
+  test('a dev session (IWER metaQuest3 injected) with a Quest user agent runs the low tier: plain materials, 1024 maps, no stage environment', async ({ page }) => {
+    const errors = watchErrors(page);
+    await open(page);
+    const w = await page.evaluate(() => window.__chrono!.trayWood);
+    expect(w.quality).toBe('low');
+    expect(w.physical).toBe(false);
+    expect(w.clearcoat).toBe(0);
+    expect(w.anisotropy).toBe(1);
+    await page.waitForFunction(() => window.__chrono!.scenery.backdrop === 'c2');
+    expect((await scenery(page)).environment).toBe('neutral');
+    expect(errors).toEqual([]);
+  });
+});

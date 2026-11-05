@@ -161,7 +161,7 @@ let level: Level = levels[levelIndex]!;
 par = parHere(levelIndex, level);
 tuneForSoftwareGl(world.renderer);
 // Render quality (src/quality.ts): software GL draws the low tier; ?quality=high|low overrides.
-const quality = qualityOf(location.search, isSoftwareGl(world.renderer));
+const quality = qualityOf(location.search, isSoftwareGl(world.renderer), navigator.userAgent);
 const low = quality === 'low';
 setPlainMetals(low);
 const built = buildScene(level, world.scene, world.renderer, low);
@@ -1542,6 +1542,8 @@ function showPanel(now = performance.now()): void {
 }
 
 syncBackdrop();
+// Compile every shader now, behind the loading card, so no first play frame stalls on it (capped, so a slow GPU never hangs the card).
+await Promise.race([world.renderer.compileAsync(world.scene, world.camera), new Promise((done) => setTimeout(done, 8000))]).catch(() => undefined);
 // The world is built and the first card is up: the loading card in index.html fades out of the way.
 document.getElementById('loading')?.classList.add('done');
 
