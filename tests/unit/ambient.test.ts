@@ -1,7 +1,8 @@
-import { Mesh, Points, Scene, type BufferGeometry, type Object3D } from 'three';
+import { Box3, Mesh, Points, Scene, Vector3, type BufferGeometry, type Object3D } from 'three';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BIRD, CLOUD, FLICKER, THUMP, cloudLight, createAmbient, poseOf, stepEase, thumpLight, type AmbientStage } from '../../src/ambient';
 import { DESKTOP_EYE, DESKTOP_TARGET } from '../../src/fit';
+import { BENCH_Y } from '../../src/scenery';
 
 // The module paints a few canvas textures; a no-op 2D context stands in for the DOM.
 beforeAll(() => {
@@ -116,5 +117,21 @@ describe('createAmbient', () => {
     a.dispose();
     expect(a.group.parent).toBeNull();
     expect(scene.children).toHaveLength(0);
+  });
+
+  it.each(STAGES)('%s: no solid part reaches into the workbench slab (its top at the bench height, back edge at z -0.95)', (stage) => {
+    const bench = new Box3(new Vector3(-1.7, BENCH_Y - 0.04, -0.95), new Vector3(1.7, BENCH_Y, 0.59));
+    const a = make(stage);
+    for (const [beats, seconds] of [[0, 0], [3.4, 10], [11.7, 31]] as const) {
+      a.update(beats, seconds);
+      a.group.updateMatrixWorld(true);
+      a.group.traverse((o) => {
+        const m = o as Mesh;
+        if (!m.isMesh || (m.material as { blending?: number }).blending === 2) return; // additive planes (rays, haze) are light, not solids
+        const box = new Box3().setFromObject(m);
+        expect(box.intersectsBox(bench), `${stage} ${m.geometry.type} at ${box.min.toArray().map((v) => v.toFixed(2))}..${box.max.toArray().map((v) => v.toFixed(2))}`).toBe(false);
+      });
+    }
+    a.dispose();
   });
 });

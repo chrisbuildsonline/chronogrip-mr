@@ -208,7 +208,7 @@ export function createAmbient(stage: AmbientStage, opts: AmbientOptions): Ambien
     // big gears close up: top-left, and bottom-right under the giant balance wheel and hairspring (kept clear)
     const left = face(new Group(), at(55, 25, 1.5)); left.scale.setScalar(px(165, 1.5) / ((MODULE * 40) / 2)); group.add(left);
     const gl = train(left, [{ teeth: 40 }, { teeth: 12, mat: darkBrass, angle: -1.05 }]);
-    const right = face(new Group(), at(1262, 445, 1.7)); right.scale.setScalar(px(135, 1.7) / ((MODULE * 30) / 2)); group.add(right);
+    const right = face(new Group(), at(1262, 445, 2.3)); right.scale.setScalar(px(135, 2.3) / ((MODULE * 30) / 2)); group.add(right);
     const gr = train(right, [{ teeth: 30, mat: darkBrass }, { teeth: 10, mat: darkBrass, angle: 2.6 }]);
     updates.push((b) => { const d = Math.floor(b) + stepEase(b % 1); turn(gl, (d * Math.PI * 2) / 40); turn(gr, -(d * Math.PI * 2) / 30); });
 
