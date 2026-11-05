@@ -155,3 +155,44 @@ test('phone 375x812: a touch drag on the bench orbits within the limits and the 
   expect(errors).toEqual([]);
   await ctx.close();
 });
+
+const angleBetween = (a: readonly number[], b: readonly number[]) => (Math.acos(Math.min(1, Math.max(-1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!))) * 180) / Math.PI;
+
+for (const stage of ['easy', 'medium', 'hard'] as const) {
+  test(`${stage}: the ambient parts stay locked to the panorama at every corner of the orbit clamp (same direction from the eye, within 0.5 degrees)`, async ({ page }) => {
+    const errors = await open(page);
+    await newGame(page, (id) => click(page, id), stage);
+    await page.waitForFunction((s) => window.__chrono!.ambient?.stage === s, stage);
+    const dirs = () => page.evaluate(() => window.__chrono!.ambientDirections());
+    // Hold the beat so a part that moves with the music does not read as drift: parts are compared by their anchors (their groups), which never move.
+    const fixed = stage === 'medium' ? 3 : 2; // the static anchors: Easy hub + rays, Medium wall gears + pendulum + shaft, Hard's two corner clusters (the gull and the haze drift on purpose)
+    const home = (await dirs()).slice(0, fixed);
+    expect(home.length).toBe(fixed);
+    const corners: [string, [number, number], number][] = [
+      ['up-left', [-1, -1], 0],
+      ['up-right', [1, -1], -30],
+      ['down-left', [-1, 1], 30],
+      ['down-right', [1, 1], 0],
+    ];
+    for (const [name, [sx, sy], wheel] of corners) {
+      // far past the clamp, several times, so the camera sits at the corner
+      for (let i = 0; i < 3; i++) await drag(page, [720 - sx * 300, 450 - sy * 250], [720 + sx * 300, 450 + sy * 250]);
+      for (let i = 0; i < Math.abs(wheel); i++) await page.mouse.wheel(0, wheel < 0 ? -400 : 400);
+      await settle(page);
+      const v = await view(page);
+      const now = (await dirs()).slice(0, fixed);
+      now.forEach((d, i) => expect(angleBetween(d, home[i]!), `${stage} part ${i} at the ${name} corner (camera ${v.camera.map((x) => x.toFixed(2))}, ${v.distance.toFixed(2)} m)`).toBeLessThan(0.5));
+      // Occlusion: the bench and the tray must win over the parts. A solid part never reaches into the bench slab (top at benchY, back
+      // edge z -0.95, x +-1.7) and none comes nearer the eye than the tray.
+      const { tray, parts } = await page.evaluate(() => window.__chrono!.ambientBoxes());
+      for (const [i, p] of parts.entries()) {
+        const intoBench = p.minY < v.benchY && p.maxZ > -0.95 && p.minZ < 0.59;
+        expect(intoBench, `${stage} solid part ${i} at the ${name} corner reaches into the bench (y from ${p.minY.toFixed(2)}, z ${p.minZ.toFixed(2)}..${p.maxZ.toFixed(2)})`).toBe(false);
+        expect(p.near, `${stage} solid part ${i} at the ${name} corner comes within ${p.near.toFixed(2)} m of the eye (the tray is ${tray.toFixed(2)})`).toBeGreaterThan(tray);
+      }
+      await page.keyboard.press('r');
+      await page.waitForTimeout(900);
+    }
+    expect(errors).toEqual([]);
+  });
+}

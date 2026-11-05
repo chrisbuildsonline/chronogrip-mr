@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { APP_TITLE, createWorldOptions } from './config';
 import { DEFAULT_PLACEMENT, toHeadFrame, type Head } from './anchor';
 import { startSession } from './enter';
-import { BoxGeometry, Box3, Color, MathUtils, PMREMGenerator, type MeshPhysicalMaterial, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
+import { BoxGeometry, Box3, type Points, Color, MathUtils, PMREMGenerator, type MeshPhysicalMaterial, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
 import { grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle, type Hand } from './grab';
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
@@ -1935,8 +1935,13 @@ window.__chrono = Object.freeze({
       tray,
       parts: (ambient ? meshesIn(ambient.group) : [])
         .filter((m) => (m.material as { blending?: number }).blending !== 2)
-        .map((m) => ({ box: screenBox([m])!, near: new Box3().setFromObject(m).distanceToPoint(eye), maxZ: new Box3().setFromObject(m).max.z })),
+        .map((m) => ({ box: screenBox([m])!, near: new Box3().setFromObject(m).distanceToPoint(eye), maxZ: new Box3().setFromObject(m).max.z, minY: new Box3().setFromObject(m).min.y, minZ: new Box3().setFromObject(m).min.z })),
     };
+  },
+  /** Unit direction from the camera to each ambient part's anchor (the group's own children; dust left out), to test they stay locked to the panorama. */
+  ambientDirections() {
+    const eye = world.camera.getWorldPosition(new Vector3());
+    return (ambient?.group.children ?? []).filter((c) => !(c as Points).isPoints).map((c) => c.getWorldPosition(new Vector3()).sub(eye).normalize().toArray() as [number, number, number]);
   },
   ghostBox: () => screenBox(meshesIn(ghost.root)),
   dialFaceBox: () => screenBox([escapement.face]),
