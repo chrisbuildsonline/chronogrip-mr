@@ -69,6 +69,8 @@ interface ChronoHook {
   readonly turning: 'left' | 'right' | 'mouse' | null;
   /** Live: world orientation [x, y, z, w] of each tracked wrist joint, else null. */
   readonly wrists: { readonly left: readonly [number, number, number, number] | null; readonly right: readonly [number, number, number, number] | null };
+  /** Live: the music's theme, the level driving its layers, whether the clock is under 30 s, and the layers playing (pad, melody, bass, counter, ticks). */
+  readonly music: { readonly theme: 'menu' | 'box' | 'marimba' | 'clockwork'; readonly level: number; readonly low: boolean; readonly layers: readonly ('pad' | 'melody' | 'bass' | 'counter' | 'ticks')[] };
   /** Live: audio context state and how many of each sound have played. */
   readonly audio: { readonly state: 'none' | 'suspended' | 'running' | 'closed'; readonly ticks: number; readonly clicks: number; readonly grinds: number; readonly chimes: number; /** Music notes scheduled so far (the bed's melody and pad). */ readonly notes: number };
   /** Live: draw calls and triangles of the last rendered frame. */
@@ -79,10 +81,10 @@ interface ChronoHook {
    * `fog`: scene.fog is set; `clearAlpha`: the renderer's clear alpha.
    */
   readonly scenery: { readonly mode: 'inline' | 'xr'; readonly parts: readonly string[]; readonly tris: number; readonly background: boolean; readonly cube: boolean; readonly environment: 'stage' | 'neutral'; readonly backdrop: 'c1' | 'c2' | 'c3' | null; readonly fog: boolean; readonly clearAlpha: number };
-  /** Live: the first gear's metal (metalness, roughness, brushed maps) and whether the scene has an environment map (scene.environment). */
-  readonly metals: { readonly metalness: number; readonly roughness: number; readonly roughnessMap: boolean; readonly normalMap: boolean; readonly environment: boolean; readonly intensity: number };
   /** Live: every gear's screen centre and radius (CSS px). */
   readonly gearScreens: readonly { readonly id: string; readonly x: number; readonly y: number; readonly r: number }[];
+  /** Live: the first gear's metal (metalness, roughness, brushed maps) and whether the scene has an environment map (scene.environment). */
+  readonly metals: { readonly metalness: number; readonly roughness: number; readonly roughnessMap: boolean; readonly normalMap: boolean; readonly environment: boolean; readonly intensity: number };
   /** Live: the tray's wood material (PBR maps present, anisotropy of the albedo map). */
   readonly trayWood: { readonly physical: boolean; readonly map: boolean; readonly normalMap: boolean; readonly roughnessMap: boolean; readonly anisotropy: number; readonly normalScale: number; readonly clearcoat: number };
   /** Live: true once the escapement is calibrated and the automaton runs. */

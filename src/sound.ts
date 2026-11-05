@@ -1,5 +1,9 @@
 import type { Vec3 } from './seat';
-import { BEATS_PER_BAR, DUCK, FADE_S, LOWPASS_HZ, MUSIC_GAIN, PAUSE_GAIN, THEMES, beatOf, composer, midiToHz, type Bar } from './music';
+import {
+  DUCK, FADE_S, HUMANIZE_S, LAYER_FADE_BARS, LOWPASS_HZ, MUSIC_GAIN, PAUSE_GAIN, THEMES, VOICE_CAP, barOf, beatOf, composer, impulseResponse, layersFor,
+  type Bar, type Layer, type Note,
+} from './music';
+import { bassNote, celesta, epiano, padNote } from './voices';
 import type { ThemeId } from './stages';
 
 /** Seconds between ticks at a rate in ticks per second; no rate, no ticks. */
@@ -66,11 +70,13 @@ export function createSound() {
   let muted = false;
   const live = () => (ctx && ctx.state !== 'closed' && !muted ? ctx : null);
 
-  // The music bed (src/music.ts composes it): a gentle music box, a low pad and a quiet tick, at -24 dB through a low-pass.
+  // The music bed (src/music.ts composes it, src/voices.ts plays the notes): FM celesta and e-piano, a detuned-saw pad under a
+  // slow low-pass, a soft bass, a quiet tick; a generated reverb send and a soft delay on the melody, at -24 dB through a low-pass.
   // It starts with the context (after the first gesture), fades in and out over 2 s, and plays only while Music and Sound are both on.
   let musicOn = true;
   let musicGain: GainNode | null = null;
   let pauseGain: GainNode | null = null;
+  let reverbSend: GainNode | null = null;
   let ducked = false;
   let nextBar = 0;
   let pump: ReturnType<typeof setInterval> | null = null;
@@ -78,6 +84,9 @@ export function createSound() {
   // One theme at a time (src/music.ts THEMES): each has its own gain into the music bed, so changing theme is a 2 s crossfade
   // (the old one fades down while the notes already scheduled ring out, the new one fades up from its first bar).
   let theme: ThemeId = 'box';
+  // The adaptive layers: the level within the stage and whether the level clock is under 30 s decide which play (music.layersFor).
+  let level = 1;
+  let low = false;
   const seed = (Math.random() * 2 ** 32) >>> 0;
   const composers = new Map<ThemeId, ReturnType<typeof composer>>();
   const composing = (id: ThemeId) => composers.get(id) ?? composers.set(id, composer(seed, id)).get(id)!;
@@ -88,11 +97,12 @@ export function createSound() {
       g = c.createGain();
       g.gain.value = start;
       g.connect(musicGain!);
+      g.connect(reverbSend!);
       themeGains.set(id, g);
     }
     return g;
   };
-  /** Fades every theme to its place: the current one up to 1, the rest down to 0, over the fade time. */
+  /** Fades every theme to its place: the current one up to its level, the rest down to 0, over the fade time. */
   const crossfade = (c: AudioContext) => {
     const t = c.currentTime;
     themeGain(c, theme, 0);
@@ -101,6 +111,71 @@ export function createSound() {
       g.gain.setValueAtTime(g.gain.value, t);
       g.gain.linearRampToValueAtTime(id === theme ? THEMES[id].level : 0, t + FADE_S);
     }
+  };
+  const activeLayers = (id: ThemeId): Layer[] => (id === 'menu' ? ['pad', 'melody'] : layersFor(level, low));
+  // Where each layer's voices connect (a layer gain per theme, so a layer fades in over two bars; the pad through its own
+  // low-pass with a slow LFO, the melody also into a dotted-eighth delay, the ticks through a high-pass).
+  const layerIn = new Map<string, AudioNode>();
+  const layerGains = new Map<string, GainNode>();
+  const padFilters: [BiquadFilterNode, number][] = [];
+  const input = (c: AudioContext, id: ThemeId, layer: Layer): AudioNode => {
+    const key = `${id}:${layer}`;
+    let node = layerIn.get(key);
+    if (node) return node;
+    const g = c.createGain();
+    g.gain.value = activeLayers(id).includes(layer) ? 1 : 0;
+    g.connect(themeGain(c, id, id === theme ? THEMES[id].level : 0));
+    layerGains.set(key, g);
+    node = g;
+    if (layer === 'pad') {
+      const f = filter(c, 'lowpass', THEMES[id].padCutoff, 0.7);
+      const lfo = c.createOscillator();
+      const depth = c.createGain();
+      lfo.frequency.value = 0.11;
+      depth.gain.value = THEMES[id].padCutoff * 0.35;
+      lfo.connect(depth);
+      depth.connect(f.frequency);
+      lfo.start();
+      f.connect(g);
+      padFilters.push([f, THEMES[id].padCutoff]);
+      node = f;
+    } else if (layer === 'melody') {
+      // a soft feedback delay: a dotted eighth, little feedback, low-passed, mixed in under the dry notes
+      const delay = c.createDelay(2);
+      const feedback = c.createGain();
+      const wet = c.createGain();
+      delay.delayTime.value = 0.75 * beatOf(id);
+      feedback.gain.value = 0.28;
+      wet.gain.value = 0.28;
+      const damp = filter(c, 'lowpass', 2000, 0.5);
+      const send = c.createGain();
+      send.connect(g);
+      send.connect(delay);
+      delay.connect(damp);
+      damp.connect(feedback);
+      feedback.connect(delay);
+      damp.connect(wet);
+      wet.connect(g);
+      node = send;
+    } else if (layer === 'ticks') {
+      const hp = filter(c, 'highpass', 5500, 0.7);
+      hp.connect(g);
+      node = hp;
+    }
+    layerIn.set(key, node);
+    return node;
+  };
+  /** Moves every layer gain to its place for the level and the clock: up or down over two bars; the pad opens a little when time is short. */
+  const retarget = () => {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    for (const [key, g] of layerGains) {
+      const [id, layer] = key.split(':') as [ThemeId, Layer];
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.linearRampToValueAtTime(activeLayers(id).includes(layer) ? 1 : 0, t + LAYER_FADE_BARS * barOf(id));
+    }
+    for (const [f, cutoff] of padFilters) f.frequency.setTargetAtTime(cutoff * (low ? 1.3 : 1), t, 0.8);
   };
   const musicWanted = () => musicOn && !muted;
   /** Fades the bed to its level, or to silence, over the fade time. */
@@ -112,47 +187,50 @@ export function createSound() {
     musicGain.gain.linearRampToValueAtTime(musicWanted() ? MUSIC_GAIN : 0, t + FADE_S);
     if (musicWanted()) nextBar = Math.max(nextBar, t + 0.3);
   };
-  /** One note of the bed: a pluck (sine and a slightly detuned triangle, a fast attack, a long decay) or a pad (a slow swell). */
-  const note = (c: AudioContext, at: number, midi: number, beats: number, vel: number, voice: 'pluck' | 'pad' | 'mallet' | 'pulse', id: ThemeId) => {
+  // Voices (notes, not oscillators) sounding at once are capped: a note that would be the seventeenth is left out.
+  const voices: { start: number; end: number }[] = [];
+  let voicePeak = 0;
+  /** One note of the bed on a layer: the voice, the humanized start for melodic layers, the legato length (a long release). */
+  const note = (c: AudioContext, bar: number, n: Note, layer: Layer, id: ThemeId) => {
     if (!musicGain) return;
-    counts.notes++;
-    const pad = voice === 'pad';
+    const T = THEMES[id];
     const beat = beatOf(id);
-    const len = beats * beat * (pad ? 1 : voice === 'pluck' ? 2.2 : voice === 'mallet' ? 1.6 : 0.9);
-    const env = c.createGain();
-    env.gain.setValueAtTime(0.0001, at);
-    env.gain.exponentialRampToValueAtTime(Math.max(0.0002, vel * (pad ? 0.35 : voice === 'pulse' ? 0.45 : 0.6)), at + (pad ? 1.2 : voice === 'pulse' ? 0.012 : 0.006));
-    env.gain.exponentialRampToValueAtTime(0.0001, at + len);
-    env.connect(themeGain(c, id, id === theme ? THEMES[id].level : 0));
-    (pad ? (id === 'menu' ? ['sine', 'sine'] : ['sine']) : voice === 'pulse' ? ['triangle'] : ['sine', 'triangle']).forEach((type, i) => {
-      const o = c.createOscillator();
-      o.type = type as OscillatorType;
-      o.frequency.value = midiToHz(midi);
-      o.detune.value = pad ? (id === 'menu' ? i * 10 - 5 : 0) : i * 7 - 3; // the menu pad's two voices drift a little apart, like tape
-      o.connect(env);
-      o.start(at);
-      o.stop(at + len + 0.05);
-    });
+    const melodic = layer === 'melody' || layer === 'counter';
+    const at = bar + n.at * beat + (melodic ? (Math.random() * 2 - 1) * HUMANIZE_S : 0);
+    const arp = layer === 'melody' && T.arp;
+    const len = layer === 'pad' ? n.beats * beat + 1.4 : n.beats * beat + (layer === 'bass' ? 0.4 : arp ? 0.2 : 0.7);
+    for (let i = voices.length - 1; i >= 0; i--) if (voices[i]!.end < c.currentTime) voices.splice(i, 1);
+    const sounding = voices.filter((v) => v.start <= at && v.end > at).length;
+    if (sounding >= VOICE_CAP) return;
+    voicePeak = Math.max(voicePeak, sounding + 1);
+    voices.push({ start: at, end: at + len + 0.05 });
+    counts.notes++;
+    const out = input(c, id, layer);
+    if (layer === 'pad') padNote(c, out, at, n.midi, len, n.vel);
+    else if (layer === 'bass') bassNote(c, out, at, n.midi, len, n.vel);
+    else (layer === 'melody' ? T.voice : T.counterVoice) === 'celesta' ? celesta(c, out, at, n.midi, len, n.vel) : epiano(c, out, at, n.midi, len, n.vel);
   };
   const scheduleBar = (c: AudioContext, at: number, bar: Bar, id: ThemeId) => {
     const beat = beatOf(id);
-    for (const n of bar.melody) note(c, at + n.at * beat, n.midi, n.beats, n.vel, id === 'box' ? 'pluck' : id === 'marimba' ? 'mallet' : 'pluck', id);
-    for (const n of bar.counter) note(c, at + n.at * beat, n.midi, n.beats, n.vel, 'mallet', id);
-    for (const n of bar.ostinato) note(c, at + n.at * beat, n.midi, n.beats, n.vel, 'pulse', id);
-    for (const n of bar.pad) note(c, at, n.midi, n.beats, n.vel, 'pad', id);
-    // A very quiet escapement tick: every beat, or in eighths with an accent in the Hard theme.
-    for (const tick of bar.ticks) {
-      const when = at + tick.at * beat;
-      const o = c.createOscillator();
-      const env = c.createGain();
-      o.type = 'triangle';
-      o.frequency.value = tick.accent ? 1900 : 1700;
-      env.gain.setValueAtTime(id === 'clockwork' ? (tick.accent ? 0.06 : 0.035) : 0.05, when);
-      env.gain.exponentialRampToValueAtTime(0.0001, when + 0.025);
-      o.connect(env);
-      env.connect(themeGain(c, id, id === theme ? THEMES[id].level : 0));
-      o.start(when);
-      o.stop(when + 0.04);
+    const on = activeLayers(id);
+    if (on.includes('pad')) for (const n of bar.pad) note(c, at, n, 'pad', id);
+    if (on.includes('bass')) for (const n of bar.bass) note(c, at, n, 'bass', id);
+    if (on.includes('melody')) for (const n of bar.melody) note(c, at, n, 'melody', id);
+    if (on.includes('counter')) for (const n of bar.counter) note(c, at, n, 'counter', id);
+    // The escapement as a very quiet hi-hat-like texture: a burst of high noise on every beat (every eighth in Hard), in step with the tempo.
+    if (on.includes('ticks')) {
+      const out = input(c, id, 'ticks');
+      for (const tick of bar.ticks) {
+        const when = at + tick.at * beat;
+        const src = noiseSource(c);
+        const env = c.createGain();
+        env.gain.setValueAtTime(id === 'clockwork' ? (tick.accent ? 0.05 : 0.025) : tick.accent ? 0.05 : 0.035, when);
+        env.gain.exponentialRampToValueAtTime(0.0001, when + 0.03);
+        src.connect(env);
+        env.connect(out);
+        src.start(when);
+        src.stop(when + 0.04);
+      }
     }
   };
   /** Keeps the bed scheduled about a second and a half ahead, while the context runs and the music is wanted. */
@@ -161,7 +239,7 @@ export function createSound() {
     if (!c || c.state !== 'running' || !musicWanted()) return;
     while (nextBar < c.currentTime + 1.5) {
       scheduleBar(c, nextBar, composing(theme).next(), theme);
-      nextBar += BEATS_PER_BAR * beatOf(theme);
+      nextBar += barOf(theme);
     }
   };
 
@@ -203,9 +281,25 @@ export function createSound() {
     setTheme(id: ThemeId): void {
       if (id === theme) return;
       theme = id;
+      composers.delete(id); // each entry starts the progression from its first bar
       if (!ctx || !musicGain) return;
       crossfade(ctx);
       nextBar = ctx.currentTime + 0.3;
+    },
+    /** The adaptive layers: the level within the stage, and whether the level clock is under 30 s. Cheap to call every frame. */
+    setIntensity(nextLevel: number, nextLow: boolean): void {
+      if (nextLevel === level && nextLow === low) return;
+      level = nextLevel;
+      low = nextLow;
+      retarget();
+    },
+    /** What the bed plays now: the theme, the level, the short-time flag and the layers on. */
+    get layers() {
+      return { theme, level, low, layers: activeLayers(theme) };
+    },
+    /** The most notes ever sounding at once (never above the cap). */
+    get voicePeak() {
+      return voicePeak;
     },
     state: (): SoundState => (ctx ? (ctx.state === 'interrupted' ? 'suspended' : ctx.state) : 'none'),
     /** Creates the context on the first call and resumes it; a user gesture must have started the call. */
@@ -234,6 +328,17 @@ export function createSound() {
           musicGain.connect(pauseGain);
           pauseGain.connect(soft);
           soft.connect(c.destination);
+          // The reverb: one convolver with a generated decaying-noise impulse (2.5 s, built once), fed by every theme's gain.
+          reverbSend = c.createGain();
+          reverbSend.gain.value = 0.4;
+          const room = c.createConvolver();
+          const [irL, irR] = impulseResponse(c.sampleRate);
+          const ir = c.createBuffer(2, irL.length, c.sampleRate);
+          ir.getChannelData(0).set(irL);
+          ir.getChannelData(1).set(irR);
+          room.buffer = ir;
+          reverbSend.connect(room);
+          room.connect(musicGain);
           themeGain(c, theme, THEMES[theme].level);
           nextBar = c.currentTime + 0.3;
           pump = setInterval(feed, 250);

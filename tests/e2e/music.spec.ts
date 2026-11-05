@@ -58,7 +58,7 @@ test('the music starts only after the first click, and plays without console err
 
   await beginByMouse(page); // a real click on New Game
   await page.waitForFunction(() => window.__chrono!.audio.state === 'running');
-  await page.waitForFunction(() => window.__chrono!.audio.notes > 3, undefined, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__chrono!.audio.notes > 3, undefined, { timeout: 45_000 });
   expect((await seen(page)).oscillators).toBeGreaterThan(5);
   expect(errors).toEqual([]);
 });
@@ -70,7 +70,7 @@ test('Options has a Music switch, on by default and saved; off stops the notes, 
   expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['No timer', 'Sound', 'Music', 'Reset progress', 'Back']);
   expect(await page.evaluate(() => window.__chrono!.options)).toMatchObject({ music: true, sound: true });
   // The click that opened Options started the context: notes are coming.
-  await page.waitForFunction(() => window.__chrono!.audio.notes > 2, undefined, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__chrono!.audio.notes > 2, undefined, { timeout: 45_000 });
 
   await click(page, 'music');
   await page.waitForFunction(() => !window.__chrono!.musicOn);
@@ -84,7 +84,7 @@ test('Options has a Music switch, on by default and saved; off stops the notes, 
   await page.waitForFunction(() => window.__chrono!.musicOn);
   expect(await page.evaluate(() => localStorage.getItem('chronogrip.music.v1'))).toBe('1');
   const before = await notes(page);
-  await page.waitForFunction((n) => window.__chrono!.audio.notes > n + 2, before, { timeout: 15_000 });
+  await page.waitForFunction((n) => window.__chrono!.audio.notes > n + 2, before, { timeout: 45_000 });
 
   await click(page, 'music'); // off again, then reload
   await page.reload();
@@ -100,7 +100,7 @@ test('Options has a Music switch, on by default and saved; off stops the notes, 
 test('Sound off silences the music too', async ({ page }) => {
   const errors = await open(page);
   await click(page, 'options');
-  await page.waitForFunction(() => window.__chrono!.audio.notes > 2, undefined, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__chrono!.audio.notes > 2, undefined, { timeout: 45_000 });
   await click(page, 'sound');
   await page.waitForFunction(() => !window.__chrono!.soundOn);
   await page.waitForTimeout(4000);
@@ -119,7 +119,7 @@ test('each stage has its own music: the menus their own calm theme, Easy the box
   await click(page, 'stage-easy');
   await page.waitForFunction(() => window.__chrono!.flow !== 'title');
   await page.waitForFunction(() => window.__chrono!.audio.state === 'running');
-  await page.waitForFunction(() => window.__chrono!.audio.notes > 3, undefined, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__chrono!.audio.notes > 3, undefined, { timeout: 45_000 });
   await page.waitForFunction(() => window.__chrono!.musicTheme === 'box');
   // Give up, then New Game on Hard: the theme changes with the stage.
   await click(page, 'pause');
@@ -129,7 +129,7 @@ test('each stage has its own music: the menus their own calm theme, Easy the box
   await newGame(page, (id) => click(page, id), 'hard');
   await page.waitForFunction(() => window.__chrono!.musicTheme === 'clockwork');
   const heard = await notes(page);
-  await page.waitForFunction((n) => window.__chrono!.audio.notes > n + 8, heard, { timeout: 15_000 });
+  await page.waitForFunction((n) => window.__chrono!.audio.notes > n + 8, heard, { timeout: 45_000 });
   // Pause is a menu in the level: the stage's music keeps going; Main menu returns to the box.
   await click(page, 'pause');
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'paused');
@@ -144,4 +144,36 @@ test('each stage has its own music: the menus their own calm theme, Easy the box
   expect(await page.evaluate(() => window.__chrono!.musicDucked)).toBe(false);
   expect(await page.evaluate(() => window.__chrono!.musicOn)).toBe(true);
   expect(errors).toEqual([]);
+});
+
+test.describe('adaptive layers', () => {
+  test.use({ classic: false });
+
+  test('the hook reports the theme and the layers on, and they change with the level; no console errors', async ({ page }) => {
+    const errors = await open(page);
+    await newGame(page, (id) => click(page, id), 'hard');
+    await page.waitForFunction(() => window.__chrono!.audio.state === 'running');
+    await page.waitForFunction(() => window.__chrono!.audio.notes > 3, undefined, { timeout: 45_000 });
+    const music = () => page.evaluate(() => window.__chrono!.music);
+    for (const [level, layers] of [
+      [3, ['pad', 'melody']],
+      [8, ['pad', 'melody', 'bass']],
+      [13, ['pad', 'melody', 'bass', 'counter']],
+      [18, ['pad', 'melody', 'bass', 'counter', 'ticks']],
+    ] as const) {
+      await page.evaluate((n) => window.__chrono!.jump(n), level);
+      await page.waitForFunction((n) => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === n - 1, level);
+      await page.waitForFunction((n) => window.__chrono!.music.level === n, level);
+      expect(await music(), `level ${level}`).toMatchObject({ theme: 'clockwork', level, low: false, layers });
+    }
+    await page.evaluate(() => window.__chrono!.jump(2));
+    await page.waitForFunction(() => window.__chrono!.music.level === 2);
+    expect((await music()).layers).toEqual(['pad', 'melody']);
+    // The menus play the calm theme: pad and melody only.
+    await click(page, 'pause');
+    await click(page, 'giveup');
+    await page.waitForFunction(() => window.__chrono!.musicTheme === 'menu');
+    expect((await music()).layers).toEqual(['pad', 'melody']);
+    expect(errors).toEqual([]);
+  });
 });

@@ -25,7 +25,7 @@ import { C } from './palette';
 import type { GearSpin } from './train';
 import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
 import { createSound, loadSoundOn, saveSoundOn, tickGain, ticksBetween } from './sound';
-import { loadMusicOn, saveMusicOn } from './music';
+import { LOW_TIME_S, loadMusicOn, saveMusicOn } from './music';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
 import { carried, loadRun, nextIndex, reached, saveRun, solvedLevel, startRun, won, type Run } from './run';
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
@@ -1266,6 +1266,8 @@ world.scene.onBeforeRender = () => {
   lastFrame = now;
   stepGrabs();
   levelClock.tick(now, flow.name === 'playing');
+  // The music's layers follow the level (a Random level counts as 10) and the clock: under 30 s left the pad opens and the ticks come up.
+  sound.setIntensity(levelIndex < CAMPAIGN ? levelIndex + 1 : 10, (flow.name === 'playing' || flow.name === 'paused') && !relaxed && par - levelClock.seconds < LOW_TIME_S);
   // A campaign run is lost when the level's time limit runs out (not with No timer).
   if (flow.name === 'playing' && !relaxed && run && levelIndex < CAMPAIGN && levelClock.seconds >= par) endRun('timeout');
   for (const [id, t] of tweens) {
@@ -1666,6 +1668,9 @@ window.__chrono = Object.freeze({
   get musicTheme() {
     return sound.theme;
   },
+  get music() {
+    return sound.layers;
+  },
   get musicDucked() {
     return sound.ducked;
   },
@@ -1747,16 +1752,16 @@ window.__chrono = Object.freeze({
       return { id, x, y, r: Math.abs(x2 - x) };
     });
   },
-    const m = built.wood;
-    return { physical: m.isMeshPhysicalMaterial, map: !!m.map, normalMap: !!m.normalMap, roughnessMap: !!m.roughnessMap, anisotropy: m.map?.anisotropy ?? 0, normalScale: m.normalScale.x, clearcoat: m.clearcoat };
-  },
-  get scenery() {
-    return { ...scenery.state(), clearAlpha: world.renderer.getClearAlpha() };
   get metals() {
     const g = built.gears.values().next().value!.material as MeshStandardMaterial;
     return { metalness: g.metalness, roughness: g.roughness, roughnessMap: !!g.roughnessMap, normalMap: !!g.normalMap, environment: g.envMap !== null, intensity: g.envMapIntensity };
   },
   get trayWood() {
+    const m = built.wood;
+    return { physical: m.isMeshPhysicalMaterial, map: !!m.map, normalMap: !!m.normalMap, roughnessMap: !!m.roughnessMap, anisotropy: m.map?.anisotropy ?? 0, normalScale: m.normalScale.x, clearcoat: m.clearcoat };
+  },
+  get scenery() {
+    return { ...scenery.state(), clearAlpha: world.renderer.getClearAlpha() };
   },
   get automatonRunning() {
     return regulator.calibrated;
