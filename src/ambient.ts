@@ -15,10 +15,11 @@
  */
 import {
   AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color, CylinderGeometry, DoubleSide,
-  Group, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera,
+  Group, MathUtils, Mesh, MeshBasicMaterial, type MeshStandardMaterial, Object3D, PerspectiveCamera,
   PlaneGeometry, Points, PointsMaterial, Shape, ShapeGeometry, SphereGeometry, SRGBColorSpace, Texture, Vector3,
 } from 'three';
 import { gearGeometry } from './gear';
+import { brass as metalBrass, steel as metalSteel } from './metal';
 
 export type AmbientStage = 'easy' | 'medium' | 'hard';
 export type Vec3 = readonly [number, number, number];
@@ -27,6 +28,8 @@ export type AmbientOptions = {
   target: Vec3;
   /** Halves the dust and drops Hard's haze. */
   phone?: boolean;
+  /** The low quality tier: no stage environment, so the metals get a little glow of their own. */
+  warm?: boolean;
   /** Parts stay where they are; no motion, no light changes. */
   reducedMotion?: boolean;
 };
@@ -76,13 +79,21 @@ export function createAmbient(stage: AmbientStage, opts: AmbientOptions): Ambien
   const updates: ((b: number, s: number, frac: number) => void)[] = [];
   let bgMul = 1, lightMul = 1;
 
-  // The game's key and rim lights are aimed at the tray and hit the wall parts face on, so their base colour is turned down (x0.35)
-  // and a little glow of their own keeps them readable in shadow.
-  const metal = (color: number, roughness: number, glow: number) =>
-    keep(new MeshStandardMaterial({ color: new Color(color).multiplyScalar(0.35), metalness: 0.7, roughness: roughness + 0.25, envMapIntensity: 1.2, emissive: glow, emissiveIntensity: 0.8 }));
-  const brass = metal(0xc8963e, 0.32, 0x3a2408);
-  const darkBrass = metal(0xa87a34, 0.38, 0x2a1a06);
-  const steel = metal(0xb9bcc2, 0.25, 0x1c1c1e);
+  // The same brass and steel as the play gears (src/metal.ts: stage environment on the high tier, brushing maps), toned per part:
+  // the game's key and rim lights hit the wall parts face on, so `k` turns the base colour down where they would blow out. The low
+  // tier has no stage environment, so a little warm glow of their own keeps the parts from going black.
+  const tone = (m: MeshStandardMaterial, k: number, glow: number) => {
+    m.color.multiplyScalar(k);
+    if (opts.warm) { m.emissive.set(glow); m.emissiveIntensity = 0.35; }
+    return keep(m);
+  };
+  // k: the low tier is lit by the room environment plus the key and rim lights, which blow the wall parts out; the high tier reads
+  // the stage environment, which is dimmer.
+  const k = stage === 'medium' ? (opts.warm ? 0.22 : 0.7) : opts.warm ? 0.75 : 1;
+  const brass = tone(metalBrass(), k, 0x3a2408);
+  const darkBrass = tone(metalBrass(), k * 0.8, 0x2a1a06);
+  const steel = tone(metalSteel(), k, 0x1c1c1e);
+  const bobBrass = tone(metalBrass(), k * 1.1, 0x4a2e0c);
 
   const tex = (w: number, h: number, draw: (x: CanvasRenderingContext2D, w: number, h: number) => void): Texture => {
     const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d')!, w, h);
@@ -189,7 +200,7 @@ export function createAmbient(stage: AmbientStage, opts: AmbientOptions): Ambien
 
     const pendulum = face(new Group(), at(365, 115, 3.6)), swing = new Group(); pendulum.add(swing); group.add(pendulum);
     const rod = mesh(new CylinderGeometry(0.008, 0.008, 0.85, 10), steel); rod.position.y = -0.425;
-    const bob = mesh(new CylinderGeometry(0.12, 0.12, 0.03, 48), metal(0xd9a84e, 0.28, 0x4a2e0c)); bob.rotation.x = Math.PI / 2; bob.position.y = -0.88;
+    const bob = mesh(new CylinderGeometry(0.12, 0.12, 0.03, 48), bobBrass); bob.rotation.x = Math.PI / 2; bob.position.y = -0.88;
     swing.add(rod, bob); pendulum.add(mesh(new SphereGeometry(0.025, 16, 12), darkBrass));
     updates.push((b) => (swing.rotation.z = 0.2 * Math.sin(Math.PI * b))); // one swing per beat, through the middle on the tick
 
@@ -206,7 +217,7 @@ export function createAmbient(stage: AmbientStage, opts: AmbientOptions): Ambien
 
   if (stage === 'hard') {
     // big gears close up: top-left, and bottom-right under the giant balance wheel and hairspring (kept clear)
-    const left = face(new Group(), at(55, 25, 1.5)); left.scale.setScalar(px(165, 1.5) / ((MODULE * 40) / 2)); group.add(left);
+    const left = face(new Group(), at(55, 25, 2.6)); left.scale.setScalar(px(165, 2.6) / ((MODULE * 40) / 2)); group.add(left);
     const gl = train(left, [{ teeth: 40 }, { teeth: 12, mat: darkBrass, angle: -1.05 }]);
     const right = face(new Group(), at(1262, 445, 2.3)); right.scale.setScalar(px(135, 2.3) / ((MODULE * 30) / 2)); group.add(right);
     const gr = train(right, [{ teeth: 30, mat: darkBrass }, { teeth: 10, mat: darkBrass, angle: 2.6 }]);

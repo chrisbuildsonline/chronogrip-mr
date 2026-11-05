@@ -114,3 +114,30 @@ test('desktop 1920x1080: Easy, Medium and Hard each show their parts (screenshot
   }
   expect(errors).toEqual([]);
 });
+
+test('Hard: turning the view 320 px never swings an ambient part in front of the tray or the HUD card', async ({ page }) => {
+  const errors = await open(page);
+  await newGame(page, (id) => click(page, id), 'hard');
+  await page.waitForFunction(() => window.__chrono!.ambient?.stage === 'hard');
+  // The cluster used to float 1.5 m out between the eye and the bench (world z -0.56): a turn put a big dark gear over the tray and
+  // the card. Every part must stay past the bench's back edge and farther from the eye than the tray, in the turned view too, so the
+  // tray and the card are always drawn in front of it, as of the painted backdrop.
+  const check = async (label: string) => {
+    const { tray, parts } = await page.evaluate(() => window.__chrono!.ambientBoxes());
+    expect(parts.length).toBeGreaterThan(0);
+    for (const p of parts) {
+      expect(p.maxZ, `${label}: a part reaches z ${p.maxZ.toFixed(2)}, past the bench's back edge is -0.95`).toBeLessThan(-0.95);
+      expect(p.near, `${label}: a part comes within ${p.near.toFixed(2)} m of the eye, the tray is ${tray.toFixed(2)} m`).toBeGreaterThan(tray);
+    }
+  };
+  await check('default view');
+  await page.mouse.move(300, 820);
+  await page.mouse.down();
+  await page.mouse.move(-20, 820, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(900);
+  await frames(page);
+  await page.screenshot({ path: `${OUT}/hard-turned.png` });
+  await check('turned 320 px left');
+  expect(errors).toEqual([]);
+});

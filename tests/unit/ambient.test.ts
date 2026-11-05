@@ -6,7 +6,7 @@ import { BENCH_Y } from '../../src/scenery';
 
 // The module paints a few canvas textures; a no-op 2D context stands in for the DOM.
 beforeAll(() => {
-  const ctx = new Proxy({}, { get: (_t, k) => (k === 'createRadialGradient' || k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => undefined), set: () => true });
+  const ctx = new Proxy({}, { get: (_t, k) => (k === 'createRadialGradient' || k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : k === 'createImageData' ? () => ({ data: new Uint8ClampedArray(4 * 256 * 256) }) : () => undefined), set: () => true });
   vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) });
 });
 afterAll(() => vi.unstubAllGlobals());
@@ -130,6 +130,21 @@ describe('createAmbient', () => {
         if (!m.isMesh || (m.material as { blending?: number }).blending === 2) return; // additive planes (rays, haze) are light, not solids
         const box = new Box3().setFromObject(m);
         expect(box.intersectsBox(bench), `${stage} ${m.geometry.type} at ${box.min.toArray().map((v) => v.toFixed(2))}..${box.max.toArray().map((v) => v.toFixed(2))}`).toBe(false);
+      });
+    }
+    a.dispose();
+  });
+
+  it.each(STAGES)('%s: every solid part stays past the bench\'s back edge (z < -0.95), so nothing floats between the eye and the bench', (stage) => {
+    const a = make(stage);
+    for (const [beats, seconds] of [[0, 0], [3.4, 10], [11.7, 31]] as const) {
+      a.update(beats, seconds);
+      a.group.updateMatrixWorld(true);
+      a.group.traverse((o) => {
+        const m = o as Mesh;
+        if (!m.isMesh || (m.material as { blending?: number }).blending === 2) return;
+        const box = new Box3().setFromObject(m);
+        expect(box.max.z, `${stage} ${m.geometry.type} z ${box.min.z.toFixed(2)}..${box.max.z.toFixed(2)}`).toBeLessThan(-0.95);
       });
     }
     a.dispose();

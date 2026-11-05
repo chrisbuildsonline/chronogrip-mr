@@ -201,6 +201,8 @@ interface ChronoHook {
    */
   viewBoxes(): Record<'board' | 'dial' | 'bird' | 'card', [number, number, number, number] | null>;
   /** Page-pixel box [x0, y0, x1, y1] round the ghost hand's visible meshes (and anything it carries); null while it is hidden. */
+  /** Each solid ambient part's screen box [x0, y0, x1, y1] (CSS px) and nearest distance to the camera, plus the tray's distance. */
+  ambientBoxes(): { tray: number; parts: { box: [number, number, number, number]; near: number; maxZ: number }[] };
   ghostBox(): [number, number, number, number] | null;
   /** Page-pixel box [x0, y0, x1, y1] round the regulator's cream dial face alone. */
   dialFaceBox(): [number, number, number, number] | null;

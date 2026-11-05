@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { APP_TITLE, createWorldOptions } from './config';
 import { DEFAULT_PLACEMENT, toHeadFrame, type Head } from './anchor';
 import { startSession } from './enter';
-import { BoxGeometry, Color, MathUtils, PMREMGenerator, type MeshPhysicalMaterial, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
+import { BoxGeometry, Box3, Color, MathUtils, PMREMGenerator, type MeshPhysicalMaterial, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
 import { grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle, type Hand } from './grab';
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
@@ -205,6 +205,7 @@ function useAmbient(id: StageId | null): void {
     eye: DESKTOP_EYE,
     target: DESKTOP_TARGET,
     phone: isPhone(window.innerWidth, window.innerHeight),
+    warm: low,
     reducedMotion: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches,
   });
   world.scene.add(ambient.group);
@@ -1925,6 +1926,17 @@ window.__chrono = Object.freeze({
     // The board and the ledge are the tray's own box meshes.
     const board = built.tray.children.filter((c): c is Mesh => c instanceof Mesh && c.geometry instanceof BoxGeometry);
     return { board: screenBox(board), dial: screenBox(meshesIn(escapement.root)), bird: screenBox(meshesIn(automaton.root)), card: boxOf(panelCorners()) };
+  },
+  /** Each solid ambient part (additive light planes and dust left out): its screen box (CSS px) and how near it comes to the camera, and the tray's distance, for the "nothing floats in front of the tray" test. */
+  ambientBoxes() {
+    const eye = world.camera.getWorldPosition(new Vector3());
+    const tray = built.tray.getWorldPosition(new Vector3()).distanceTo(eye);
+    return {
+      tray,
+      parts: (ambient ? meshesIn(ambient.group) : [])
+        .filter((m) => (m.material as { blending?: number }).blending !== 2)
+        .map((m) => ({ box: screenBox([m])!, near: new Box3().setFromObject(m).distanceToPoint(eye), maxZ: new Box3().setFromObject(m).max.z })),
+    };
   },
   ghostBox: () => screenBox(meshesIn(ghost.root)),
   dialFaceBox: () => screenBox([escapement.face]),
