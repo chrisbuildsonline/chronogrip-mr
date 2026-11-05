@@ -79,6 +79,8 @@ export function createSound() {
   let reverbSend: GainNode | null = null;
   let ducked = false;
   let nextBar = 0;
+  /** The audio-clock time the current theme's first bar was scheduled for (the beat clock's zero). */
+  let themeStart = 0;
   let pump: ReturnType<typeof setInterval> | null = null;
   let hiddenSuspend = false;
   // One theme at a time (src/music.ts THEMES): each has its own gain into the music bed, so changing theme is a 2 s crossfade
@@ -284,7 +286,11 @@ export function createSound() {
       composers.delete(id); // each entry starts the progression from its first bar
       if (!ctx || !musicGain) return;
       crossfade(ctx);
-      nextBar = ctx.currentTime + 0.3;
+      nextBar = themeStart = ctx.currentTime + 0.3;
+    },
+    /** The music clock: beats since the current theme's first bar, from the AudioContext time it was scheduled (so a visual tick lands on the music's beat); null while the music is not playing (off, Sound off, no gesture yet, suspended). */
+    beats(): number | null {
+      return ctx && musicGain && ctx.state === 'running' && musicWanted() ? Math.max(0, ctx.currentTime - themeStart) / beatOf(theme) : null;
     },
     /** The adaptive layers: the level within the stage, and whether the level clock is under 30 s. Cheap to call every frame. */
     setIntensity(nextLevel: number, nextLow: boolean): void {
@@ -340,7 +346,7 @@ export function createSound() {
           reverbSend.connect(room);
           room.connect(musicGain);
           themeGain(c, theme, THEMES[theme].level);
-          nextBar = c.currentTime + 0.3;
+          nextBar = themeStart = c.currentTime + 0.3;
           pump = setInterval(feed, 250);
           musicLevel();
           // The tab hidden: the whole context rests, and wakes with the tab.

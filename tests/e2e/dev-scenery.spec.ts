@@ -109,3 +109,17 @@ test('leaving immersive-ar brings the bench and panorama back, and the props go'
   expect(s.fog).toBe(false);
   expect(s.background).toBe(true);
 });
+
+test('immersive-ar: the animated stage backdrop is gone while the session runs and back when it ends', async ({ page }) => {
+  const errors = watchErrors(page);
+  await open(page);
+  await page.evaluate(() => window.__chrono!.jump(5));
+  await page.waitForFunction(() => window.__chrono!.ambient?.stage === 'easy');
+  await enterMr(page);
+  await frames(page);
+  expect(await page.evaluate(() => window.__chrono!.ambient), 'no ambient parts in immersive-ar').toBeNull();
+  await page.evaluate((d) => (window as unknown as Record<string, Device>)[d]!.activeSession!.end(), device);
+  await page.waitForFunction(() => window.__chrono?.xrPresenting === false, undefined, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__chrono!.ambient?.stage === 'easy');
+  expect(errors).toEqual([]);
+});

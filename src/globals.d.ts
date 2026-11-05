@@ -69,6 +69,9 @@ interface ChronoHook {
   readonly turning: 'left' | 'right' | 'mouse' | null;
   /** Live: world orientation [x, y, z, w] of each tracked wrist joint, else null. */
   readonly wrists: { readonly left: readonly [number, number, number, number] | null; readonly right: readonly [number, number, number, number] | null };
+  /** Live: the animated stage backdrop (src/ambient.ts): null on menus and in XR; else its stage, part count, the beat and seconds clocks (frozen while paused), the room-light multiplier and a pose string that changes when any part moves, and the screen position (CSS px) of its first part (Easy: the second hand's pivot). */
+  readonly ambient: { readonly stage: 'easy' | 'medium' | 'hard'; readonly parts: number; readonly beats: number; readonly seconds: number; readonly bgMul: number; readonly visible: boolean; readonly pose: string; readonly anchor: readonly [number, number] } | null;
+  setAmbientVisible(v: boolean): void;
   /** Live: the music's theme, the level driving its layers, whether the clock is under 30 s, and the layers playing (pad, melody, bass, counter, ticks). */
   readonly music: { readonly theme: 'menu' | 'box' | 'marimba' | 'clockwork'; readonly level: number; readonly low: boolean; readonly layers: readonly ('pad' | 'melody' | 'bass' | 'counter' | 'ticks')[] };
   /** Live: audio context state and how many of each sound have played. */

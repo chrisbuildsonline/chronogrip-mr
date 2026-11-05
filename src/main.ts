@@ -15,6 +15,7 @@ import { woodSet } from './wood';
 import { trackMr } from './mr';
 import { isSoftwareGl, tuneForSoftwareGl } from './render';
 import { qualityOf } from './quality';
+import { createAmbient, poseOf, type Ambient } from './ambient';
 import { setPlainMetals } from './metal';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
@@ -27,7 +28,7 @@ import { C } from './palette';
 import type { GearSpin } from './train';
 import { createRegulator, dragTwist, settingOf, startSetting, targetRate, twistOf, type Quat } from './escapement';
 import { createSound, loadSoundOn, saveSoundOn, tickGain, ticksBetween } from './sound';
-import { LOW_TIME_S, loadMusicOn, saveMusicOn } from './music';
+import { LOW_TIME_S, THEMES, loadMusicOn, saveMusicOn } from './music';
 import { DIAL_AT, KNOB_GRAB_M, KNOB_TOP, TWIST_CUE_AT, createAutomaton, createEscapement } from './clockwork';
 import { carried, loadRun, nextIndex, reached, saveRun, solvedLevel, startRun, won, type Run } from './run';
 import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } from './timer';
@@ -176,6 +177,52 @@ function useBackdrop(id: BackdropId): void {
   backdropWanted = id;
   void loadBackdrop(id, low || isPhone(window.innerWidth, window.innerHeight)).then((t) => (backdropWanted === id ? scenery.setBackdrop(id, t) : t.dispose()));
 }
+/**
+ * The animated stage backdrop (src/ambient.ts): one group per stage, only while a level is on (never on the menus, never in
+ * immersive-ar), ticking on the stage music's beat (the audio clock; seconds * bpm / 60 while the music is not playing), both
+ * clocks frozen while paused and through the resume countdown. Its room-light multiplier drives the background intensity.
+ */
+let ambient: Ambient | null = null;
+let ambientStage: StageId | null = null;
+let ambientOn: StageId | null = null; // what the screen wants, XR or not
+let ambSeconds = 0;
+let ambBeats = 0;
+let ambOffset = 0;
+let ambMul = 1;
+const ambientEye = new Vector3();
+const ambientEye0 = new Vector3(...DESKTOP_EYE);
+function useAmbient(id: StageId | null): void {
+  ambientOn = id;
+  const wanted = world.renderer.xr.isPresenting ? null : id;
+  if (wanted === ambientStage) return;
+  ambient?.dispose();
+  ambient = null;
+  ambientStage = wanted;
+  ambSeconds = ambBeats = ambOffset = 0;
+  ambMul = world.scene.backgroundIntensity = 1;
+  if (!wanted) return;
+  ambient = createAmbient(wanted, {
+    eye: DESKTOP_EYE,
+    target: DESKTOP_TARGET,
+    phone: isPhone(window.innerWidth, window.innerHeight),
+    reducedMotion: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches,
+  });
+  world.scene.add(ambient.group);
+}
+/** One frame of the ambient parts: the beat clock (frozen while paused), then the room-light multiplier. */
+function tickAmbient(dt: number): void {
+  if (!ambient || world.renderer.xr.isPresenting) return;
+  const frozen = flow.name === 'paused' || overlay?.kind === 'countdown';
+  if (!frozen) ambSeconds += dt;
+  const raw = sound.beats() ?? (ambSeconds * THEMES[sound.theme].bpm) / 60;
+  if (frozen) ambOffset = ambBeats - raw;
+  else ambBeats = raw + ambOffset;
+  ambMul = ambient.update(ambBeats, ambSeconds).bgMul;
+  // The parts were placed by direction from the tuned eye; the camera backs off and orbits, so the group rides along with it
+  // (never rotating), which keeps every part in its painted spot of the cubemap (the second hand on the clock hub).
+  ambient.group.position.copy(world.camera.getWorldPosition(ambientEye)).sub(ambientEye0);
+  world.scene.backgroundIntensity = ambMul;
+}
 // In immersive-ar there is no environment and the headset GPU is a mobile one: the varnish (clearcoat) goes for the session.
 const varnish = (built.wood as MeshPhysicalMaterial).clearcoat ?? 0;
 const setVarnish = (on: boolean) => {
@@ -186,10 +233,12 @@ const setVarnish = (on: boolean) => {
 };
 world.renderer.xr.addEventListener('sessionstart', () => {
   scenery.set(true);
+  useAmbient(ambientOn);
   setVarnish(false);
 });
 world.renderer.xr.addEventListener('sessionend', () => {
   scenery.set(false);
+  useAmbient(ambientOn);
   setVarnish(true);
 });
 
@@ -715,6 +764,7 @@ function syncBackdrop(): void {
   const on = flow.name === 'title' ? null : levelIndex < CAMPAIGN ? stage : isRandomLevel(levelIndex) ? RANDOM_PICK[randomDiff].stage : null;
   useBackdrop(on ? stageOf(on).backdrop : MENU_BACKDROP);
   sound.setTheme(on ? stageOf(on).theme : MENU_THEME);
+  useAmbient(on);
   sound.setDucked(flow.name === 'paused');
 }
 
@@ -1285,6 +1335,7 @@ world.scene.onBeforeRender = () => {
   lastFrame = now;
   stepGrabs();
   levelClock.tick(now, flow.name === 'playing');
+  tickAmbient(dt);
   // The music's layers follow the level (a Random level counts as 10) and the clock: under 30 s left the pad opens and the ticks come up.
   sound.setIntensity(levelIndex < CAMPAIGN ? levelIndex + 1 : 10, (flow.name === 'playing' || flow.name === 'paused') && !relaxed && par - levelClock.seconds < LOW_TIME_S);
   // A campaign run is lost when the level's time limit runs out (not with No timer).
@@ -1686,6 +1737,13 @@ window.__chrono = Object.freeze({
   },
   get musicTheme() {
     return sound.theme;
+  },
+  get ambient() {
+    return ambient && { stage: ambientStage!, parts: ambient.group.children.length, beats: ambBeats, seconds: ambSeconds, bgMul: ambMul, visible: ambient.group.visible, pose: poseOf(ambient.group), anchor: toScreen(ambient.group.children[0]!.getWorldPosition(new Vector3()).toArray()) };
+  },
+  /** Test hook: shows or hides the ambient parts (to compare a frame with and without them). */
+  setAmbientVisible(v: boolean) {
+    if (ambient) ambient.group.visible = v;
   },
   get music() {
     return sound.layers;
