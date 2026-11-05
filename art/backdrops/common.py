@@ -147,7 +147,10 @@ def gear_bm(teeth, r, thick, rim=0.82, hub=0.16, spokes=5, depth=None, kind='spu
     depth = depth or (2.2 * math.pi * r / teeth) * 0.55
     rr = r - depth
     outer = []
-    for i in range(teeth):
+    if kind == 'involute':
+        outer = involute_outline(teeth, r)
+        rr = r - 2.25 * (2 * r / (teeth + 2))
+    for i in range(teeth if kind != 'involute' else 0):
         a0 = 2 * math.pi * i / teeth
         p = 2 * math.pi / teeth
         if kind == 'escape':
@@ -180,6 +183,39 @@ def gear_bm(teeth, r, thick, rim=0.82, hub=0.16, spokes=5, depth=None, kind='spu
             R = (rot.to_matrix() if rot is not None else Matrix.Identity(3)) @ Matrix.Rotation(a, 3, 'Z')
             bm_box(L + r * 0.04, sw, thick * spoke_h, at=loc, bm=bm, rot=R.to_euler())
     return bm
+
+
+def involute_outline(teeth, ra, pressure=20.0, flank=7, tip=4, root=4):
+    """Closed 2D outline of an involute spur gear with tip radius ra (module m = 2 ra / (N + 2)), counter-clockwise."""
+    m = 2 * ra / (teeth + 2)
+    rp = m * teeth / 2
+    a = math.radians(pressure)
+    rb = rp * math.cos(a)
+    rf = rp - 1.25 * m
+    inv = lambda x: math.tan(x) - x
+    tp = math.pi / (2 * teeth)
+
+    def psi(r):
+        r = max(r, rb)
+        return tp + inv(a) - inv(math.acos(min(1.0, rb / r)))
+
+    r0 = max(rf, 1e-6)
+    radii = [r0 + (ra - r0) * (k / flank) ** 1.3 for k in range(flank + 1)]
+    pts = []
+    for k in range(teeth):
+        c = 2 * math.pi * k / teeth
+        for r in radii:                       # leading flank, root to tip
+            pts.append((r, c - psi(r)))
+        for j in range(1, tip):               # tip land
+            t = j / tip
+            pts.append((ra, c - psi(ra) + 2 * psi(ra) * t))
+        for r in reversed(radii):             # trailing flank, tip to root
+            pts.append((r, c + psi(r)))
+        nxt = 2 * math.pi * (k + 1) / teeth - psi(r0)
+        start = c + psi(r0)
+        for j in range(1, root):              # root arc
+            pts.append((rf, start + (nxt - start) * j / root))
+    return [(r * math.cos(t), r * math.sin(t)) for r, t in pts]
 
 
 def gear(name, teeth, r, thick, mat, loc, rot=(0, 0, 0), **kw):
@@ -690,3 +726,31 @@ def setup_render(mode, samples, scale=1.0, exposure=0.0, look='AgX - Medium High
 
 def rnd(seed):
     return random.Random(seed)
+
+
+# three.js direction -> Blender: (x, y, z) -> (x, -z, y)
+CUBE_FACES = {  # name: (forward, up) in three.js coords, natural inside view
+    'px': ((1, 0, 0), (0, 1, 0)), 'nx': ((-1, 0, 0), (0, 1, 0)),
+    'py': ((0, 1, 0), (0, 0, -1)), 'ny': ((0, -1, 0), (0, 0, 1)),
+    'pz': ((0, 0, 1), (0, 1, 0)), 'nz': ((0, 0, -1), (0, 1, 0)),
+}
+
+
+def cube_cameras():
+    cams = {}
+    for name, (f, u) in CUBE_FACES.items():
+        fb, ub = g2b(*f), g2b(*u)
+        right = fb.cross(ub)
+        M = Matrix((right, ub, -fb)).transposed()
+        cd = bpy.data.cameras.new('cube-' + name)
+        cd.type = 'PERSP'
+        cd.sensor_fit = 'HORIZONTAL'
+        cd.angle = math.pi / 2
+        cd.clip_start = 0.02
+        cd.clip_end = 200
+        ob = bpy.data.objects.new('cube-' + name, cd)
+        ob.location = TARGET
+        ob.rotation_euler = M.to_euler()
+        bpy.context.scene.collection.objects.link(ob)
+        cams[name] = ob
+    return cams

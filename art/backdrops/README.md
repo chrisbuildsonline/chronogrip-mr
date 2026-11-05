@@ -1,26 +1,36 @@
 # Backdrop renders
 
-Procedural Blender scenes (no third-party assets) behind the tray on desktop and phone. Each renders a 4096x2048
-equirectangular panorama from the orbit target; game-forward (-Z) sits at u = 0.25, so three's
-`scene.background` with `EquirectangularReflectionMapping` lines up with no rotation.
+Procedural Blender scenes (no third-party assets) behind the tray on desktop and phone. Each scene renders six cube faces
+(2048 px) from the orbit target; game-forward is -Z. The game loads them as a three.js `CubeTexture`
+(`public/backdrops/<id>_cube/{px,nx,py,ny,pz,nz}.jpg`, and `<id>_cube_1024/` for phones). No resample, no equirect pass.
 
 | file | scene | stage |
 | --- | --- | --- |
 | `c2_attic.py` | attic clock window (also the menus) | Easy |
 | `c1_atelier.py` | clockmaker's atelier | Medium |
-| `c3_movement.py` | inside a giant clock movement | Hard |
+| `c3b_movement.py` | inside a giant movement, lens-soft variant B (the shipped Hard) | Hard |
+| `c3_movement.py` | the earlier Hard render, kept for reference | - |
 
 Shared helpers are in `common.py`, `props.py`, `clocks.py`; `run.py` drives one scene.
 
 ## Re-render
 
-Blender 4.5 LTS (Cycles; a GPU helps, CPU works but is slow). The binary is not in the repo.
+Blender 4.5 LTS (Cycles; a GPU helps, CPU works but is slow). The binary is not in the repo. Run from this folder's parent
+layout (`scripts/` here, `out/`, `cube/` beside it), or adjust the paths in `run.py` and `export_cube.sh`.
 
-    blender -b --factory-startup -P run.py -- c2_attic pano       # one panorama -> out/c2_attic_pano.png
-    blender -b --factory-startup -P run.py -- c2_attic preview    # a flat preview from the game camera
-    BLENDER=/path/to/blender ./batch.sh                           # all three, both modes
+    blender -b --factory-startup -P run.py -- c2_attic cube2048 1 96       # six faces -> out/c2_attic_cube2048_<face>.png
+    VARIANT=b blender -b --factory-startup -P run.py -- c3b_movement cube2048 1 128 _b
+    blender -b --factory-startup -P run.py -- c2_attic preview             # a flat preview from the game camera
 
-Then make the JPGs the game loads (`public/backdrops/cN_pano.jpg` 4096 wide, `cN_pano_2048.jpg` for phones):
+`batch.sh` runs the set. Then `export_cube.sh <render prefix> <id>` turns the faces into the JPGs (4:4:4, swapping px and nx
+because three samples a cube with x flipped) and a 1024 phone set; copy them to `public/backdrops/<id>_cube[_1024]/`.
 
-    ffmpeg -i out/c2_attic_pano.png -q:v 4 ../../public/backdrops/c2_pano.jpg
-    ffmpeg -i out/c2_attic_pano.png -vf scale=2048:1024 -q:v 4 ../../public/backdrops/c2_pano_2048.jpg
+## Wood textures
+
+`textures.py` bakes the tileable walnut sets (albedo, roughness, height -> normal) that `src/wood.ts` loads from
+`public/textures/{tray,bench}_{albedo,normal,roughness}_{2048,1024}.jpg`. Grain runs along U; the tray tile is 0.5 m, the bench 1.0 m.
+
+    blender -b --factory-startup -P textures.py -- tray 2048
+    blender -b --factory-startup -P textures.py -- bench 2048
+
+Make the JPGs (and 1024 copies) with ffmpeg `-q:v 3`.
