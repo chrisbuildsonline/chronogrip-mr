@@ -85,8 +85,8 @@ interface ChronoHook {
   readonly gearScreens: readonly { readonly id: string; readonly x: number; readonly y: number; readonly r: number }[];
   /** Live: the first gear's metal (metalness, roughness, brushed maps) and whether the scene has an environment map (scene.environment). */
   readonly metals: { readonly metalness: number; readonly roughness: number; readonly roughnessMap: boolean; readonly normalMap: boolean; readonly environment: boolean; readonly intensity: number };
-  /** Live: the tray's wood material (PBR maps present, anisotropy of the albedo map). */
-  readonly trayWood: { readonly physical: boolean; readonly map: boolean; readonly normalMap: boolean; readonly roughnessMap: boolean; readonly anisotropy: number; readonly normalScale: number; readonly clearcoat: number };
+  /** Live: the tray's wood material (PBR maps present, anisotropy and width of the albedo map, the quality tier: software GL runs 'low'). */
+  readonly trayWood: { readonly quality: 'high' | 'low'; readonly texture: number; readonly physical: boolean; readonly map: boolean; readonly normalMap: boolean; readonly roughnessMap: boolean; readonly anisotropy: number; readonly normalScale: number; readonly clearcoat: number };
   /** Live: true once the escapement is calibrated and the automaton runs. */
   readonly automatonRunning: boolean;
   /** Live: the escapement's tick count so far (fractional); the bird's wings snap up at each whole tick. */

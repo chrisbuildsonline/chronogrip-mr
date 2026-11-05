@@ -11,7 +11,6 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshPhysicalMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
   PMREMGenerator,
@@ -70,7 +69,7 @@ export type BuiltScene = {
   /** Flat highlight rings round each pin by axle id, hidden until shown. */
   rings: Map<string, Mesh>;
   /** The tray's wood material (shared by board, ledge and riser), for the test hook. */
-  readonly wood: MeshPhysicalMaterial;
+  readonly wood: MeshStandardMaterial;
   gearCount: number;
   axleCount: number;
   /** Moves the tray (and its riser, if the plane is low) to a placement. */
@@ -82,7 +81,7 @@ export type BuiltScene = {
 };
 
 /** Builds the tray, pins and gears of a level, posed per TRAY_POSE, and warm lights. */
-export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer): BuiltScene {
+export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer, low = false): BuiltScene {
   const tray = new Group();
   tray.name = 'tray';
   tray.rotation.order = 'YXZ'; // yaw outside the tilt, as in trayToWorld
@@ -98,7 +97,7 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
   const pinGeometry = new CylinderGeometry(PIN_RADIUS, PIN_RADIUS, PIN_HEIGHT, 24);
   const ringGeometry = new RingGeometry(PIN_RADIUS * 2, PIN_RADIUS * 2.6, 32);
   const gearGeometries = new Map<number, BufferGeometry>();
-  const woodMaterial = trayWood(woodSet('tray', isPhone(innerWidth, innerHeight), renderer));
+  const woodMaterial = trayWood(woodSet('tray', isPhone(innerWidth, innerHeight), renderer, low), low);
 
   const place =(mesh: Mesh, x: number, y: number, lift: number) => {
     mesh.position.set(...trayLocal(x, y, lift));

@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { APP_TITLE, createWorldOptions } from './config';
 import { DEFAULT_PLACEMENT, toHeadFrame, type Head } from './anchor';
 import { startSession } from './enter';
-import { BoxGeometry, Color, PMREMGenerator, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
+import { BoxGeometry, Color, PMREMGenerator, type MeshPhysicalMaterial, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
 import { grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle, type Hand } from './grab';
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
@@ -13,7 +13,9 @@ import { MENU_BACKDROP, MENU_THEME, RANDOM_PICK, STAGES, dOf, kindOf, parOf, sta
 import { createScenery } from './scenery';
 import { woodSet } from './wood';
 import { trackMr } from './mr';
-import { fullResolution, isSoftwareGl, tuneForSoftwareGl } from './render';
+import { isSoftwareGl, tuneForSoftwareGl } from './render';
+import { qualityOf } from './quality';
+import { setPlainMetals } from './metal';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
 import { MENU_SCREENS, PLAY_SCREENS, SCRIM_OPACITY, buttonAt, clockTenths, layout, menuAnchor, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
@@ -157,10 +159,13 @@ let levelIndex = sharedSeed === null ? continueAt() : randomSlot();
 let level: Level = levels[levelIndex]!;
 par = parHere(levelIndex, level);
 tuneForSoftwareGl(world.renderer);
-const built = buildScene(level, world.scene, world.renderer);
-// (README screenshots, ?shots, keep the lit bench on software GL too.)
-// The bench and a rendered panorama behind the tray on desktop and phone; in immersive-ar only a few props on the real table (src/scenery.ts).
-const scenery = createScenery(world.scene, isSoftwareGl(world.renderer) && !fullResolution(location.search) ? null : woodSet('bench', isPhone(window.innerWidth, window.innerHeight), world.renderer), new PMREMGenerator(world.renderer));
+// Render quality (src/quality.ts): software GL draws the low tier; ?quality=high|low overrides.
+const quality = qualityOf(location.search, isSoftwareGl(world.renderer));
+const low = quality === 'low';
+setPlainMetals(low);
+const built = buildScene(level, world.scene, world.renderer, low);
+// // The bench and a rendered panorama behind the tray on desktop and phone; in immersive-ar only a few props on the real table (src/scenery.ts).
+const scenery = createScenery(world.scene, low ? null : woodSet('bench', isPhone(window.innerWidth, window.innerHeight), world.renderer), low ? null : new PMREMGenerator(world.renderer));
 /**
  * The rendered panorama behind the tray: the attic (c2) on every menu, the stage's own while a level is on. One at a time: a
  * new one replaces the old (freeing its texture) once it has loaded, and a switch made while one is loading wins.
@@ -169,10 +174,24 @@ let backdropWanted: BackdropId | null = null;
 function useBackdrop(id: BackdropId): void {
   if (id === backdropWanted) return;
   backdropWanted = id;
-  void loadBackdrop(id, isPhone(window.innerWidth, window.innerHeight)).then((t) => (backdropWanted === id ? scenery.setBackdrop(id, t) : t.dispose()));
+  void loadBackdrop(id, low || isPhone(window.innerWidth, window.innerHeight)).then((t) => (backdropWanted === id ? scenery.setBackdrop(id, t) : t.dispose()));
 }
-world.renderer.xr.addEventListener('sessionstart', () => scenery.set(true));
-world.renderer.xr.addEventListener('sessionend', () => scenery.set(false));
+// In immersive-ar there is no environment and the headset GPU is a mobile one: the varnish (clearcoat) goes for the session.
+const varnish = (built.wood as MeshPhysicalMaterial).clearcoat ?? 0;
+const setVarnish = (on: boolean) => {
+  const m = built.wood as MeshPhysicalMaterial;
+  if (!m.isMeshPhysicalMaterial) return;
+  m.clearcoat = on ? varnish : 0;
+  m.needsUpdate = true;
+};
+world.renderer.xr.addEventListener('sessionstart', () => {
+  scenery.set(true);
+  setVarnish(false);
+});
+world.renderer.xr.addEventListener('sessionend', () => {
+  scenery.set(false);
+  setVarnish(true);
+});
 
 // Desktop preview: from above, behind and a little right of the seated head, so the board reads in depth (bevel,
 // gear thickness, the bird standing up) and the panel above it stays in frame. A narrow window backs it off (fitView).
@@ -1758,7 +1777,7 @@ window.__chrono = Object.freeze({
   },
   get trayWood() {
     const m = built.wood;
-    return { physical: m.isMeshPhysicalMaterial, map: !!m.map, normalMap: !!m.normalMap, roughnessMap: !!m.roughnessMap, anisotropy: m.map?.anisotropy ?? 0, normalScale: m.normalScale.x, clearcoat: m.clearcoat };
+    return { quality, physical: !!(m as MeshPhysicalMaterial).isMeshPhysicalMaterial, map: !!m.map, normalMap: !!m.normalMap, roughnessMap: !!m.roughnessMap, anisotropy: m.map?.anisotropy ?? 0, normalScale: m.normalScale.x, clearcoat: (m as MeshPhysicalMaterial).clearcoat ?? 0, texture: (m.map?.image as { width?: number } | undefined)?.width ?? 0 };
   },
   get scenery() {
     return { ...scenery.state(), clearAlpha: world.renderer.getClearAlpha() };

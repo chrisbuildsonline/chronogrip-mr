@@ -66,6 +66,15 @@ export function brushedMaps(): { roughness: Texture; normal: Texture } {
   return maps;
 }
 
+let plain = false;
+const brushed = (repeat: number, scale: number) =>
+  plain ? {} : { roughnessMap: brushedAt(repeat).roughness, normalMap: brushedAt(repeat).normal, normalScale: new Vector2(scale, scale) };
+
+/** The low quality tier (src/quality.ts) drops the brushing maps: plain standard metals under the scene's own lighting. */
+export const setPlainMetals = (on: boolean): void => {
+  plain = on;
+};
+
 /** The brushed maps at a texture repeat: gears use world-scaled UVs (a few centimetres a tile), small round parts the 0..1 ones. */
 const repeated = new Map<number, { roughness: Texture; normal: Texture }>();
 function brushedAt(repeat: number) {
@@ -109,12 +118,12 @@ const ENV_INTENSITY = 10;
 
 /** Polished brass: metalness 1, roughness about 0.3, a warm colour, a subtle brushing. */
 export const brass = (repeat = 40): MeshStandardMaterial =>
-  track(new MeshStandardMaterial({ color: new Color(C.brass), metalness: 0.62, roughness: 0.48, roughnessMap: brushedAt(repeat).roughness, normalMap: brushedAt(repeat).normal, normalScale: new Vector2(0.25, 0.25), envMapIntensity: 1 }));
+  track(new MeshStandardMaterial({ color: new Color(C.brass), metalness: 0.62, roughness: 0.48, ...brushed(repeat, 0.25), envMapIntensity: 1 }));
 
 /** Darker aged brass for plates and plinths. */
 export const bronze = (repeat = 3): MeshStandardMaterial =>
-  track(new MeshStandardMaterial({ color: 0x7d5f33, metalness: 1, roughness: 0.5, roughnessMap: brushedAt(repeat).roughness, normalMap: brushedAt(repeat).normal, normalScale: new Vector2(0.25, 0.25), envMapIntensity: 1 }));
+  track(new MeshStandardMaterial({ color: 0x7d5f33, metalness: 1, roughness: 0.5, ...brushed(repeat, 0.25), envMapIntensity: 1 }));
 
 /** Cooler steel for axles, screws and springs. */
 export const steel = (repeat = 40): MeshStandardMaterial =>
-  track(new MeshStandardMaterial({ color: 0x9aa3ab, metalness: 1, roughness: 0.5, roughnessMap: brushedAt(repeat).roughness, normalMap: brushedAt(repeat).normal, normalScale: new Vector2(0.2, 0.2), envMapIntensity: 1 }));
+  track(new MeshStandardMaterial({ color: 0x9aa3ab, metalness: 1, roughness: 0.5, ...brushed(repeat, 0.2), envMapIntensity: 1 }));

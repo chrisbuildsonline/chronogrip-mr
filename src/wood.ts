@@ -49,10 +49,10 @@ export function planarUv<G extends BufferGeometry>(geo: G, tile: number, ofs = 0
 
 const loader = new TextureLoader();
 
-/** One tileable PBR wood set (public/textures): albedo sRGB, normal and roughness linear, repeat-wrapped, anisotropy at the GPU's maximum. */
-export function woodSet(name: 'tray' | 'bench', phone: boolean, renderer: WebGLRenderer): WoodSet {
-  const size = phone ? 1024 : 2048;
-  const aniso = renderer.capabilities.getMaxAnisotropy();
+/** One tileable PBR wood set (public/textures; 1024 on a phone or in the low tier): albedo sRGB, normal and roughness linear, repeat-wrapped, anisotropy at the GPU's maximum. */
+export function woodSet(name: 'tray' | 'bench', small: boolean, renderer: WebGLRenderer, low = false): WoodSet {
+  const size = small || low ? 1024 : 2048;
+  const aniso = low ? 1 : renderer.capabilities.getMaxAnisotropy();
   const load = (kind: string) => {
     const t = loader.load(`textures/${name}_${kind}_${size}.jpg`);
     t.wrapS = t.wrapT = RepeatWrapping;
@@ -65,8 +65,10 @@ export function woodSet(name: 'tray' | 'bench', phone: boolean, renderer: WebGLR
 }
 
 /** Varnished walnut for the tray; roughness 1 is a multiplier, the map holds the real values. */
-export const trayWood = (set: WoodSet) =>
-  new MeshPhysicalMaterial({ ...set, roughness: 1, metalness: 0, normalScale: new Vector2(0.3, 0.3), clearcoat: 0.15, clearcoatRoughness: 0.3, envMapIntensity: 0.6 });
+export const trayWood = (set: WoodSet, low = false): MeshStandardMaterial =>
+  low
+    ? new MeshStandardMaterial({ ...set, roughness: 0.45, metalness: 0, normalScale: new Vector2(0.3, 0.3), envMapIntensity: 0.6 })
+    : new MeshPhysicalMaterial({ ...set, roughness: 1, metalness: 0, normalScale: new Vector2(0.3, 0.3), clearcoat: 0.15, clearcoatRoughness: 0.3, envMapIntensity: 0.6 });
 
 /** A 2.5 mm brass line inlaid 9 mm inside the board edge, flush with the top (tray-local XZ). */
 export function brassInlay(halfX: number, halfZ: number, inset = 0.009, w = 0.0025): Mesh {
