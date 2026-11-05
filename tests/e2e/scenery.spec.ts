@@ -44,6 +44,7 @@ async function expectBackdrop(page: Page, id = 'c2') {
   expect(s.parts.length).toBeLessThanOrEqual(3);
   expect(s.background).toBe(true);
   expect(s.cube).toBe(true);
+  expect(s.environment).toBe('stage');
   expect(s.fog).toBe(false);
   expect(s.tris).toBeLessThanOrEqual(1000);
 }
@@ -88,6 +89,18 @@ test('the tray is walnut PBR: albedo, normal and roughness maps, anisotropic fil
   expect(w.anisotropy).toBeGreaterThan(1);
   expect(w.normalScale).toBeLessThanOrEqual(0.4);
   expect(w.clearcoat).toBeLessThanOrEqual(0.2);
+  expect(errors).toEqual([]);
+});
+
+test('the metals are polished brass lit by the stage environment', async ({ page }) => {
+  const errors = await open(page, 1440, 900);
+  await expectBackdrop(page);
+  const m = await page.evaluate(() => window.__chrono!.metals);
+  expect(m.metalness).toBe(1);
+  expect(m.roughness).toBeGreaterThanOrEqual(0.28);
+  expect(m.roughness).toBeLessThanOrEqual(0.45);
+  expect(m.roughnessMap && m.normalMap).toBe(true);
+  expect(m.environment).toBe(true);
   expect(errors).toEqual([]);
 });
 

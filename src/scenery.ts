@@ -14,6 +14,8 @@ import {
   Shape,
   type Scene,
   type CubeTexture,
+  type PMREMGenerator,
+  type WebGLRenderTarget,
   TorusGeometry,
   Vector3,
   Color,
@@ -23,6 +25,7 @@ import type { Placement } from './anchor';
 import { type BackdropId } from './backdrop';
 import { C, SCENE } from './palette';
 import { TRAY_POSE } from './seat';
+import { metalEnv, setMetalEnv } from './metal';
 import { type WoodSet, benchTopGeometry, benchWood } from './wood';
 
 /** 'inline' is the desktop and phone view (the bench under the tray, a rendered cubemap behind it); 'xr' is immersive-ar (a few props on the real table, nothing else). */
@@ -206,7 +209,7 @@ export function buildScenery(mode: SceneryMode, wood: WoodSet | null = null): Sc
 }
 
 /** What the test hook reports: the mode now shown, the visible mesh names and their triangles, and what is behind the room. */
-export type SceneryState = { mode: SceneryMode; parts: string[]; tris: number; background: boolean; cube: boolean; backdrop: BackdropId | null; fog: boolean };
+export type SceneryState = { mode: SceneryMode; parts: string[]; tris: number; background: boolean; cube: boolean; environment: 'stage' | 'neutral'; backdrop: BackdropId | null; fog: boolean };
 
 export type Sceneries = {
   inline: Scenery;
@@ -221,10 +224,13 @@ export type Sceneries = {
 };
 
 /** Adds both sceneries to the scene and returns the switch between them. Starts inline. */
-export function createScenery(scene: Scene, wood: WoodSet | null = null): Sceneries {
+export function createScenery(scene: Scene, wood: WoodSet | null = null, pmrem: PMREMGenerator | null = null): Sceneries {
   const inline = buildScenery('inline', wood);
   const xr = buildScenery('xr');
   let backdrop: { id: BackdropId; texture: CubeTexture } | null = null;
+  // The metals reflect the stage: its cubemap, prefiltered once per stage (one PMREM, the old one freed). In immersive-ar, and
+  // before a backdrop has loaded, they use the scene's neutral room environment.
+  let stageEnv: WebGLRenderTarget | null = null;
   scene.add(inline.group, xr.group);
   let presenting = false;
   let last: Placement | null = null;
@@ -233,6 +239,7 @@ export function createScenery(scene: Scene, wood: WoodSet | null = null): Scener
     scene.fog = null;
     scene.background = presenting ? null : (backdrop?.texture ?? null);
     xr.group.visible = presenting && last !== null && last.stand > 0.02;
+    setMetalEnv(!presenting && stageEnv ? stageEnv.texture : null);
   };
   apply();
   return {
@@ -245,6 +252,10 @@ export function createScenery(scene: Scene, wood: WoodSet | null = null): Scener
     setBackdrop(id, texture) {
       if (backdrop && backdrop.texture !== texture) backdrop.texture.dispose();
       backdrop = { id, texture };
+      if (pmrem) {
+        stageEnv?.dispose();
+        stageEnv = pmrem.fromCubemap(texture);
+      }
       apply();
     },
     place(placement) {
@@ -265,7 +276,7 @@ export function createScenery(scene: Scene, wood: WoodSet | null = null): Scener
           tris += triangles(o.geometry);
         });
       }
-      return { mode: presenting ? 'xr' : 'inline', parts, tris, background: scene.background !== null, cube: (scene.background as CubeTexture | null)?.isCubeTexture === true, backdrop: backdrop?.id ?? null, fog: scene.fog !== null };
+      return { mode: presenting ? 'xr' : 'inline', parts, tris, background: scene.background !== null, environment: metalEnv() !== null ? 'stage' : 'neutral', cube: (scene.background as CubeTexture | null)?.isCubeTexture === true, backdrop: backdrop?.id ?? null, fog: scene.fog !== null };
     },
   };
 }

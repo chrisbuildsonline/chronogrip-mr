@@ -6,7 +6,7 @@ import {
   CylinderGeometry,
   Group,
   Mesh,
-  MeshBasicMaterial,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
   Object3D,
   SRGBColorSpace,
@@ -16,6 +16,7 @@ import {
   Vector3,
   BoxGeometry,
 } from 'three';
+import { bronze as metalBronze, brass as metalBrass, steel as metalSteel } from './metal';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { BAND, TWIST_FULL, settingOf } from './escapement';
 import { C } from './palette';
@@ -57,9 +58,10 @@ export const KNOB_TOP = 0.019;
 /** A pinch (or a mouse press) this close to the knob grabs it: the whole dial is the target, metres. */
 export const KNOB_GRAB_M = 0.04;
 
-const brass = () => new MeshStandardMaterial({ color: 0xb08d57, metalness: 1, roughness: 0.35 });
-const bronze = () => new MeshStandardMaterial({ color: 0x7d5f33, metalness: 0.85, roughness: 0.45 });
-const steel = () => new MeshStandardMaterial({ color: 0x9aa3ab, metalness: 1, roughness: 0.35 });
+// Polished, lightly brushed metals (src/metal.ts); the parts here have 0..1 UVs, so a coarse brushing repeat.
+const brass = () => metalBrass(3);
+const bronze = () => metalBronze(3);
+const steel = () => metalSteel(3);
 const flat = <T extends Object3D>(m: T, lift: number, at: readonly [number, number]) => {
   m.position.set(...trayLocal(at[0], at[1], lift));
   return m;
@@ -167,7 +169,7 @@ export function createEscapement() {
 
   // Dial: brass bezel round a cream face.
   const face = dialFace();
-  const faceMesh = new Mesh(new CircleGeometry(DIAL_R, 64), new MeshBasicMaterial({ map: face.tex, toneMapped: false }));
+  const faceMesh = new Mesh(new CircleGeometry(DIAL_R, 64), new MeshPhysicalMaterial({ map: face.tex, color: 0xb0b0b0, metalness: 0, roughness: 0.2, clearcoat: 0.3, clearcoatRoughness: 0.15, envMapIntensity: 0.3 }));
   faceMesh.rotation.x = -Math.PI / 2;
   root.add(flat(faceMesh, 0.0052, DIAL_AT));
   const bezel = new Mesh(new TorusGeometry(DIAL_R, 0.0019, 10, 72), brass());

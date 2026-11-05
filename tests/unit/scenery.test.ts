@@ -4,6 +4,7 @@ import { DEFAULT_PLACEMENT, type Placement } from '../../src/anchor';
 import { C, SCENE } from '../../src/palette';
 import { backdropDir } from '../../src/backdrop';
 import { buildScenery, createScenery } from '../../src/scenery';
+import { metalEnv, setMetalEnv } from '../../src/metal';
 import { benchTopGeometry, brassInlay, planarUv, type WoodSet } from '../../src/wood';
 import { BOARD_MARGIN, COMFORT, TRAY_HALF, TRAY_POSE, inZone, type Vec3 } from '../../src/seat';
 import { PANEL_ZONE } from '../../src/ui';
@@ -173,6 +174,49 @@ describe('scenery colours', () => {
   it('src/scenery.ts hard-codes no colour', () => {
     expect(src).not.toMatch(/#[0-9a-f]{3,8}\b/i);
     expect(src).not.toMatch(/0x[0-9a-f]{6}\b/i);
+  });
+});
+
+describe('createScenery: the stage environment for the metals', () => {
+  const fake = () => {
+    const made: { texture: Texture; disposed: boolean }[] = [];
+    const pmrem = {
+      fromCubemap: () => {
+        const rt = { texture: new Texture(), disposed: false, dispose() { this.disposed = true; } };
+        made.push(rt);
+        return rt;
+      },
+    };
+    return { made, pmrem: pmrem as never };
+  };
+
+  it('a backdrop becomes the metals\' environment (one PMREM, the old one freed); immersive-ar and no backdrop use the scene\'s', () => {
+    const { made, pmrem } = fake();
+    const sc = createScenery(new Scene(), null, pmrem);
+    expect(sc.state().environment).toBe('neutral');
+    expect(metalEnv()).toBeNull();
+    sc.setBackdrop('c2', new CubeTexture());
+    expect(made).toHaveLength(1);
+    expect(metalEnv()).toBe(made[0]!.texture);
+    expect(sc.state().environment).toBe('stage');
+    sc.setBackdrop('c3', new CubeTexture());
+    expect(made).toHaveLength(2);
+    expect(made[0]!.disposed).toBe(true);
+    expect(made[1]!.disposed).toBe(false);
+    expect(metalEnv()).toBe(made[1]!.texture);
+    sc.set(true);
+    expect(metalEnv()).toBeNull();
+    expect(sc.state().environment).toBe('neutral');
+    sc.set(false);
+    expect(metalEnv()).toBe(made[1]!.texture);
+    setMetalEnv(null);
+  });
+
+  it('without a PMREM generator nothing is built', () => {
+    const sc = createScenery(new Scene());
+    sc.setBackdrop('c1', new CubeTexture());
+    expect(metalEnv()).toBeNull();
+    expect(sc.state().environment).toBe('neutral');
   });
 });
 

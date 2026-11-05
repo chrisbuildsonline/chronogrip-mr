@@ -75,10 +75,12 @@ interface ChronoHook {
   readonly render: { readonly calls: number; readonly triangles: number };
   /**
    * Live: the scenery (src/scenery.ts). `mode`: 'inline' (bench and panorama backdrop) or 'xr' (a few props on the real table);
-   * `parts`: names of the scenery meshes drawn now; `tris`: their triangles; `background`: scene.background is set; `cube`: it is a CubeTexture; `backdrop`: which panorama (c1-c3);
+   * `parts`: names of the scenery meshes drawn now; `tris`: their triangles; `background`: scene.background is set; `cube`: it is a CubeTexture; `environment`: what lights the metals ('stage' = the backdrop's PMREM, 'neutral' = the room environment); `backdrop`: which panorama (c1-c3);
    * `fog`: scene.fog is set; `clearAlpha`: the renderer's clear alpha.
    */
-  readonly scenery: { readonly mode: 'inline' | 'xr'; readonly parts: readonly string[]; readonly tris: number; readonly background: boolean; readonly cube: boolean; readonly backdrop: 'c1' | 'c2' | 'c3' | null; readonly fog: boolean; readonly clearAlpha: number };
+  readonly scenery: { readonly mode: 'inline' | 'xr'; readonly parts: readonly string[]; readonly tris: number; readonly background: boolean; readonly cube: boolean; readonly environment: 'stage' | 'neutral'; readonly backdrop: 'c1' | 'c2' | 'c3' | null; readonly fog: boolean; readonly clearAlpha: number };
+  /** Live: the first gear's metal (metalness, roughness, brushed maps) and whether the scene has an environment map (scene.environment). */
+  readonly metals: { readonly metalness: number; readonly roughness: number; readonly roughnessMap: boolean; readonly normalMap: boolean; readonly environment: boolean; readonly intensity: number };
   /** Live: the tray's wood material (PBR maps present, anisotropy of the albedo map). */
   readonly trayWood: { readonly physical: boolean; readonly map: boolean; readonly normalMap: boolean; readonly roughnessMap: boolean; readonly anisotropy: number; readonly normalScale: number; readonly clearcoat: number };
   /** Live: true once the escapement is calibrated and the automaton runs. */

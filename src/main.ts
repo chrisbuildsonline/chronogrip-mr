@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { APP_TITLE, createWorldOptions } from './config';
 import { DEFAULT_PLACEMENT, toHeadFrame, type Head } from './anchor';
 import { startSession } from './enter';
-import { BoxGeometry, Color, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
+import { BoxGeometry, Color, PMREMGenerator, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
 import { grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle, type Hand } from './grab';
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
@@ -159,7 +159,7 @@ par = parHere(levelIndex, level);
 tuneForSoftwareGl(world.renderer);
 const built = buildScene(level, world.scene, world.renderer);
 // The bench and a rendered panorama behind the tray on desktop and phone; in immersive-ar only a few props on the real table (src/scenery.ts).
-const scenery = createScenery(world.scene, isSoftwareGl(world.renderer) ? null : woodSet('bench', isPhone(window.innerWidth, window.innerHeight), world.renderer));
+const scenery = createScenery(world.scene, isSoftwareGl(world.renderer) ? null : woodSet('bench', isPhone(window.innerWidth, window.innerHeight), world.renderer), new PMREMGenerator(world.renderer));
 /**
  * The rendered panorama behind the tray: the attic (c2) on every menu, the stage's own while a level is on. One at a time: a
  * new one replaces the old (freeing its texture) once it has loaded, and a switch made while one is loading wins.
@@ -1734,6 +1734,10 @@ window.__chrono = Object.freeze({
   get render() {
     const { calls, triangles } = world.renderer.info.render;
     return { calls, triangles };
+  },
+  get metals() {
+    const g = built.gears.values().next().value!.material as MeshStandardMaterial;
+    return { metalness: g.metalness, roughness: g.roughness, roughnessMap: !!g.roughnessMap, normalMap: !!g.normalMap, environment: g.envMap !== null, intensity: g.envMapIntensity };
   },
   get trayWood() {
     const m = built.wood;

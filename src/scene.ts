@@ -23,14 +23,13 @@ import {
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { gearGeometry } from './gear';
+import { brass, steel } from './metal';
 import { isPhone } from './fit';
 import { brassInlay, planarUv, trayWood, woodSet } from './wood';
 import type { Level } from './levels';
 import type { Placement } from './anchor';
 import { BOARD_MARGIN, PIN_RADIUS, TRAY_HALF, TRAY_POSE, layerLift, ledgeFar, partsStrip, trayLocal } from './seat';
 
-const brass = () => new MeshStandardMaterial({ color: 0xb08d57, metalness: 1, roughness: 0.35 });
-const steel = () => new MeshStandardMaterial({ color: 0x9aa3ab, metalness: 1, roughness: 0.4 });
 
 /** A soft round shadow: dark in the middle, fading to nothing at the rim. */
 function softShadow(): CanvasTexture {
