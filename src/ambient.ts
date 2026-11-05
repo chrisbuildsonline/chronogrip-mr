@@ -245,6 +245,7 @@ export function createAmbient(stage: AmbientStage, opts: AmbientOptions): Ambien
 export function poseOf(group: Group): string {
   const out: string[] = [];
   group.traverse((o) => {
+    if (o === group) return; // the group itself rides the camera; only the parts count
     out.push(`${o.position.x.toFixed(5)},${o.position.y.toFixed(5)},${o.position.z.toFixed(5)},${o.rotation.z.toFixed(5)},${o.visible ? 1 : 0}`);
     const pts = o as Points;
     if (pts.isPoints) out.push([...(pts.geometry.attributes.position!.array as Float32Array).slice(0, 6)].map((v) => v.toFixed(5)).join(','));
