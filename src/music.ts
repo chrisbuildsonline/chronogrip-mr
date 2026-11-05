@@ -1,17 +1,17 @@
 import type { ThemeId } from './stages';
 
 /**
- * The background music, a clockmaker's music box (src/sound.ts plays it with WebAudio; no audio files). This file is the
- * composing: pure functions from a seed to notes, so a phrase never repeats obviously and a test can read every note.
- * A slow pentatonic melody (A minor pentatonic, two octaves), a low pad that follows the bass, and a quiet tick on every beat.
- * That is the Easy theme ('box', also the menus'). Medium ('marimba') is D Dorian at 84 bpm with a mallet counterline under the
- * melody; Hard ('clockwork') is E Phrygian at 96 bpm over a low pulsing ostinato, with a ticking escapement pattern and a few
- * high notes (THEMES). Each stage plays its own; src/sound.ts crossfades between them.
+ * The background music (src/sound.ts plays it with WebAudio; no audio files). This file is the composing: pure functions from
+ * a seed to notes, so a test can read every note. Harmony comes first: each theme is a 4- or 8-bar chord progression (one chord a
+ * bar). The melody is a 2-bar motif and a varied answer (transposed, inverted or rhythm-shifted) over those chords: strong beats
+ * (1 and 3) land on chord tones, the notes between are passing or neighbour tones a step apart, a leap is answered by a step, and
+ * the last bar of every phrase comes home on the chord's root. Velocities swell to the peak of each phrase and relax.
+ * Themes: menu (F Lydian, slow), box = Easy (C major), marimba = Medium (D Dorian), clockwork = Hard (E minor, harmonic colour).
  */
 
-/** Beats per minute of the box theme, between 70 and 80; four beats to a bar. */
-export const BPM = 74;
 export const BEATS_PER_BAR = 4;
+/** The Easy theme's tempo (and the old single tempo some tests still read). */
+export const BPM = 74;
 export const BEAT_S = 60 / BPM;
 /** The music's master level: -24 dB, well under the effects. */
 export const MUSIC_DB = -24;
@@ -22,44 +22,125 @@ export const LOWPASS_HZ = 2400;
 export const DUCK = { to: 0.45, seconds: 3 } as const;
 /** The pause menu steps the stage music down 6 dB. */
 export const PAUSE_GAIN = 10 ** (-6 / 20);
-
-/** A minor pentatonic as MIDI notes, A3 up to E5: the melody never leaves this scale. */
-export const SCALE: readonly number[] = [57, 60, 62, 64, 67, 69, 72, 74, 76];
-/** The pad: the roots under the melody, A2, D3 and E3, and the note held above each (a fifth, or for E a minor third): all in the scale's pitch classes. */
-export const BASS: readonly number[] = [45, 50, 52];
-const ABOVE: readonly number[] = [52, 57, 55];
+/** Most voices (notes, not oscillators) sounding at once. */
+export const VOICE_CAP = 16;
+/** Humanize: each melodic note starts up to this many seconds early or late. */
+export const HUMANIZE_S = 0.008;
+/** Under this many seconds left on the level clock the pad opens up and the ticks come in. */
+export const LOW_TIME_S = 30;
+/** Layers fade in over this many bars. */
+export const LAYER_FADE_BARS = 2;
 
 export const midiToHz = (midi: number): number => 440 * 2 ** ((midi - 69) / 12);
 
 /** `at` and `beats` in beats from the start of the bar; `vel` 0..1. */
 export type Note = { at: number; midi: number; beats: number; vel: number };
-/** A tick of the escapement pattern: `at` in beats, `accent` for the louder, higher one. */
+/** A tick of the escapement texture: `at` in beats, `accent` for the louder one. */
 export type Tick = { at: number; accent: boolean };
-/** `counter`: the mallet counterline (Medium); `ostinato`: the low pulse (Hard); both empty in the box theme. `ticks`: the pattern for the bar. */
-export type Bar = { melody: Note[]; pad: Note[]; counter: Note[]; ostinato: Note[]; ticks: Tick[] };
+/** One bar: `chord` indexes the theme's progression; the layers are the voices (the arp of Hard is its `melody`). */
+export type Bar = { chord: number; melody: Note[]; counter: Note[]; bass: Note[]; pad: Note[]; ticks: Tick[] };
 
-/** A theme: its tempo and the notes it may play (MIDI), every one of them in its mode. */
-export type Theme = { id: ThemeId; bpm: number; /** Its share of the music level (1 is the stage themes'). */ level: number; mode: string; melody: readonly number[]; counter: readonly number[]; bass: readonly number[]; above: readonly number[]; pulse: readonly number[] };
+/** The adaptive layers, in the order they come in. */
+export type Layer = 'pad' | 'melody' | 'bass' | 'counter' | 'ticks';
+export const LAYERS: readonly Layer[] = ['pad', 'melody', 'bass', 'counter', 'ticks'];
+
+/** Level 1-5: pad and melody (the arp, in Hard); 6-10 add the bass; 11-15 the counter-melody; 16-20 the ticks. Under 30 s left the ticks come up at any level. */
+export function layersFor(level: number, low = false): Layer[] {
+  const out: Layer[] = ['pad', 'melody'];
+  if (level >= 6) out.push('bass');
+  if (level >= 11) out.push('counter');
+  if (level >= 16 || low) out.push('ticks');
+  return out;
+}
+
+/** A chord: its bass note, the three upper pad notes (MIDI) and every pitch class that counts as a chord tone. */
+export type Chord = { name: string; bass: number; pad: readonly number[]; tones: readonly number[] };
+
+/** The voices a theme plays its melody and counter-melody on (src/voices.ts). */
+export type VoiceName = 'celesta' | 'epiano';
+export type Theme = {
+  id: ThemeId;
+  bpm: number;
+  /** Its share of the music level (1 is the stage themes'). */
+  level: number;
+  mode: string;
+  /** The tonic's pitch class. */
+  tonic: number;
+  /** Scale pitch classes: the passing and neighbour tones come from here (chord tones are always allowed too). */
+  scale: readonly number[];
+  chords: readonly Chord[];
+  /** Melody range (MIDI, lowest and highest) and the counter-melody's. */
+  range: readonly [number, number];
+  counterRange: readonly [number, number];
+  voice: VoiceName;
+  counterVoice: VoiceName;
+  /** Rhythms a melody bar may use, as [at, beats] pairs. */
+  rhythms: readonly (readonly (readonly [number, number])[])[];
+  /** Hard: the melody layer is a flowing 16th-note arpeggio instead of a motif. */
+  arp: boolean;
+  /** The pad's low-pass cutoff in Hz, and the ticks (every beat, or every eighth). */
+  padCutoff: number;
+  tickEvery: number;
+};
+
+const c = (name: string, bass: number, pad: number[], tones: number[]): Chord => ({ name, bass, pad, tones });
+
+const SLOW: Theme['rhythms'] = [
+  [[0, 1.5], [1.5, 0.5], [2, 2]],
+  [[0, 2], [2, 1], [3, 1]],
+  [[0, 1], [1, 1], [2, 2]],
+];
+const MID: Theme['rhythms'] = [
+  [[0, 1], [1, 1], [2, 1], [3, 1]],
+  [[0, 1.5], [1.5, 0.5], [2, 2]],
+  [[0, 1], [1, 0.5], [1.5, 0.5], [2, 2]],
+  [[0, 2], [2, 1], [3, 1]],
+];
+const BUSY: Theme['rhythms'] = [
+  [[0, 0.5], [0.5, 0.5], [1, 1], [2, 1.5], [3.5, 0.5]],
+  [[0, 1], [1, 0.5], [1.5, 0.5], [2, 1], [3, 1]],
+  [[0, 1.5], [1.5, 0.5], [2, 0.5], [2.5, 0.5], [3, 1]],
+  [[0, 1], [1, 1], [2, 0.5], [2.5, 0.5], [3, 1]],
+];
 
 export const THEMES: Record<ThemeId, Theme> = {
-  // F Lydian at 60 bpm: soft sustained chords (Fmaj7, G add9, Am7, Cmaj9) and now and then a distant chime, a little under the stage themes.
-  menu: { id: 'menu', bpm: 60, level: 0.7, mode: 'F Lydian', melody: [72, 74, 76, 77, 79, 81, 84], counter: [], bass: [41, 43, 45, 36], above: [], pulse: [] },
-  box: { id: 'box', bpm: BPM, level: 1, mode: 'A minor pentatonic', melody: SCALE, counter: [], bass: BASS, above: ABOVE, pulse: [] },
-  // D Dorian: D E F G A B C. The melody D4-E5, the counterline D3-D4, the pad on D, G and A with a fifth or third above.
-  marimba: { id: 'marimba', bpm: 84, level: 1, mode: 'D Dorian', melody: [62, 64, 65, 67, 69, 71, 72, 74, 76], counter: [50, 52, 53, 55, 57, 59, 60, 62], bass: [50, 55, 57], above: [57, 62, 64], pulse: [] },
-  // E Phrygian: E F G A B C D. A few high notes, a drone on E and B, the ostinato on E and now and then F.
-  clockwork: { id: 'clockwork', bpm: 96, level: 1, mode: 'E Phrygian', melody: [76, 77, 79, 81, 83, 84, 86], counter: [], bass: [52], above: [59], pulse: [40, 41] },
+  // F Lydian, 60 bpm: Fmaj7 - G6/9 - Am7 - Cmaj9, one chord a bar. Celesta over a slow pad, no ticks.
+  menu: {
+    id: 'menu', bpm: 60, level: 0.7, mode: 'F Lydian', tonic: 5, scale: [5, 7, 9, 11, 0, 2, 4],
+    chords: [c('Fmaj7', 41, [57, 60, 64], [5, 9, 0, 4]), c('G6/9', 43, [59, 62, 64], [7, 11, 2, 4, 9]), c('Am7', 45, [55, 60, 64], [9, 0, 4, 7]), c('Cmaj9', 36, [59, 62, 64], [0, 4, 7, 11, 2])],
+    range: [69, 88], counterRange: [57, 72], voice: 'celesta', counterVoice: 'epiano', rhythms: SLOW, arp: false, padCutoff: 1100, tickEvery: 1,
+  },
+  // C major, 74 bpm: I - vi - IV - V, then I - iii - IV - I. A warm pentatonic celesta tune.
+  box: {
+    id: 'box', bpm: BPM, level: 1, mode: 'C major pentatonic', tonic: 0, scale: [0, 2, 4, 7, 9],
+    chords: [c('C', 36, [55, 60, 64], [0, 4, 7]), c('Am', 45, [57, 60, 64], [9, 0, 4]), c('F', 41, [57, 60, 65], [5, 9, 0]), c('G', 43, [55, 59, 62], [7, 11, 2]),
+      c('C', 36, [55, 60, 64], [0, 4, 7]), c('Em', 40, [55, 59, 64], [4, 7, 11]), c('F', 41, [57, 60, 65], [5, 9, 0]), c('C', 36, [55, 60, 64], [0, 4, 7])],
+    range: [67, 86], counterRange: [55, 69], voice: 'celesta', counterVoice: 'epiano', rhythms: MID, arp: false, padCutoff: 1500, tickEvery: 1,
+  },
+  // D Dorian, 84 bpm: Dm7 - G7 - Em7 - Am7, then Dm7 - G7 - Am7 - Dm7. A soft e-piano melody and a celesta counter-line.
+  marimba: {
+    id: 'marimba', bpm: 84, level: 1, mode: 'D Dorian', tonic: 2, scale: [2, 4, 5, 7, 9, 11, 0],
+    chords: [c('Dm7', 38, [53, 57, 60], [2, 5, 9, 0]), c('G7', 43, [53, 59, 62], [7, 11, 2, 5]), c('Em7', 40, [55, 59, 62], [4, 7, 11, 2]), c('Am7', 45, [55, 60, 64], [9, 0, 4, 7]),
+      c('Dm7', 38, [53, 57, 60], [2, 5, 9, 0]), c('G7', 43, [53, 59, 62], [7, 11, 2, 5]), c('Am7', 45, [55, 60, 64], [9, 0, 4, 7]), c('Dm7', 38, [53, 57, 60], [2, 5, 9, 0])],
+    range: [62, 81], counterRange: [53, 67], voice: 'epiano', counterVoice: 'celesta', rhythms: BUSY, arp: false, padCutoff: 1700, tickEvery: 1,
+  },
+  // E minor, 92 bpm: Em - Cmaj7 - Am7 - B7 (D# is the harmonic-minor colour), then Em - Cmaj7 - B7 - Em. A flowing 16th arpeggio.
+  clockwork: {
+    id: 'clockwork', bpm: 92, level: 1, mode: 'E minor (harmonic colour)', tonic: 4, scale: [4, 6, 7, 9, 11, 0, 2, 3],
+    chords: [c('Em', 40, [55, 59, 64], [4, 7, 11]), c('Cmaj7', 36, [55, 59, 64], [0, 4, 7, 11]), c('Am7', 45, [55, 60, 64], [9, 0, 4, 7]), c('B7', 47, [57, 63, 66], [11, 3, 6, 9]),
+      c('Em', 40, [55, 59, 64], [4, 7, 11]), c('Cmaj7', 36, [55, 59, 64], [0, 4, 7, 11]), c('B7', 47, [57, 63, 66], [11, 3, 6, 9]), c('Em', 40, [55, 59, 64], [4, 7, 11])],
+    range: [48, 83], counterRange: [64, 79], voice: 'epiano', counterVoice: 'celesta', rhythms: MID, arp: true, padCutoff: 1300, tickEvery: 0.5,
+  },
 };
 /** Seconds per beat of a theme. */
 export const beatOf = (id: ThemeId): number => 60 / THEMES[id].bpm;
-/** Every pitch class a theme may play: the test of "only notes of its scale". */
+/** Seconds in one bar of a theme. */
+export const barOf = (id: ThemeId): number => BEATS_PER_BAR * beatOf(id);
+/** Every pitch class a theme may play: its scale and the tones of its chords. */
 export const pitchClassesOf = (id: ThemeId): Set<number> => {
   const t = THEMES[id];
-  return new Set([...t.melody, ...t.counter, ...t.bass, ...t.above, ...t.pulse, ...(id === 'menu' ? CHORDS.flat() : [])].map((m) => m % 12));
+  return new Set([...t.scale, ...t.chords.flatMap((x) => [...x.tones, x.bass % 12, ...x.pad.map((m) => m % 12)])]);
 };
-
-const BEAT_TICKS: Tick[] = [0, 1, 2, 3].map((at) => ({ at, accent: at % 2 === 0 }));
-const ESCAPEMENT_TICKS: Tick[] = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5].map((at, i) => ({ at, accent: i % 2 === 0 }));
 
 /** A small seeded random stream (mulberry32), so the same seed plays the same music. */
 function stream(seed: number): () => number {
@@ -73,153 +154,197 @@ function stream(seed: number): () => number {
   };
 }
 
+/** A phrase's loudness: a rise to the peak at 60% of the phrase, then a relax. `pos` 0..1. */
+export const arc = (pos: number): number => (pos < 0.6 ? 0.6 + 0.4 * (pos / 0.6) : 1 - 0.35 * ((pos - 0.6) / 0.4));
+
+const pickFrom = <T>(r: () => number, xs: readonly T[]): T => xs[Math.floor(r() * xs.length)]!;
+/** The MIDI notes in [lo, hi] whose pitch class is in `pcs`, ascending. */
+const pitchesIn = (pcs: readonly number[], lo: number, hi: number): number[] => {
+  const out: number[] = [];
+  for (let m = lo; m <= hi; m++) if (pcs.includes(m % 12)) out.push(m);
+  return out;
+};
+const nearest = (xs: readonly number[], to: number): number => xs.reduce((a, b) => (Math.abs(b - to) < Math.abs(a - to) ? b : a));
+
+/** One step along the scale from `from` in direction `dir`, staying inside the range. */
+function stepFrom(from: number, dir: number, scale: readonly number[], range: readonly [number, number]): number {
+  let m = from;
+  for (let i = 0; i < 3; i++) {
+    m += dir;
+    if (m < range[0] || m > range[1]) return from;
+    if (scale.includes(m % 12)) return m;
+  }
+  return from;
+}
+
+/** A motif note: its place in the 2 bars (beats), length, and a contour step (scale steps, signed). */
+type MotifNote = { at: number; beats: number; step: number };
+
+function makeMotif(r: () => number, t: Theme): MotifNote[] {
+  const out: MotifNote[] = [];
+  let last = pickFrom(r, [1, -1]);
+  for (const bar of [0, 1]) {
+    for (const [at, beats] of pickFrom(r, t.rhythms)) {
+      // mostly steps, now and then a skip; the contour tends to come back the way it went
+      let step = r() < 0.7 ? pickFrom(r, [-1, 1]) : pickFrom(r, [-2, 2, 0]);
+      if (r() < 0.5) step = -Math.sign(last) * Math.abs(step || 1);
+      last = step || last;
+      out.push({ at: bar * BEATS_PER_BAR + at, beats, step });
+    }
+  }
+  return out;
+}
+
+/** The answer to a motif: inverted, shifted a little in time (one eighth later, the first note holding on), or transposed (same contour, a third up). */
+function answerTo(r: () => number, motif: MotifNote[]): { notes: MotifNote[]; lift: number } {
+  const kind = pickFrom(r, ['invert', 'shift', 'transpose'] as const);
+  if (kind === 'invert') return { notes: motif.map((n) => ({ ...n, step: -n.step })), lift: 0 };
+  if (kind === 'shift') {
+    // rhythm-shifted: every note after the first moves an eighth later (those that would cross the 2 bars end there)
+    return { notes: motif.map((n, i) => (i === 0 || n.at + 0.5 >= 2 * BEATS_PER_BAR ? n : { ...n, at: n.at + 0.5, beats: n.beats })), lift: 0 };
+  }
+  return { notes: motif, lift: 3 };
+}
+
+/** Builds one phrase of melody: [bar][notes]. */
+function phraseMelody(r: () => number, t: Theme, start: number): { notes: Note[][]; end: number } {
+  const L = t.chords.length;
+  const bars: Note[][] = Array.from({ length: L }, () => []);
+  let prev = start;
+  let leap = 0; // the direction of the last leap, to answer it with a step the other way
+  const motif = makeMotif(r, t);
+  for (let sub = 0; sub < L / 2; sub++) {
+    const isAnswer = sub % 2 === 1;
+    const lastSub = sub === L / 2 - 1;
+    let notes = motif;
+    let lift = 0;
+    if (isAnswer) ({ notes, lift } = answerTo(r, motif));
+    else if (sub > 0) lift = 2; // the motif returns a step higher
+    for (const n of notes) {
+      const bar = sub * 2 + Math.floor(n.at / BEATS_PER_BAR);
+      const at = n.at % BEATS_PER_BAR;
+      if (lastSub && bar === L - 1) continue; // the cadence bar is written below
+      const chord = t.chords[bar]!;
+      const strong = at % 2 === 0;
+      const dir = leap ? -leap : Math.sign(n.step) || 1;
+      let midi: number;
+      if (strong) {
+        const tones = pitchesIn(chord.tones, t.range[0], t.range[1]);
+        const target = Math.max(t.range[0], Math.min(t.range[1], prev + (leap ? dir * 2 : n.step * 2 + lift)));
+        const ahead = leap ? tones.filter((m) => Math.sign(m - prev) === dir) : tones;
+        midi = nearest(ahead.length ? ahead : tones, target);
+      } else {
+        midi = stepFrom(prev, dir, [...t.scale, ...chord.tones], t.range);
+      }
+      const jump = midi - prev;
+      leap = Math.abs(jump) > 4 ? Math.sign(jump) : 0;
+      prev = midi;
+      const pos = (bar + at / BEATS_PER_BAR) / L;
+      bars[bar]!.push({ at, midi, beats: n.beats, vel: Math.min(0.9, 0.55 * arc(pos) + (strong ? 0.12 : 0.04) + r() * 0.08) });
+    }
+  }
+  // The cadence: a step down towards the root, a passing note, and the chord's root held through the last two beats.
+  const last = t.chords[L - 1]!;
+  const roots = pitchesIn([last.bass % 12], t.range[0], t.range[1]);
+  const tones = pitchesIn(last.tones, t.range[0], t.range[1]);
+  const root = nearest(roots, prev);
+  const lead = nearest(tones.filter((m) => m !== root), (prev + root) / 2);
+  const pass = stepFrom(lead, Math.sign(root - lead) || 1, [...t.scale, ...last.tones], t.range);
+  const pos = (L - 1) / L;
+  bars[L - 1]!.push({ at: 0, midi: lead, beats: 1, vel: 0.5 * arc(pos) + 0.1 });
+  if (pass !== lead && pass !== root && Math.abs(pass - root) <= 2) bars[L - 1]!.push({ at: 1, midi: pass, beats: 1, vel: 0.4 * arc(pos) + 0.06 });
+  bars[L - 1]!.push({ at: 2, midi: root, beats: 4, vel: 0.5 * arc(1) + 0.15 });
+  return { notes: bars, end: root };
+}
+
+/** The flowing arpeggio patterns (indices into the chord's tones, two octaves up from the root). All move by a step of the chord or a third. */
+const ARP: readonly ((k: number, top: number) => number)[] = [
+  (k, top) => bounce(k, top), // up and down
+  (k, top) => top - bounce(k, top), // down and up
+  (k) => [0, 2, 1, 2][k % 4]!, // alberti
+  (k) => [0, 1, 2, 1][k % 4]!, // a rocking third
+];
+/** 0, 1, 2 .. top, top-1 .. 1, 0, 1 ..: a triangle wave. */
+function bounce(k: number, top: number): number {
+  const period = 2 * top;
+  const m = k % period;
+  return m <= top ? m : period - m;
+}
+
+/** The chord's tones as MIDI, ascending for two octaves from its root. */
+function arpTones(chord: Chord): number[] {
+  const base = chord.bass + 12;
+  const offs = chord.tones.map((pc) => (pc - chord.bass + 1200) % 12).sort((a, b) => a - b);
+  return [...offs.map((o) => base + o), ...offs.map((o) => base + 12 + o)];
+}
+
 /**
- * The composer: call `next()` for each bar in turn. The melody is a walk along the scale (steps, sometimes a leap), in
- * eighth and quarter notes with rests, resting on the tonic at the end of every fourth bar; the pad holds one bass note
- * and its fifth for the bar, the bass moving by the seeded stream.
+ * The composer: call `next()` for each bar in turn; the progression and the phrase loop on their own. The same seed always gives
+ * the same music.
  */
 export function composer(seed: number, theme: ThemeId = 'box'): { next(): Bar } {
-  if (theme === 'menu') return menuComposer(seed);
-  if (theme === 'marimba') return marimbaComposer(seed);
-  if (theme === 'clockwork') return clockworkComposer(seed);
+  const t = THEMES[theme];
   const r = stream(seed);
-  let degree = 5; // A4
-  let bass = 0;
+  const L = t.chords.length;
   let bar = 0;
+  let phrase: Note[][] = [];
+  let carry = Math.round((t.range[0] + t.range[1]) / 2);
+  let counterAt = Math.round((t.counterRange[0] + t.counterRange[1]) / 2);
+  let pattern = -1;
   return {
     next(): Bar {
-      const melody: Note[] = [];
-      let at = 0;
-      const phraseEnd = bar % 4 === 3;
-      while (at < BEATS_PER_BAR) {
-        const beats = r() < 0.55 ? 1 : 0.5;
-        const left = BEATS_PER_BAR - at;
-        const len = Math.min(beats, left);
-        if (r() < 0.22 && !(phraseEnd && left <= 2)) {
-          at += len; // a rest
-          continue;
-        }
-        const step = r() < 0.8 ? (r() < 0.5 ? -1 : 1) : r() < 0.5 ? -2 : 2;
-        degree = Math.min(SCALE.length - 1, Math.max(0, degree + step));
-        const last = phraseEnd && at + len >= BEATS_PER_BAR - 1e-9;
-        if (last) degree = 5; // home on A4
-        melody.push({ at, midi: SCALE[degree]!, beats: last ? 2 : len * 1.6, vel: (last ? 0.7 : 0.45) + r() * 0.3 });
-        at += len;
+      const i = bar % L;
+      const chord = t.chords[i]!;
+      const pos = i / L;
+      if (i === 0) {
+        const p = phraseMelody(r, t, carry);
+        phrase = p.notes;
+        carry = p.end;
       }
-      if (r() < 0.4) bass = Math.floor(r() * BASS.length);
-      if (phraseEnd) bass = 0;
-      const root = BASS[bass]!;
-      const pad: Note[] = [
-        { at: 0, midi: root, beats: BEATS_PER_BAR, vel: 0.6 },
-        { at: 0, midi: ABOVE[bass]!, beats: BEATS_PER_BAR, vel: 0.35 },
-      ];
-      bar++;
-      return { melody, pad, counter: [], ostinato: [], ticks: BEAT_TICKS };
-    },
-  };
-}
-
-/** The menu's chords, four voices each: Fmaj7, G add9, Am7 and Cmaj9, all of F Lydian. */
-export const CHORDS: readonly (readonly number[])[] = [[41, 53, 57, 60, 64], [43, 55, 59, 62, 64], [45, 57, 60, 64, 67], [36, 52, 55, 59, 62]];
-
-/**
- * The menus: F Lydian at 60 bpm. One soft chord is held for a bar (it comes home to Fmaj7 every fourth bar), no ticks, and in
- * about two bars of five a single distant chime rings over it, high and far apart.
- */
-function menuComposer(seed: number): { next(): Bar } {
-  const r = stream(seed);
-  const T = THEMES.menu;
-  let chord = 0;
-  let bar = 0;
-  return {
-    next(): Bar {
-      if (r() < 0.55) chord = Math.floor(r() * CHORDS.length);
-      if (bar % 4 === 3) chord = 0;
-      const pad: Note[] = CHORDS[chord]!.map((midi, i) => ({ at: 0, midi, beats: BEATS_PER_BAR, vel: i === 0 ? 0.5 : 0.3 }));
-      const melody: Note[] = [];
-      if (r() < 0.4) melody.push({ at: Math.floor(r() * 3) + (r() < 0.5 ? 0 : 0.5), midi: T.melody[Math.floor(r() * T.melody.length)]!, beats: 3, vel: 0.3 + r() * 0.2 });
-      bar++;
-      return { melody, pad, counter: [], ostinato: [], ticks: [] };
-    },
-  };
-}
-
-/**
- * Medium: D Dorian at 84 bpm. The melody walks the mode in eighths and quarters with fewer rests than the box, home on D5 every
- * fourth bar; under it a soft mallet counterline in the octave below plays on the off-beats, a step at a time.
- */
-function marimbaComposer(seed: number): { next(): Bar } {
-  const r = stream(seed);
-  const T = THEMES.marimba;
-  let degree = 4;
-  let low = 3;
-  let bass = 0;
-  let bar = 0;
-  return {
-    next(): Bar {
-      const melody: Note[] = [];
+      let melody: Note[] = phrase[i]!;
+      if (t.arp) {
+        const tones = arpTones(chord);
+        const top = tones.length - 1;
+        let p = Math.floor(r() * ARP.length);
+        if (p === pattern) p = (p + 1) % ARP.length;
+        pattern = p;
+        const cadence = i === L - 1;
+        const count = cadence ? 8 : 16;
+        melody = [];
+        for (let k = 0; k < count; k++) {
+          const accent = k % 4 === 0 ? 0.12 : k % 2 === 0 ? 0.04 : 0;
+          melody.push({ at: k * 0.25, midi: tones[Math.min(top, ARP[p]!(k, top))]!, beats: 0.5, vel: Math.min(0.9, 0.4 * arc(pos) + accent + 0.1 + r() * 0.05) });
+        }
+        // the cadence bar: the arpeggio settles and the root rings through the last two beats
+        if (cadence) melody.push({ at: 2, midi: chord.bass + 12, beats: 4, vel: 0.5 });
+      }
       const counter: Note[] = [];
-      const phraseEnd = bar % 4 === 3;
-      let at = 0;
-      while (at < BEATS_PER_BAR) {
-        const len = Math.min(r() < 0.5 ? 1 : 0.5, BEATS_PER_BAR - at);
-        if (r() < 0.12 && !(phraseEnd && BEATS_PER_BAR - at <= 2)) {
-          at += len;
-          continue;
-        }
-        degree = Math.min(T.melody.length - 1, Math.max(0, degree + (r() < 0.75 ? (r() < 0.5 ? -1 : 1) : r() < 0.5 ? -3 : 3)));
-        const last = phraseEnd && at + len >= BEATS_PER_BAR - 1e-9;
-        if (last) degree = 7; // home on D5
-        melody.push({ at, midi: T.melody[degree]!, beats: last ? 2 : len * 1.3, vel: (last ? 0.7 : 0.45) + r() * 0.3 });
-        at += len;
+      const ctones = pitchesIn(chord.tones, t.counterRange[0], t.counterRange[1]);
+      for (const at of [0, 2]) {
+        const others = ctones.filter((m) => m !== counterAt && Math.abs(m - counterAt) <= 5);
+        counterAt = others.length ? pickFrom(r, others) : nearest(ctones, counterAt);
+        counter.push({ at, midi: counterAt, beats: 2, vel: 0.3 * arc(pos) + 0.1 });
       }
-      for (const off of [0.5, 1.5, 2.5, 3.5]) {
-        if (r() < 0.25) continue;
-        low = Math.min(T.counter.length - 1, Math.max(0, low + (r() < 0.5 ? -1 : 1)));
-        counter.push({ at: off, midi: T.counter[low]!, beats: 0.5, vel: 0.3 + r() * 0.2 });
-      }
-      if (r() < 0.4) bass = Math.floor(r() * T.bass.length);
-      if (phraseEnd) bass = 0;
-      const pad: Note[] = [
-        { at: 0, midi: T.bass[bass]!, beats: BEATS_PER_BAR, vel: 0.55 },
-        { at: 0, midi: T.above[bass]!, beats: BEATS_PER_BAR, vel: 0.3 },
-      ];
+      const bass: Note[] = [{ at: 0, midi: chord.bass, beats: 2, vel: 0.55 }];
+      if (t.id !== 'menu') bass.push({ at: 2, midi: i === L - 1 ? chord.bass : chord.bass + (r() < 0.5 ? 7 : 0), beats: 2, vel: 0.42 });
+      const pad = chord.pad.map((midi, k) => ({ at: 0, midi, beats: BEATS_PER_BAR, vel: k === 0 ? 0.5 : 0.4 }));
+      const ticks: Tick[] = [];
+      for (let at = 0; at < BEATS_PER_BAR; at += t.tickEvery) ticks.push({ at, accent: at % 2 === 0 });
       bar++;
-      return { melody, pad, counter, ostinato: [], ticks: BEAT_TICKS };
+      return { chord: i, melody, counter, bass, pad, ticks };
     },
   };
 }
 
-/**
- * Hard: E Phrygian at 96 bpm. A low ostinato pulses on E in eighths (an F on the fourth bar leans on the flat second), a drone on
- * E and B holds the bar, a few high notes ring over the top, and the ticks run in eighths like an escapement.
- */
-function clockworkComposer(seed: number): { next(): Bar } {
-  const r = stream(seed);
-  const T = THEMES.clockwork;
-  const accents = [1, 0.5, 0.7, 0.5, 0.9, 0.5, 0.7, 0.6];
-  let degree = 0;
-  let bar = 0;
-  return {
-    next(): Bar {
-      const melody: Note[] = [];
-      const ostinato: Note[] = [];
-      const root = T.pulse[bar % 4 === 3 ? 1 : 0]!;
-      accents.forEach((a, i) => ostinato.push({ at: i * 0.5, midi: root, beats: 0.5, vel: 0.35 + 0.35 * a }));
-      for (const at of [0, 2]) {
-        if (r() < 0.45) continue;
-        degree = Math.min(T.melody.length - 1, Math.max(0, degree + (r() < 0.5 ? -1 : 1) * (r() < 0.7 ? 1 : 2)));
-        melody.push({ at: at + (r() < 0.3 ? 1 : 0), midi: T.melody[degree]!, beats: 2, vel: 0.35 + r() * 0.25 });
-      }
-      if (!melody.length) melody.push({ at: 0, midi: T.melody[degree]!, beats: 2, vel: 0.35 });
-      const pad: Note[] = [
-        { at: 0, midi: T.bass[0]!, beats: BEATS_PER_BAR, vel: 0.5 },
-        { at: 0, midi: T.above[0]!, beats: BEATS_PER_BAR, vel: 0.3 },
-      ];
-      bar++;
-      return { melody, pad, counter: [], ostinato, ticks: ESCAPEMENT_TICKS };
-    },
+/** A stereo impulse response of decaying noise (a room or hall tail), built once: `rand` gives numbers in 0..1. */
+export function impulseResponse(sampleRate: number, seconds = 2.5, rand: () => number = Math.random): [Float32Array, Float32Array] {
+  const n = Math.max(1, Math.floor(sampleRate * seconds));
+  const make = () => {
+    const d = new Float32Array(n);
+    for (let i = 0; i < n; i++) d[i] = (rand() * 2 - 1) * (1 - i / n) ** 3;
+    return d;
   };
+  return [make(), make()];
 }
 
 const KEY = 'chronogrip.music.v1';

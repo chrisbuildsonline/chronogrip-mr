@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSound } from '../../src/sound';
-import { BEAT_S, MUSIC_GAIN, SCALE, BASS, FADE_S, PAUSE_GAIN, THEMES, beatOf, pitchClassesOf } from '../../src/music';
+import { MUSIC_GAIN, FADE_S, PAUSE_GAIN, THEMES, VOICE_CAP, barOf, beatOf } from '../../src/music';
 
 /** A stand-in for WebAudio: records every node made and lets the test move the clock. */
 class FakeParam {
@@ -17,12 +17,16 @@ class FakeNode {
   frequency = new FakeParam();
   detune = new FakeParam();
   Q = new FakeParam();
+  delayTime = new FakeParam();
+  buffer: unknown = null;
+  onended: unknown = null;
   type = '';
   connect(n: unknown) { return n; }
   start() {}
   stop() {}
 }
-const made = { osc: [] as FakeNode[], gains: [] as FakeNode[], filters: [] as FakeNode[] };
+const made = { osc: [] as FakeNode[], gains: [] as FakeNode[], filters: [] as FakeNode[], convolvers: [] as FakeNode[], delays: [] as FakeNode[], sources: [] as FakeNode[] };
+const irs: Float32Array[] = [];
 let now = 0;
 let state = 'suspended';
 let created = 0;
@@ -39,13 +43,15 @@ class FakeContext {
   createOscillator() { const o = new FakeNode(); made.osc.push(o); return o; }
   createBiquadFilter() { const f = new FakeNode(); made.filters.push(f); return f; }
   createPanner() { return Object.assign(new FakeNode(), { positionX: new FakeParam(), positionY: new FakeParam(), positionZ: new FakeParam() }); }
-  createBuffer(_c: number, n: number) { return { getChannelData: () => new Float32Array(n) }; }
-  createBufferSource() { return new FakeNode(); }
+  createBuffer(_c: number, n: number) { const chans = [new Float32Array(n), new Float32Array(n)]; irs.push(...chans); return { duration: n / this.sampleRate, getChannelData: (i = 0) => chans[i]! }; }
+  createBufferSource() { const n = new FakeNode(); made.sources.push(n); return n; }
+  createConvolver() { const n = new FakeNode(); made.convolvers.push(n); return n; }
+  createDelay() { const n = new FakeNode(); made.delays.push(n); return n; }
 }
 
 beforeEach(() => {
   vi.useFakeTimers();
-  made.osc = []; made.gains = []; made.filters = [];
+  made.osc = []; made.gains = []; made.filters = []; made.convolvers = []; made.delays = []; made.sources = []; irs.length = 0;
   now = 0; state = 'suspended'; created = 0;
   vi.stubGlobal('AudioContext', FakeContext);
 });
@@ -61,6 +67,8 @@ const run = (secs: number) => {
   }
 };
 const hz = (o: FakeNode) => o.frequency.value;
+/** Gains that carry sound (not the FM modulators' and the pad LFO's depths, which are in hertz and so start above 1). */
+const amplitudeGains = () => made.gains.filter((g) => !g.gain.calls.some(([k, v]) => k === 'set' && v > 1) && !(g.gain.calls.length === 0 && g.gain.value > 1));
 
 describe('the music bed', () => {
   it('makes nothing before the first gesture, then starts with the context', async () => {
@@ -75,40 +83,30 @@ describe('the music bed', () => {
     expect(s.counts.notes).toBeGreaterThan(3);
   });
 
-  it('plays only scale notes (melody) and bass notes (pad), under the -24 dB master, fading in from silence over 2 s', async () => {
+  it('sits under the -24 dB master, fading in from silence over 2 s, through a soft low-pass, no envelope above 0.7', async () => {
     const s = createSound();
     s.unlock();
     await Promise.resolve();
     run(20);
-    const scale = new Set([...SCALE, ...BASS].map((m) => m % 12));
-    const ticks = new Set([1700, 1900]);
-    for (const o of made.osc) {
-      if (ticks.has(hz(o))) continue;
-      const midi = Math.round(69 + 12 * Math.log2(hz(o) / 440));
-      expect(scale.has(midi % 12), `${hz(o)} Hz`).toBe(true);
-    }
-    // The master gain: starts at 0 and ramps to -24 dB over the fade.
     const master = made.gains.find((g) => g.gain.calls.some(([k, v]) => k === 'ramp' && Math.abs(v - MUSIC_GAIN) < 1e-9))!;
     expect(master).toBeDefined();
     const ramp = master.gain.calls.find(([k]) => k === 'ramp')!;
     expect(ramp[1]).toBeCloseTo(MUSIC_GAIN, 9);
     expect(ramp[2]).toBeCloseTo(2, 6);
-    // No note is louder than a pluck: every envelope peak is well under 1.
-    for (const g of made.gains) for (const [k, v] of g.gain.calls) if (k === 'exp') expect(v).toBeLessThan(0.7);
+    for (const g of amplitudeGains()) for (const [k, v] of g.gain.calls) if (k === 'exp') expect(v).toBeLessThan(0.7);
     expect(MUSIC_GAIN).toBeLessThan(0.07);
-    // A soft low-pass sits in the chain.
     expect(made.filters.some((f) => f.type === 'lowpass' && f.frequency.value >= 1000 && f.frequency.value <= 5000)).toBe(true);
   });
 
-  it('keeps the bed about 1.5 s ahead: a bar every four beats, a tick on each beat', async () => {
+  it('keeps the bed about 1.5 s ahead: a bar of notes every bar of the theme', async () => {
     const s = createSound();
     s.unlock();
     await Promise.resolve();
-    run(10);
-    const bars = Math.floor(10 / (4 * BEAT_S));
-    const ticks = made.osc.filter((o) => hz(o) === 1700 || hz(o) === 1900).length;
-    expect(ticks).toBeGreaterThanOrEqual(4 * bars);
-    expect(ticks).toBeLessThanOrEqual(4 * (bars + 3));
+    run(12);
+    const bars = Math.floor(12 / barOf('box'));
+    // pad (3 notes) + melody (2 to 5) a bar at level 1
+    expect(s.counts.notes).toBeGreaterThanOrEqual(5 * bars);
+    expect(s.counts.notes).toBeLessThanOrEqual(10 * (bars + 3));
   });
 
   it('creates no music while Music is off, resumes (with a fresh fade) when turned on, and Sound off silences it too', async () => {
@@ -179,10 +177,7 @@ describe('the escapement tick after a solve', () => {
 });
 
 describe('the themes', () => {
-  const pc = (o: FakeNode) => Math.round(69 + 12 * Math.log2(hz(o) / 440)) % 12;
-  const isTick = (o: FakeNode) => hz(o) === 1700 || hz(o) === 1900;
-
-  it('a theme set before the first gesture is the one that plays', async () => {
+  it('a theme set before the first gesture is the one that plays, with its own tempo, and each entry restarts its progression', async () => {
     const s = createSound();
     expect(s.theme).toBe('box');
     s.setTheme('clockwork');
@@ -190,12 +185,8 @@ describe('the themes', () => {
     s.unlock();
     await Promise.resolve();
     run(8);
-    const scale = pitchClassesOf('clockwork');
-    for (const o of made.osc.filter((x) => !isTick(x))) expect(scale.has(pc(o)), `${hz(o)} Hz`).toBe(true);
-    // A tick in eighths: a bar of the Hard theme holds eight.
-    const ticks = made.osc.filter(isTick).length;
-    const bars = Math.floor(8 / (4 * beatOf('clockwork')));
-    expect(ticks).toBeGreaterThanOrEqual(8 * bars);
+    expect(s.counts.notes).toBeGreaterThan(20); // a 16th arpeggio is busy
+    expect(made.delays.some((d) => Math.abs(d.delayTime.value - 0.75 * beatOf('clockwork')) < 1e-9), 'a dotted-eighth delay at Hard\'s tempo').toBe(true);
   });
 
   it('crossfades over 2 s: the old theme\'s gain ramps down to 0 and the new one\'s up to 1, then only the new theme is composed', async () => {
@@ -215,9 +206,6 @@ describe('the themes', () => {
     expect(up).toHaveLength(1);
     expect(up[0]!.gain.calls.find(([k]) => k === 'set')![1]).toBe(0);
     run(8);
-    const scale = pitchClassesOf('marimba');
-    const fresh = made.osc.slice(made.osc.length - 40).filter((o) => !isTick(o));
-    for (const o of fresh) expect(scale.has(pc(o)), `${hz(o)} Hz`).toBe(true);
     // The same theme again changes nothing; going back crossfades again.
     const n = made.gains.length;
     s.setTheme('marimba');
@@ -252,18 +240,17 @@ describe('the themes', () => {
     expect(MUSIC_GAIN).toBeLessThan(0.07);
   });
 
-  it('the menu theme fades in at a lower level than a stage theme, and its notes are F Lydian', async () => {
+  it('the menu theme fades in at a lower level than a stage theme and has only pad and melody layers', async () => {
     const s = createSound();
     s.setTheme('menu');
+    s.setIntensity(20, true); // the menus ignore the level and the clock
     s.unlock();
     await Promise.resolve();
     run(10);
     expect(made.gains.some((g) => g.gain.value === THEMES.menu.level), 'its gain sits at the menu level, under 1').toBe(true);
     expect(THEMES.menu.level).toBeLessThan(1);
-    const scale = pitchClassesOf('menu');
-    for (const o of made.osc) expect(scale.has(pc(o)), `${hz(o)} Hz`).toBe(true);
-    expect(made.osc.filter(isTick), 'no ticks in the menus').toHaveLength(0);
-    // Crossfading into a stage theme ramps the menu down to 0 and the stage up to its level (1), both over 2 s.
+    expect(s.layers.layers).toEqual(['pad', 'melody']);
+    expect(made.sources.length, 'no ticks in the menus').toBe(0);
     const t0 = now;
     s.setTheme('clockwork');
     run(0.5);
@@ -291,3 +278,100 @@ describe('the themes', () => {
     expect(s.ducked).toBe(false);
   });
 });
+
+describe('the flow: reverb, delay, layers, voices', () => {
+  it('builds one reverb convolver with a 2.5 s stereo impulse, once, and a delay only for the themes that play', async () => {
+    const s = createSound();
+    s.unlock();
+    await Promise.resolve();
+    run(10);
+    expect(made.convolvers).toHaveLength(1);
+    const ir = irs.filter((x) => x.length === Math.floor(8000 * 2.5));
+    expect(ir.length, 'a stereo impulse of 2.5 s').toBe(2);
+    expect(ir[0]!.some((x) => x !== 0)).toBe(true);
+    s.setTheme('marimba');
+    run(8);
+    expect(made.convolvers, 'still one').toHaveLength(1);
+    expect(made.delays.length).toBe(2);
+    for (const d of made.delays) expect(d.delayTime.value).toBeCloseTo(0.75 * (made.delays.indexOf(d) === 0 ? beatOf('box') : beatOf('marimba')), 9);
+  });
+
+  it('the layers follow the level: pad + melody, then bass, counter-melody, ticks; they fade in over two bars; fewer when the level falls', async () => {
+    const s = createSound();
+    s.setIntensity(3, false);
+    s.unlock();
+    await Promise.resolve();
+    run(8);
+    expect(s.layers.layers).toEqual(['pad', 'melody']);
+    expect(made.sources.length).toBe(0);
+    const t0 = now;
+    s.setIntensity(8, false);
+    expect(s.layers.layers).toEqual(['pad', 'melody', 'bass']);
+    const fade = made.gains.flatMap((g) => g.gain.calls.filter(([k, v, t]) => k === 'ramp' && v === 1 && Math.abs((t ?? 0) - (t0 + 2 * barOf('box'))) < 1e-6));
+    expect(fade.length, 'the new layer ramps in over two bars').toBeGreaterThan(0);
+    s.setIntensity(12, false);
+    expect(s.layers.layers).toEqual(['pad', 'melody', 'bass', 'counter']);
+    run(6);
+    expect(made.sources.length).toBe(0);
+    s.setIntensity(17, false);
+    run(6);
+    expect(s.layers.layers).toEqual(['pad', 'melody', 'bass', 'counter', 'ticks']);
+    expect(made.sources.length, 'noise ticks play from level 16').toBeGreaterThan(0);
+    s.setIntensity(2, false);
+    expect(s.layers.layers).toEqual(['pad', 'melody']);
+    expect(s.layers.level).toBe(2);
+  });
+
+  it('under 30 s left the ticks come up and the pad filter opens; solving or restarting puts it back', async () => {
+    const s = createSound();
+    s.setIntensity(2, false);
+    s.unlock();
+    await Promise.resolve();
+    run(6);
+    const pad = made.filters.find((f) => f.type === 'lowpass' && f.frequency.value === THEMES.box.padCutoff)!;
+    expect(pad).toBeDefined();
+    const before = made.sources.length;
+    s.setIntensity(2, true);
+    run(6);
+    expect(s.layers.low).toBe(true);
+    expect(s.layers.layers).toContain('ticks');
+    expect(made.sources.length).toBeGreaterThan(before);
+    const open = pad.frequency.calls.filter(([k]) => k === 'target').at(-1)!;
+    expect(open[1]).toBeGreaterThan(THEMES.box.padCutoff);
+    s.setIntensity(2, false);
+    expect(s.layers.layers).toEqual(['pad', 'melody']);
+    expect(pad.frequency.calls.filter(([k]) => k === 'target').at(-1)![1]).toBe(THEMES.box.padCutoff);
+  });
+
+  it.each(['menu', 'box', 'marimba', 'clockwork'] as const)('%s: never more than the voice cap sounding, and every gain stays at or under 1', async (id) => {
+    const s = createSound();
+    s.setTheme(id);
+    s.setIntensity(20, true);
+    s.unlock();
+    await Promise.resolve();
+    run(40);
+    expect(s.voicePeak).toBeGreaterThan(0);
+    expect(s.voicePeak).toBeLessThanOrEqual(VOICE_CAP);
+    for (const g of amplitudeGains()) {
+      expect(g.gain.value, `${id} gain`).toBeLessThanOrEqual(1);
+      for (const [k, v] of g.gain.calls) expect(v, `${id} ${k}`).toBeLessThanOrEqual(1);
+    }
+    for (const g of amplitudeGains()) for (const [k, v] of g.gain.calls) if (k === 'exp') expect(v).toBeLessThan(0.7);
+  });
+
+  it('every note stops itself: each oscillator has a stop time (nothing keeps running after its release)', async () => {
+    const s = createSound();
+    const stops: number[] = [];
+    const starts: number[] = [];
+    vi.spyOn(FakeNode.prototype, 'stop').mockImplementation(function (this: FakeNode, t?: unknown) { stops.push(Number(t)); });
+    vi.spyOn(FakeNode.prototype, 'start').mockImplementation(function (this: FakeNode, t?: unknown) { starts.push(Number(t)); });
+    s.setIntensity(20, false);
+    s.unlock();
+    await Promise.resolve();
+    run(20);
+    // everything but the pad LFOs (one per theme, started with no time) stops
+    expect(stops.filter((t) => Number.isFinite(t)).length).toBeGreaterThanOrEqual(starts.filter((t) => Number.isFinite(t)).length - 1);
+    vi.restoreAllMocks();
+  });
+});
+
