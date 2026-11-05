@@ -133,7 +133,6 @@ async function brightness(page: Page, regions: { x: number; y: number; w: number
 }
 
 test('every brass gear reads as brass, never near black, from three orbit angles', async ({ page }) => {
-  test.setTimeout(240_000);
   const errors = await open(page, 1440, 900);
   await choose(page, () => Promise.resolve(), 5);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
