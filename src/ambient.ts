@@ -14,7 +14,7 @@
  *   amb.dispose();                              // when the stage changes
  */
 import {
-  AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, CylinderGeometry, DoubleSide,
+  AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CircleGeometry, Color, CylinderGeometry, DoubleSide,
   Group, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PerspectiveCamera,
   PlaneGeometry, Points, PointsMaterial, Shape, ShapeGeometry, SphereGeometry, SRGBColorSpace, Texture, Vector3,
 } from 'three';
@@ -76,9 +76,10 @@ export function createAmbient(stage: AmbientStage, opts: AmbientOptions): Ambien
   const updates: ((b: number, s: number, frac: number) => void)[] = [];
   let bgMul = 1, lightMul = 1;
 
-  // The parts bring their own warm glow and stronger reflections, so they read in a dark room whatever lights the game has.
+  // The game's key and rim lights are aimed at the tray and hit the wall parts face on, so their base colour is turned down (x0.35)
+  // and a little glow of their own keeps them readable in shadow.
   const metal = (color: number, roughness: number, glow: number) =>
-    keep(new MeshStandardMaterial({ color, metalness: 1, roughness, envMapIntensity: 2.2, emissive: glow, emissiveIntensity: 1 }));
+    keep(new MeshStandardMaterial({ color: new Color(color).multiplyScalar(0.35), metalness: 0.7, roughness: roughness + 0.25, envMapIntensity: 1.2, emissive: glow, emissiveIntensity: 0.8 }));
   const brass = metal(0xc8963e, 0.32, 0x3a2408);
   const darkBrass = metal(0xa87a34, 0.38, 0x2a1a06);
   const steel = metal(0xb9bcc2, 0.25, 0x1c1c1e);
