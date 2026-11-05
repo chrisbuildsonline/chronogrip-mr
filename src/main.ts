@@ -1736,11 +1736,6 @@ window.__chrono = Object.freeze({
     const { calls, triangles } = world.renderer.info.render;
     return { calls, triangles };
   },
-  get metals() {
-    const g = built.gears.values().next().value!.material as MeshStandardMaterial;
-    return { metalness: g.metalness, roughness: g.roughness, roughnessMap: !!g.roughnessMap, normalMap: !!g.normalMap, environment: g.envMap !== null, intensity: g.envMapIntensity };
-  },
-  get trayWood() {
   /** Every gear's centre and its width on screen in CSS pixels, for the test that samples how bright the brass renders. */
   get gearScreens() {
     return [...built.gears].map(([id, m]) => {
@@ -1757,6 +1752,11 @@ window.__chrono = Object.freeze({
   },
   get scenery() {
     return { ...scenery.state(), clearAlpha: world.renderer.getClearAlpha() };
+  get metals() {
+    const g = built.gears.values().next().value!.material as MeshStandardMaterial;
+    return { metalness: g.metalness, roughness: g.roughness, roughnessMap: !!g.roughnessMap, normalMap: !!g.normalMap, environment: g.envMap !== null, intensity: g.envMapIntensity };
+  },
+  get trayWood() {
   },
   get automatonRunning() {
     return regulator.calibrated;

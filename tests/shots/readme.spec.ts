@@ -6,7 +6,7 @@ import { calibrateByMouse } from '../e2e/calibrate';
 // The README screenshots, at full resolution (?shots keeps the pixel ratio up on software GL). Run with `bun run screenshots`.
 const OUT = 'docs';
 /** The tray, its card and the bird, with a margin of the dark room round them (CSS px of the 1280 x 720 view). */
-const CLIP = { x: 305, y: 0, width: 700, height: 700 };
+const CLIP = { x: 305, y: 64, width: 700, height: 700 };
 
 async function click(page: Page, id: string) {
   await page.waitForFunction((b) => window.__chrono!.buttons().some((x) => x.id === b), id);
