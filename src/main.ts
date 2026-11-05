@@ -11,8 +11,9 @@ import { buildScene } from './scene';
 import { loadBackdrop, type BackdropId } from './backdrop';
 import { MENU_BACKDROP, MENU_THEME, RANDOM_PICK, STAGES, dOf, kindOf, parOf, stageOf, type StageId } from './stages';
 import { createScenery } from './scenery';
+import { woodSet } from './wood';
 import { trackMr } from './mr';
-import { tuneForSoftwareGl } from './render';
+import { isSoftwareGl, tuneForSoftwareGl } from './render';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
 import { MENU_SCREENS, PLAY_SCREENS, SCRIM_OPACITY, buttonAt, clockTenths, layout, menuAnchor, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
@@ -158,7 +159,7 @@ par = parHere(levelIndex, level);
 tuneForSoftwareGl(world.renderer);
 const built = buildScene(level, world.scene, world.renderer);
 // The bench and a rendered panorama behind the tray on desktop and phone; in immersive-ar only a few props on the real table (src/scenery.ts).
-const scenery = createScenery(world.scene);
+const scenery = createScenery(world.scene, isSoftwareGl(world.renderer) ? null : woodSet('bench', isPhone(window.innerWidth, window.innerHeight), world.renderer));
 /**
  * The rendered panorama behind the tray: the attic (c2) on every menu, the stage's own while a level is on. One at a time: a
  * new one replaces the old (freeing its texture) once it has loaded, and a switch made while one is loading wins.
@@ -1733,6 +1734,10 @@ window.__chrono = Object.freeze({
   get render() {
     const { calls, triangles } = world.renderer.info.render;
     return { calls, triangles };
+  },
+  get trayWood() {
+    const m = built.wood;
+    return { physical: m.isMeshPhysicalMaterial, map: !!m.map, normalMap: !!m.normalMap, roughnessMap: !!m.roughnessMap, anisotropy: m.map?.anisotropy ?? 0, normalScale: m.normalScale.x, clearcoat: m.clearcoat };
   },
   get scenery() {
     return { ...scenery.state(), clearAlpha: world.renderer.getClearAlpha() };

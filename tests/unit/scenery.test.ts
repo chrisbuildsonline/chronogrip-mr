@@ -1,9 +1,10 @@
-import { Box3, Color, EquirectangularReflectionMapping, Mesh, Texture, type MeshBasicMaterial, Scene, Vector3, type BufferGeometry, type Object3D } from 'three';
+import { BoxGeometry, Box3, Color, CubeTexture, Mesh, MeshStandardMaterial, Texture, type MeshBasicMaterial, Scene, Vector3, type BufferGeometry, type Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PLACEMENT, type Placement } from '../../src/anchor';
 import { C, SCENE } from '../../src/palette';
-import { backdropFile } from '../../src/backdrop';
+import { backdropDir } from '../../src/backdrop';
 import { buildScenery, createScenery } from '../../src/scenery';
+import { benchTopGeometry, brassInlay, planarUv, type WoodSet } from '../../src/wood';
 import { BOARD_MARGIN, COMFORT, TRAY_HALF, TRAY_POSE, inZone, type Vec3 } from '../../src/seat';
 import { PANEL_ZONE } from '../../src/ui';
 import src from '../../src/scenery.ts?raw';
@@ -46,11 +47,58 @@ describe('buildScenery inline (desktop and phone)', () => {
   });
 });
 
+describe('buildScenery inline with the lit bench wood', () => {
+  const wood: WoodSet = { map: new Texture(), normalMap: new Texture(), roughnessMap: new Texture() };
+  const s = buildScenery('inline', wood);
+
+  it('adds the planks as one textured mesh (one draw call), keeping the edge strip and stand', () => {
+    expect([...names(s.group)].sort()).toEqual(['tray-stand', 'workbench', 'workbench-top']);
+    const top = meshes(s.group).find((m) => m.name === 'workbench-top')!;
+    const mat = top.material as MeshStandardMaterial;
+    expect(top.geometry.attributes.uv).toBeDefined();
+    expect(mat.map).toBe(wood.map);
+    expect(mat.normalMap).toBe(wood.normalMap);
+    expect(mat.roughnessMap).toBe(wood.roughnessMap);
+    expect(mat.normalScale.x).toBeLessThanOrEqual(0.5);
+    expect(s.tris).toBeLessThanOrEqual(1000);
+  });
+
+  it('keeps the planks below the tray', () => {
+    const top = new Box3().setFromObject(meshes(s.group).find((m) => m.name === 'workbench-top')!);
+    expect(top.max.y).toBeLessThan(-0.33);
+  });
+});
+
+describe('wood helpers', () => {
+  it('planarUv scales the grain by metres, whatever the face size', () => {
+    const geo = planarUv(new BoxGeometry(2, 0.1, 1), 1);
+    const uv = geo.attributes.uv!;
+    let maxU = -Infinity;
+    for (let i = 0; i < uv.count; i++) maxU = Math.max(maxU, uv.getX(i));
+    expect(maxU).toBeCloseTo(1, 6); // 2 m wide board, 1 m tile: u runs -1..1
+    expect(planarUv(new BoxGeometry(1, 1, 1), 1, 0.5).attributes.uv!.getX(0)).not.toBe(planarUv(new BoxGeometry(1, 1, 1), 1).attributes.uv!.getX(0));
+  });
+
+  it('the bench has nine planks with uvs', () => {
+    const g = benchTopGeometry(-0.336);
+    expect(g.length).toBe(9);
+    for (const x of g) expect(x.attributes.uv).toBeDefined();
+  });
+
+  it('the brass inlay is a flat ring just over the board top', () => {
+    const m = brassInlay(0.3, 0.2);
+    expect(m.name).toBe('tray-inlay');
+    expect(m.position.y).toBeGreaterThan(0);
+    const b = new Box3().setFromObject(m);
+    expect(b.max.x).toBeLessThan(0.3);
+  });
+});
+
 describe('backdrop files', () => {
-  it('names the panorama per concept, 2048 wide on a phone and 4096 otherwise', () => {
-    expect(backdropFile('c2', false)).toBe('backdrops/c2_pano.jpg');
-    expect(backdropFile('c2', true)).toBe('backdrops/c2_pano_2048.jpg');
-    expect(backdropFile('c3', true)).toBe('backdrops/c3_pano_2048.jpg');
+  it('names the cubemap folder per concept, 1024 faces on a phone and 2048 otherwise', () => {
+    expect(backdropDir('c2', false)).toBe('backdrops/c2_cube/');
+    expect(backdropDir('c2', true)).toBe('backdrops/c2_cube_1024/');
+    expect(backdropDir('c3', true)).toBe('backdrops/c3_cube_1024/');
   });
 });
 
@@ -129,7 +177,7 @@ describe('scenery colours', () => {
 });
 
 describe('createScenery: the mode switch', () => {
-  const tex = () => new Texture();
+  const tex = () => new CubeTexture();
 
   it('inline: the bench is up, the panorama is the background, no fog', () => {
     const scene = new Scene();
@@ -141,7 +189,7 @@ describe('createScenery: the mode switch', () => {
     const t = tex();
     sc.setBackdrop('c2', t);
     expect(scene.background).toBe(t);
-    expect(t.mapping).toBe(EquirectangularReflectionMapping);
+    expect(sc.state().cube).toBe(true);
     expect(scene.fog).toBeNull();
     expect(sc.state().backdrop).toBe('c2');
   });

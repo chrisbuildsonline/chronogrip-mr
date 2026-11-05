@@ -63,6 +63,7 @@ test('immersive-ar without a table: passthrough stays the whole background, no b
   const s = await scenery(page);
   expect(s.mode).toBe('xr');
   expect(s.background).toBe(false);
+  expect(s.cube).toBe(false);
   expect(s.fog).toBe(false);
   expect(s.clearAlpha).toBe(0);
   for (const part of BACKDROP) expect(s.parts, part).not.toContain(part);

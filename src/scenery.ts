@@ -4,7 +4,6 @@ import {
   type BufferGeometry,
   CylinderGeometry,
   Euler,
-  EquirectangularReflectionMapping,
   ExtrudeGeometry,
   Group,
   Matrix4,
@@ -14,7 +13,7 @@ import {
   Quaternion,
   Shape,
   type Scene,
-  type Texture,
+  type CubeTexture,
   TorusGeometry,
   Vector3,
   Color,
@@ -24,8 +23,9 @@ import type { Placement } from './anchor';
 import { type BackdropId } from './backdrop';
 import { C, SCENE } from './palette';
 import { TRAY_POSE } from './seat';
+import { type WoodSet, benchTopGeometry, benchWood } from './wood';
 
-/** 'inline' is the desktop and phone view (the bench under the tray, a rendered panorama behind it); 'xr' is immersive-ar (a few props on the real table, nothing else). */
+/** 'inline' is the desktop and phone view (the bench under the tray, a rendered cubemap behind it); 'xr' is immersive-ar (a few props on the real table, nothing else). */
 export type SceneryMode = 'inline' | 'xr';
 
 export type Scenery = {
@@ -122,24 +122,35 @@ function trayStand(bag: Bag) {
   for (const x of [-0.17, 0.14]) bag.add(geo, SCENE.shelfEdge, [x, 0, 0]);
 }
 
-function workbench(): Mesh[] {
+/** With a wood set the nine top planks are one lit PBR mesh; without (software GL) they stay the old unlit vertex-coloured boxes. */
+function workbench(wood: WoodSet | null): Mesh[] {
   const top = new Bag(true);
-  const tones = [SCENE.benchTop, SCENE.benchPlank, SCENE.benchGrain, SCENE.benchPlank];
   const planks = 9;
   const depth = 1.5;
-  for (let i = 0; i < planks; i++) {
-    const w = depth / planks;
-    const z = 0.55 - w * (i + 0.5);
-    top.box([3.4, 0.04, w - 0.004], tones[i % tones.length]!, [0, BENCH_Y - 0.02 - (i % 3) * 0.0006, z]);
+  if (!wood) {
+    const tones = [SCENE.benchTop, SCENE.benchPlank, SCENE.benchGrain, SCENE.benchPlank];
+    for (let i = 0; i < planks; i++) {
+      const w = depth / planks;
+      const z = 0.55 - w * (i + 0.5);
+      top.box([3.4, 0.04, w - 0.004], tones[i % tones.length]!, [0, BENCH_Y - 0.02 - (i % 3) * 0.0006, z]);
+    }
   }
   top.box([3.4, 0.07, 0.04], SCENE.benchEdge, [0, BENCH_Y - 0.035, 0.57]);
-  // A worn dark strip of grain on every other plank, to break the flat colour.
-  for (let i = 0; i < planks; i += 2) {
-    top.box([0.9 + (i % 3) * 0.3, 0.001, 0.012], SCENE.benchEdge, [-0.9 + i * 0.22, BENCH_Y + 0.0005, 0.55 - (depth / planks) * (i + 0.5)]);
+  if (!wood) {
+    // A worn dark strip of grain on every other plank, to break the flat colour.
+    for (let i = 0; i < planks; i += 2) {
+      top.box([0.9 + (i % 3) * 0.3, 0.001, 0.012], SCENE.benchEdge, [-0.9 + i * 0.22, BENCH_Y + 0.0005, 0.55 - (depth / planks) * (i + 0.5)]);
+    }
   }
   const stand = new Bag(true);
   trayStand(stand);
-  return [named('workbench', top.geometry(), matte()), named('tray-stand', stand.geometry(), matte())];
+  const out = [named('workbench', top.geometry(), matte()), named('tray-stand', stand.geometry(), matte())];
+  if (wood) {
+    const geos = benchTopGeometry(BENCH_Y);
+    out.push(named('workbench-top', mergeGeometries(geos, false)!, benchWood(wood)));
+    for (const g of geos) g.dispose();
+  }
+  return out;
 }
 
 /** The small props of the real table in MR, each a single mesh named prop-*, lying beside the play area (x measured from the tray's centre). */
@@ -181,13 +192,13 @@ function tableProps(): Mesh[] {
 }
 
 /** Builds the scenery of one mode as a group; nothing is added to a scene here. */
-export function buildScenery(mode: SceneryMode): Scenery {
+export function buildScenery(mode: SceneryMode, wood: WoodSet | null = null): Scenery {
   const group = new Group();
   group.name = `scenery-${mode}`;
   if (mode === 'xr') {
     group.add(...tableProps());
   } else {
-    group.add(...workbench());
+    group.add(...workbench(wood));
   }
   let tris = 0;
   group.traverse((o) => o instanceof Mesh && (tris += triangles(o.geometry)));
@@ -195,13 +206,13 @@ export function buildScenery(mode: SceneryMode): Scenery {
 }
 
 /** What the test hook reports: the mode now shown, the visible mesh names and their triangles, and what is behind the room. */
-export type SceneryState = { mode: SceneryMode; parts: string[]; tris: number; background: boolean; backdrop: BackdropId | null; fog: boolean };
+export type SceneryState = { mode: SceneryMode; parts: string[]; tris: number; background: boolean; cube: boolean; backdrop: BackdropId | null; fog: boolean };
 
 export type Sceneries = {
   inline: Scenery;
   xr: Scenery;
   /** Makes a loaded panorama the scene background (desktop and phone); the previous one is freed. */
-  setBackdrop(id: BackdropId, texture: Texture): void;
+  setBackdrop(id: BackdropId, texture: CubeTexture): void;
   /** Switches the whole scene between the inline bench and panorama (false) and immersive-ar (true). */
   set(presenting: boolean): void;
   /** Puts the MR table props on the table the tray sits on; they show only when a table plane placed the tray. */
@@ -210,10 +221,10 @@ export type Sceneries = {
 };
 
 /** Adds both sceneries to the scene and returns the switch between them. Starts inline. */
-export function createScenery(scene: Scene): Sceneries {
-  const inline = buildScenery('inline');
+export function createScenery(scene: Scene, wood: WoodSet | null = null): Sceneries {
+  const inline = buildScenery('inline', wood);
   const xr = buildScenery('xr');
-  let backdrop: { id: BackdropId; texture: Texture } | null = null;
+  let backdrop: { id: BackdropId; texture: CubeTexture } | null = null;
   scene.add(inline.group, xr.group);
   let presenting = false;
   let last: Placement | null = null;
@@ -232,7 +243,6 @@ export function createScenery(scene: Scene): Sceneries {
       apply();
     },
     setBackdrop(id, texture) {
-      texture.mapping = EquirectangularReflectionMapping;
       if (backdrop && backdrop.texture !== texture) backdrop.texture.dispose();
       backdrop = { id, texture };
       apply();
@@ -255,7 +265,7 @@ export function createScenery(scene: Scene): Sceneries {
           tris += triangles(o.geometry);
         });
       }
-      return { mode: presenting ? 'xr' : 'inline', parts, tris, background: scene.background !== null, backdrop: backdrop?.id ?? null, fog: scene.fog !== null };
+      return { mode: presenting ? 'xr' : 'inline', parts, tris, background: scene.background !== null, cube: (scene.background as CubeTexture | null)?.isCubeTexture === true, backdrop: backdrop?.id ?? null, fog: scene.fog !== null };
     },
   };
 }

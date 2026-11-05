@@ -11,6 +11,7 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
   PMREMGenerator,
@@ -22,39 +23,14 @@ import {
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { gearGeometry } from './gear';
+import { isPhone } from './fit';
+import { brassInlay, planarUv, trayWood, woodSet } from './wood';
 import type { Level } from './levels';
 import type { Placement } from './anchor';
 import { BOARD_MARGIN, PIN_RADIUS, TRAY_HALF, TRAY_POSE, layerLift, ledgeFar, partsStrip, trayLocal } from './seat';
 
 const brass = () => new MeshStandardMaterial({ color: 0xb08d57, metalness: 1, roughness: 0.35 });
 const steel = () => new MeshStandardMaterial({ color: 0x9aa3ab, metalness: 1, roughness: 0.4 });
-
-/** Walnut grain drawn once on a canvas: warm streaks along the board, so the tray reads as wood, not a flat brown. */
-function walnutGrain(): CanvasTexture {
-  const S = 512;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = S;
-  const g = canvas.getContext('2d')!;
-  g.fillStyle = '#573822';
-  g.fillRect(0, 0, S, S);
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 110; i++) {
-    const y = rnd() * S;
-    const amp = 2 + rnd() * 5;
-    const freq = 1 + rnd() * 2;
-    const phase = rnd() * 6.3;
-    g.beginPath();
-    for (let x = 0; x <= S; x += 8) g.lineTo(x, y + amp * Math.sin((x / S) * Math.PI * 2 * freq + phase));
-    g.lineWidth = 0.6 + rnd() * 2.2;
-    g.strokeStyle = rnd() < 0.6 ? `rgba(30,14,4,${0.15 + rnd() * 0.25})` : `rgba(150,96,50,${0.08 + rnd() * 0.14})`;
-    g.stroke();
-  }
-  const tex = new CanvasTexture(canvas);
-  tex.colorSpace = SRGBColorSpace;
-  tex.anisotropy = 8;
-  return tex;
-}
 
 /** A soft round shadow: dark in the middle, fading to nothing at the rim. */
 function softShadow(): CanvasTexture {
@@ -77,6 +53,8 @@ const SHADOWS_MAX = 30;
 const BOARD_THICKNESS = 0.018;
 /** Rounded edge of the board and ledge, metres. */
 const BEVEL = 0.006;
+/** One tile of the tray wood textures, in metres. */
+const TRAY_TILE = 0.5;
 const PIN_HEIGHT = 0.04;
 
 /** Where the near edge of the tilted tray hangs below its centre: the riser stops this far under the centre. */
@@ -92,6 +70,8 @@ export type BuiltScene = {
   pins: Map<string, Mesh>;
   /** Flat highlight rings round each pin by axle id, hidden until shown. */
   rings: Map<string, Mesh>;
+  /** The tray's wood material (shared by board, ledge and riser), for the test hook. */
+  readonly wood: MeshPhysicalMaterial;
   gearCount: number;
   axleCount: number;
   /** Moves the tray (and its riser, if the plane is low) to a placement. */
@@ -119,8 +99,7 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
   const pinGeometry = new CylinderGeometry(PIN_RADIUS, PIN_RADIUS, PIN_HEIGHT, 24);
   const ringGeometry = new RingGeometry(PIN_RADIUS * 2, PIN_RADIUS * 2.6, 32);
   const gearGeometries = new Map<number, BufferGeometry>();
-  const grain = walnutGrain();
-  const wood = () => new MeshStandardMaterial({ map: grain, metalness: 0, roughness: 0.62 });
+  const woodMaterial = trayWood(woodSet('tray', isPhone(innerWidth, innerHeight), renderer));
 
   const place =(mesh: Mesh, x: number, y: number, lift: number) => {
     mesh.position.set(...trayLocal(x, y, lift));
@@ -132,11 +111,12 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
     const strip = partsStrip(level);
     const far = ledgeFar(level);
     const ledgeWidth = Math.max(2 * TRAY_HALF.x, ...strip.map((s) => 2 * Math.abs(s.x) + 2 * s.radius)) + 0.04;
-    const board = new Mesh(new RoundedBoxGeometry(2 * (TRAY_HALF.x + BOARD_MARGIN), BOARD_THICKNESS, 2 * (TRAY_HALF.y + BOARD_MARGIN), 3, BEVEL), wood());
+    const board = new Mesh(planarUv(new RoundedBoxGeometry(2 * (TRAY_HALF.x + BOARD_MARGIN), BOARD_THICKNESS, 2 * (TRAY_HALF.y + BOARD_MARGIN), 3, BEVEL), TRAY_TILE), woodMaterial);
+    board.name = 'tray-board';
     place(board, 0, 0, -BOARD_THICKNESS / 2);
     // The ledge sits a touch lower and overlaps the board, so the seam reads as a step, not a flicker.
     const ledgeDepth = far - TRAY_HALF.y + 0.01;
-    const ledge = new Mesh(new RoundedBoxGeometry(ledgeWidth, BOARD_THICKNESS, ledgeDepth, 3, BEVEL), wood());
+    const ledge = new Mesh(planarUv(new RoundedBoxGeometry(ledgeWidth, BOARD_THICKNESS, ledgeDepth, 3, BEVEL), TRAY_TILE, 0.31), woodMaterial);
     place(ledge, 0, TRAY_HALF.y + ledgeDepth / 2 - 0.01, -BOARD_THICKNESS / 2 - 0.001);
 
     for (const a of level.axles) {
@@ -179,10 +159,11 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
     trayShadow.scale.set(1.45 * ledgeWidth, 1, 1.45 * (far - near));
     trayShadow.position.set(...trayLocal(0, (far + near) / 2, -BOARD_THICKNESS - 0.01));
   };
+  tray.add(brassInlay(TRAY_HALF.x + BOARD_MARGIN, TRAY_HALF.y + BOARD_MARGIN));
   scene.add(tray);
 
   // A plain block from the plane up to the near edge of the tray, only drawn when the plane is low.
-  const riser = new Mesh(new BoxGeometry(0.24, 1, 0.14), wood());
+  const riser = new Mesh(planarUv(new BoxGeometry(0.24, 1, 0.14), TRAY_TILE), woodMaterial);
   riser.visible = false;
   scene.add(riser);
   const placeTray = ({ pose, stand }: Placement) => {
@@ -224,6 +205,7 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
   scene.add(key, rim, new HemisphereLight(0xfff1dd, 0x3a2a1e, 0.6));
 
   const built: BuiltScene = {
+    wood: woodMaterial,
     tray,
     loose,
     gears,
@@ -247,7 +229,7 @@ export function buildScene(level: Level, scene: Scene, renderer: WebGLRenderer):
       for (const m of parts) {
         tray.remove(m);
         if (m.geometry !== pinGeometry && m.geometry !== ringGeometry) m.geometry.dispose();
-        (m.material as MeshStandardMaterial).dispose();
+        if (m.material !== woodMaterial) (m.material as MeshStandardMaterial).dispose();
       }
       parts = [];
       gearGeometries.clear();

@@ -39,6 +39,8 @@ export const C = {
  */
 export const SCENE = {
   benchTop: '#6c4730',
+  /** Multiplier on the lit bench albedo (src/wood.ts). */
+  benchTint: '#9c7c66',
   benchPlank: '#5e3c28',
   benchGrain: '#533523',
   benchEdge: '#3f281a',

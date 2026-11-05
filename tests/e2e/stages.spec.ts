@@ -51,6 +51,7 @@ test('the backdrop follows the stage: Easy attic, Medium atelier, Hard movement,
     await backdrop(page, bd);
     const s = await page.evaluate(() => window.__chrono!.scenery);
     expect(s.background, `${stage} has a texture background`).toBe(true);
+    expect(s.cube, `${stage} background is a CubeTexture`).toBe(true);
     await click(page, 'pause');
     await cardIs(page, 'paused');
     expect(await words(page)).toContain(`${stage.toUpperCase()} · LEVEL 1`);

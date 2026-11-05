@@ -18,6 +18,13 @@ export function fullResolution(search: string): boolean {
   return new URLSearchParams(search).has('shots');
 }
 
+/** True when the renderer is a CPU rasteriser. */
+export function isSoftwareGl(renderer: WebGLRenderer): boolean {
+  const gl = renderer.getContext();
+  const ext = gl.getExtension('WEBGL_debug_renderer_info');
+  return isSoftwareRenderer(ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '');
+}
+
 /** Lowers the renderer's pixel ratio when it runs on a software rasteriser, unless `?shots` asks for full resolution. */
 export function tuneForSoftwareGl(renderer: WebGLRenderer): void {
   if (fullResolution(location.search)) return;

@@ -7,6 +7,8 @@ import { LEVELS } from '../../src/levels';
 /** Screenshots land here for a look by eye (gitignored). */
 const OUT = 'test-results/scenery';
 
+const FACES = ['px.jpg', 'nx.jpg', 'py.jpg', 'ny.jpg', 'pz.jpg', 'nz.jpg'];
+
 const frames = (page: Page, n = 3) =>
   page.evaluate((k) => new Promise((done) => {
     const next = (i: number) => (i <= 0 ? done(null) : requestAnimationFrame(() => next(i - 1)));
@@ -33,23 +35,25 @@ async function click(page: Page, id: string) {
   await page.mouse.click(x, y);
 }
 
-/** The scenery hook says: the bench is up under a texture background (the panorama), no props, no fog. */
+/** The scenery hook says: the bench is up under a texture background (the cubemap), no props, no fog. */
 async function expectBackdrop(page: Page, id = 'c2') {
   await page.waitForFunction((b) => window.__chrono!.scenery.backdrop === b, id);
   const s = await page.evaluate(() => window.__chrono!.scenery);
   expect(s.mode).toBe('inline');
-  expect([...s.parts].sort()).toEqual(['tray-stand', 'workbench']);
+  expect([...s.parts].sort()).toEqual(expect.arrayContaining(['tray-stand', 'workbench']));
+  expect(s.parts.length).toBeLessThanOrEqual(3);
   expect(s.background).toBe(true);
+  expect(s.cube).toBe(true);
   expect(s.fog).toBe(false);
   expect(s.tris).toBeLessThanOrEqual(1000);
 }
 
-test('desktop 1440x900: the attic panorama behind the tray, title and a level in play', async ({ page }) => {
+test('desktop 1440x900: the attic cubemap behind the tray, title and a level in play', async ({ page }) => {
   const requests: string[] = [];
   const errors = await open(page, 1440, 900, requests);
   await expectBackdrop(page);
-  expect(requests.some((u) => u.endsWith('/backdrops/c2_pano.jpg'))).toBe(true);
-  expect(requests.some((u) => u.includes('_2048'))).toBe(false);
+  for (const f of FACES) expect(requests.some((u) => u.endsWith(`/backdrops/c2_cube/${f}`)), f).toBe(true);
+  expect(requests.some((u) => u.includes('_cube_1024') || u.includes('_pano'))).toBe(false);
   await page.screenshot({ path: `${OUT}/desktop-title.png` });
   await choose(page, () => Promise.resolve(), 2);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
@@ -59,18 +63,31 @@ test('desktop 1440x900: the attic panorama behind the tray, title and a level in
   expect(errors).toEqual([]);
 });
 
-test('phone 375x812: the 2048 attic panorama backs the tray without crowding the card', async ({ page }) => {
+test('phone 375x812: the 1024 attic cubemap backs the tray without crowding the card', async ({ page }) => {
   const requests: string[] = [];
   const errors = await open(page, 375, 812, requests);
   await expectBackdrop(page);
-  expect(requests.some((u) => u.endsWith('/backdrops/c2_pano_2048.jpg'))).toBe(true);
-  expect(requests.some((u) => u.endsWith('/backdrops/c2_pano.jpg'))).toBe(false);
+  for (const f of FACES) expect(requests.some((u) => u.endsWith(`/backdrops/c2_cube_1024/${f}`)), f).toBe(true);
+  expect(requests.some((u) => /\/c2_cube\//.test(u))).toBe(false);
+  expect(requests.some((u) => /textures\/tray_albedo_1024\.jpg$/.test(u))).toBe(true);
+  expect(requests.some((u) => /textures\/tray_albedo_2048\.jpg$/.test(u))).toBe(false);
   await page.screenshot({ path: `${OUT}/phone-title.png` });
   await choose(page, () => Promise.resolve(), 2);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await frames(page, 6);
   await expectBackdrop(page);
   await page.screenshot({ path: `${OUT}/phone-playing.png` });
+  expect(errors).toEqual([]);
+});
+
+test('the tray is walnut PBR: albedo, normal and roughness maps, anisotropic filtering, a light clearcoat', async ({ page }) => {
+  const errors = await open(page, 1440, 900);
+  const w = await page.evaluate(() => window.__chrono!.trayWood);
+  expect(w.physical).toBe(true);
+  expect(w.map && w.normalMap && w.roughnessMap).toBe(true);
+  expect(w.anisotropy).toBeGreaterThan(1);
+  expect(w.normalScale).toBeLessThanOrEqual(0.4);
+  expect(w.clearcoat).toBeLessThanOrEqual(0.2);
   expect(errors).toEqual([]);
 });
 
