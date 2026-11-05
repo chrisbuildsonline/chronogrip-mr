@@ -69,6 +69,8 @@ interface ChronoHook {
   readonly turning: 'left' | 'right' | 'mouse' | null;
   /** Live: world orientation [x, y, z, w] of each tracked wrist joint, else null. */
   readonly wrists: { readonly left: readonly [number, number, number, number] | null; readonly right: readonly [number, number, number, number] | null };
+  /** Live: the desktop camera (world position, orbit target, distance), the tray's centre on screen (CSS px) and the bench top's height. */
+  readonly view: { readonly camera: readonly [number, number, number]; readonly target: readonly [number, number, number]; readonly distance: number; readonly tray: readonly [number, number]; readonly benchY: number };
   /** Live: the animated stage backdrop (src/ambient.ts): null on menus and in XR; else its stage, part count, the beat and seconds clocks (frozen while paused), the room-light multiplier and a pose string that changes when any part moves, and the screen position (CSS px) of its first part (Easy: the second hand's pivot). */
   readonly ambient: { readonly stage: 'easy' | 'medium' | 'hard'; readonly parts: number; readonly beats: number; readonly seconds: number; readonly bgMul: number; readonly visible: boolean; readonly pose: string; readonly anchor: readonly [number, number] } | null;
   setAmbientVisible(v: boolean): void;

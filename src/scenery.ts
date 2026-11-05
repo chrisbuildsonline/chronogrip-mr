@@ -39,7 +39,7 @@ export type Scenery = {
 };
 
 /** Top of the workbench: just under the lowest point of the tilted tray (its near edge, about y = -0.332). */
-const BENCH_Y = -0.336;
+export const BENCH_Y = -0.336;
 
 /** Direction the workshop's light comes from (the game's key light, from the upper left), for the baked shading. */
 const KEY = new Vector3(-0.6, 0.8, 0.25).normalize();

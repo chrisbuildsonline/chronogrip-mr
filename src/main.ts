@@ -3,14 +3,14 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { APP_TITLE, createWorldOptions } from './config';
 import { DEFAULT_PLACEMENT, toHeadFrame, type Head } from './anchor';
 import { startSession } from './enter';
-import { BoxGeometry, Color, PMREMGenerator, type MeshPhysicalMaterial, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
+import { BoxGeometry, Color, MathUtils, PMREMGenerator, type MeshPhysicalMaterial, DoubleSide, Euler, Mesh, MeshBasicMaterial, Plane, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3, type MeshStandardMaterial, type Object3D } from 'three';
 import { grabModeOf, holderHand, occupiedAt, pickGear, pinchOwner, snapAxle, type Hand } from './grab';
 import { handNear, rayPick, validAxles, type HoverTarget } from './hover';
 import { LEVELS, checkLevel, type Level } from './levels';
 import { buildScene } from './scene';
 import { loadBackdrop, type BackdropId } from './backdrop';
 import { MENU_BACKDROP, MENU_THEME, RANDOM_PICK, STAGES, dOf, kindOf, parOf, stageOf, type StageId } from './stages';
-import { createScenery } from './scenery';
+import { BENCH_Y as BENCH_TOP_Y, createScenery } from './scenery';
 import { woodSet } from './wood';
 import { trackMr } from './mr';
 import { isSoftwareGl, tuneForSoftwareGl } from './render';
@@ -247,6 +247,19 @@ world.renderer.xr.addEventListener('sessionend', () => {
 world.camera.position.set(...DESKTOP_EYE);
 const controls = new OrbitControls(world.camera, world.renderer.domElement);
 controls.target.set(...DESKTOP_TARGET);
+// The orbit stays a look around the tray, never a way out of the room: a few degrees of tilt either side of the tuned view (never
+// below the bench top, never straight down), about 40 degrees of turn, a bounded dolly (moveToFit sets it from the fitted
+// distance) and no panning, so the tray and the panel above it stay in frame. Damped: the frame loop calls update().
+const home = new Vector3(...DESKTOP_EYE).sub(new Vector3(...DESKTOP_TARGET));
+const HOME_POLAR = Math.acos(home.y / home.length());
+const HOME_AZIMUTH = Math.atan2(home.x, home.z);
+controls.minPolarAngle = HOME_POLAR - MathUtils.degToRad(18);
+controls.maxPolarAngle = HOME_POLAR + MathUtils.degToRad(12);
+controls.minAzimuthAngle = HOME_AZIMUTH - MathUtils.degToRad(40);
+controls.maxAzimuthAngle = HOME_AZIMUTH + MathUtils.degToRad(40);
+controls.enablePan = false;
+controls.enableDamping = true;
+controls.dampingFactor = 0.12;
 controls.update();
 world.renderer.xr.addEventListener('sessionstart', () => (controls.enabled = false));
 world.renderer.xr.addEventListener('sessionend', () => (controls.enabled = true));
@@ -431,6 +444,8 @@ function moveToFit(keepZoom: boolean): void {
   });
   const to = controls.target.clone().addScaledVector(offset, keepZoom ? (now * d) / fitted : d);
   fitted = d;
+  controls.minDistance = d * 0.8; // in a little, out a fair way: the board and the panel stay in frame
+  controls.maxDistance = d * 1.45;
   if (keepZoom && to.distanceTo(world.camera.position) > 1e-6) cameraTween = { from: world.camera.position.toArray(), to: to.toArray(), start: performance.now() };
   else if (!keepZoom) {
     world.camera.position.copy(to);
@@ -439,6 +454,17 @@ function moveToFit(keepZoom: boolean): void {
 }
 fitView();
 window.addEventListener('resize', () => fitView());
+/** Eases the camera back to the tuned view (at the distance the window fits): the R key, or a double-click on empty space. */
+function resetView(): void {
+  if (world.renderer.xr.isPresenting) return;
+  controls.target.set(...DESKTOP_TARGET);
+  // A drag's damping leaves spin still to apply (per frame, so a slow frame rate drags it out): flush it so the ease ends exactly home.
+  controls.enableDamping = false;
+  controls.update();
+  controls.enableDamping = true;
+  const to = controls.target.clone().addScaledVector(home.clone().normalize(), fitted);
+  cameraTween = { from: world.camera.position.toArray(), to: to.toArray(), start: performance.now() };
+}
 
 const firstMove = () => Object.entries(level.solution)[0]!;
 const ghost = createGhostHand(built.loose.get(firstMove()[0])!.geometry);
@@ -997,6 +1023,7 @@ window.addEventListener('keydown', (e) => {
     overlay = { ...overlay, ...(e.key === 'Backspace' ? backInitial(overlay) : typeInitial(overlay, e.key)) };
     return;
   }
+  if ((e.key === 'r' || e.key === 'R') && !(e.ctrlKey || e.metaKey || e.altKey) && overlay?.kind !== 'initials') return resetView(); // (the name entry's letters were taken above)
   const shown = shownButtons();
   if (overlay?.kind === 'about' && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'PageUp' || e.key === 'PageDown')) {
     e.preventDefault();
@@ -1098,6 +1125,17 @@ canvas.addEventListener(
   },
   { capture: true },
 );
+canvas.addEventListener('dblclick', (click) => {
+  const e = click as PointerEvent; // only its position is read
+  if (world.renderer.xr.isPresenting || holder !== null || turning !== null) return;
+  if (onPanel(rayAt(e))) return;
+  // Empty space only: not a card, not the tray (its plane is hit anywhere, so the board and parts strip are boxed here: x about
+  // +-30 cm, from the strip's far end to just past the near edge).
+  const hit = mouseOnTray(e);
+  const local = hit && built.tray.worldToLocal(new Vector3(hit[0], hit[1], hit[2]));
+  if (local && Math.abs(local.x) < 0.3 && local.z > -0.45 && local.z < 0.25) return;
+  resetView();
+});
 let mouseRay: [Vec3, Vec3] | null = null;
 let mouseButton: string | null = null;
 /** The menu button the keys have reached: nothing is selected when a menu opens; the first arrow or Tab starts at the top. Cleared by the mouse and by a change of card. */
@@ -1347,6 +1385,7 @@ world.scene.onBeforeRender = () => {
   }
   built.updateShadows();
   cue.update(now);
+  if (!world.renderer.xr.isPresenting && !cameraTween && controls.enabled) controls.update(); // damping
   if (cameraTween && !world.renderer.xr.isPresenting) {
     const { pos, done } = tweenAt(cameraTween.from, cameraTween.to, now - cameraTween.start, FIT_MS);
     world.camera.position.set(...pos);
@@ -1739,6 +1778,11 @@ window.__chrono = Object.freeze({
   },
   get musicTheme() {
     return sound.theme;
+  },
+  /** Live: the desktop camera (position, target, distance) and the tray's centre on screen in CSS px, for the orbit-limit tests. */
+  get view() {
+    const c = world.camera.position;
+    return { camera: [c.x, c.y, c.z] as const, target: controls.target.toArray(), distance: c.distanceTo(controls.target), tray: toScreen(built.tray.getWorldPosition(new Vector3()).toArray()), benchY: BENCH_TOP_Y };
   },
   get ambient() {
     return ambient && { stage: ambientStage!, parts: ambient.group.children.length, beats: ambBeats, seconds: ambSeconds, bgMul: ambMul, visible: ambient.group.visible, pose: poseOf(ambient.group), anchor: toScreen(ambient.group.children[0]!.getWorldPosition(new Vector3()).toArray()) };
