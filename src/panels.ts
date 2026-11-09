@@ -410,7 +410,7 @@ function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: numb
       g.fillStyle = 'rgba(217,154,43,0.22)';
       g.fill();
     }
-    const size = T.button * (sw ? 0.7 : 0.78);
+    const size = T.button * (sw && !ctx.narrow ? 0.7 : 0.78); // a phone keeps the switch readable
     text(g, b.label.toUpperCase(), x, y + 1, jfont(picked ? 600 : 400, size), picked ? C.amber : hover ? C.menuHi : C.menuMuted, 'center', 3);
     if (picked && !sw) {
       g.fillStyle = C.amber;
@@ -468,7 +468,7 @@ export const ABOUT: readonly { heading: string; lines: readonly string[] }[] = [
       '· Three stages of 20 levels, made fresh every time.',
       '· Each level has a time limit. No timer, in Options or on the pause menu, turns the limit off.',
       '· Pausing stops the clock and hides the board; play resumes after a 3-second countdown.',
-      '· Give up, or run out of time, and the run ends with no score.',
+      '· Give up, or run out of time, and the run ends. With at least one level cleared and a top-ten time you still enter initials.',
       '· Finish all 20 levels of a stage to enter three initials on that stage\'s board, on this device and global.',
       '· Random level is practice: no scores.',
     ],
@@ -681,7 +681,7 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
       const px = (rowY: number, dx: number) => at(dx, rowY)[0];
       if (b.note) text(g, b.note, cx, at(0, grid.noteY)[1] + 1, jfont(400, 10.5), C.menuMuted, 'center', 1);
       const labelY = at(0, grid.headRowY)[1] + 1;
-      const label = jfont(600, T.eyebrow * 0.78);
+      const label = jfont(600, T.eyebrow * (ctx.narrow ? 1 : 0.78)); // a phone's column labels stay readable
       text(g, '#', px(0, col.rank), labelY, label, C.amber, 'left', 3);
       text(g, 'NAME', px(0, col.name), labelY, label, C.amber, 'left', 3);
       text(g, 'LEVEL', px(0, col.level), labelY, label, C.amber, 'left', 3);

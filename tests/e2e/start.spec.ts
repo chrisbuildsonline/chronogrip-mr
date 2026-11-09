@@ -99,7 +99,7 @@ test('desktop 1440x900: the start panel has three buttons, and each reaches its 
   // High scores: the existing board, with a Local tab and room beside it.
   await click(page, 'scores');
   await cardIs(page, 'board');
-  expect(await words(page)).toEqual(expect.arrayContaining(['HIGH SCORES', 'LOCAL', 'EASY · FASTEST RUNS']));
+  expect(await words(page)).toEqual(expect.arrayContaining(['HIGH SCORES', 'EASY · BEST RUNS', 'NAME', 'TIME']));
   await page.screenshot({ path: `${OUT}/scores-1440.png` });
   await click(page, 'back');
   await cardIs(page, 'title');
@@ -237,7 +237,7 @@ test('desktop: Reset progress asks first, Keep it changes nothing, and Reset now
   expect(await page.evaluate(() => window.__chrono!.levelId)).toBe('l1');
   expect(await page.evaluate(() => localStorage.getItem('chronogrip.run.v1'))).toBeNull();
   // The high scores are a separate store and stay.
-  expect((await page.evaluate(() => window.__chrono!.scores)).boards['campaign-medium']).toEqual(board.boards['campaign-medium']);
+  expect((await page.evaluate(() => window.__chrono!.scores)).boards['campaign-medium']).toMatchObject(board.boards['campaign-medium']); // the outbox may mark it posted
   await page.screenshot({ path: `${OUT}/start-after-reset-1440.png` });
 
   expect(errors).toEqual([]);
