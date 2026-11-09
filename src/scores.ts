@@ -1,7 +1,11 @@
 
 /**
- * High score boards: one per stage. Only a completed run (all 20 levels of a stage) is scored: its total time, with three initials.
- * Ranked fastest first; the earlier date wins a tie, and the board keeps its top ten. Everything here is pure.
+ * STATE: high score boards, one per stage. A campaign run on a timer that ends with at least one level cleared is scored, whether
+ * it was finished, ran out of time or was given up: its levels cleared, total time and three initials. Relaxed and Random are not.
+ * Ranked more levels cleared first, then less total time, then the earlier date; the board keeps its top ten.
+ * An entry with no `cleared` is from before partial runs and counts as all 20 (a 20 entry is stored without it).
+ * `posted` marks an entry the global board has accepted (the outbox in src/outbox.ts sends the rest); `dev` marks a cheated run, never sent.
+ * Everything here is pure.
  */
 export const BOARDS: readonly string[] = ['campaign-easy', 'campaign-medium', 'campaign-hard'];
 /** The board a stage's finished runs go on. The single campaign board of before the stages is dropped (its times were for a different ramp). */
@@ -9,10 +13,12 @@ export const boardOf = (stage: string): string => `campaign-${stage}`;
 export const TOP = 10;
 export const DEFAULT_INITIALS = 'AAA';
 
-/** `ms`: the completed run's total time; `date`: the local day, YYYY-MM-DD. */
-export type Entry = { name: string; ms: number; date: string };
-/** A scored run has cleared all 20 levels: the global board's step. */
+/** `ms`: the run's total time; `date`: the local day, YYYY-MM-DD; `cleared`: levels cleared, 1..20 (missing: 20); `posted`: the global board has it; `dev`: a cheated run, never sent. */
+export type Entry = { name: string; ms: number; date: string; cleared?: number; posted?: boolean; dev?: boolean };
+/** A finished run has cleared all 20 levels. */
 export const RUN_STEP = 20;
+/** The levels an entry cleared: an entry from before partial runs is a finished run. */
+export const clearedOf = (e: Pick<Entry, 'cleared'>): number => e.cleared ?? RUN_STEP;
 export type Scores = { initials: string; boards: Record<string, Entry[]> };
 
 export const emptyScores = (): Scores => ({ initials: DEFAULT_INITIALS, boards: Object.fromEntries(BOARDS.map((id) => [id, []])) });
@@ -37,12 +43,23 @@ export function formatDate(date: string): string {
 
 /** Whether an entry is fit for a board: a positive finite time under a day, and a day. */
 function valid(board: string, e: Entry): boolean {
+  const c = e.cleared;
+  if (c !== undefined && !(typeof c === 'number' && Number.isInteger(c) && c >= 1 && c <= RUN_STEP)) return false;
   return BOARDS.includes(board) && Number.isFinite(e.ms) && e.ms > 0 && e.ms < 86_400_000 && validDate(e.date);
 }
 
-/** Negative when `a` ranks above `b`: less time first; the earlier date breaks a tie. */
+/** Negative when `a` ranks above `b`: more levels cleared first, then less time; the earlier date breaks a tie. */
 function order(_board: string, a: Entry, b: Entry): number {
-  return a.ms - b.ms || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  return clearedOf(b) - clearedOf(a) || a.ms - b.ms || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+}
+
+/** The entry as stored: a sanitised name, `cleared` only below 20, `posted` and `dev` only when true. */
+function clean(e: Entry): Entry {
+  const out: Entry = { name: sanitiseName(e.name), ms: e.ms, date: e.date };
+  if (e.cleared !== undefined && e.cleared < RUN_STEP) out.cleared = e.cleared;
+  if (e.posted === true) out.posted = true;
+  if (e.dev === true) out.dev = true;
+  return out;
 }
 
 /** Whether an entry would make the board's top ten, and the rank it would take (a later tie ranks after the entry already there). */
@@ -55,7 +72,7 @@ export function qualifies(s: Scores, board: string, e: Entry): { ok: boolean; ra
 /** The scores with the entry in its place and the board trimmed to ten; the same object back if it does not qualify. The name is remembered as the last initials. */
 export function addEntry(s: Scores, board: string, e: Entry): Scores {
   if (!qualifies(s, board, e).ok) return s;
-  const entry: Entry = { name: sanitiseName(e.name), ms: e.ms, date: e.date };
+  const entry = clean(e);
   const rows = [...s.boards[board]!, entry].sort((a, b) => order(board, a, b)).slice(0, TOP);
   return { initials: entry.name, boards: { ...s.boards, [board]: rows } };
 }
@@ -79,8 +96,8 @@ export function loadScores(storage: Pick<Storage, 'getItem'> | null | undefined)
       const kept: Entry[] = [];
       for (const r of rows) {
         if (!isObject(r)) continue;
-        const e: Entry = { name: sanitiseName(r.name), ms: r.ms as number, date: r.date as string };
-        if (valid(board, e)) kept.push(e);
+        const raw: Entry = { name: sanitiseName(r.name), ms: r.ms as number, date: r.date as string, ...(r.cleared === undefined ? {} : { cleared: r.cleared as number }), posted: r.posted === true, dev: r.dev === true };
+        if (valid(board, raw)) kept.push(clean(raw));
       }
       s.boards[board] = kept.sort((a, b) => order(board, a, b)).slice(0, TOP);
     }
@@ -118,3 +135,15 @@ export function stepInitial(i: Initials, slot: number, dir: 1 | -1): Initials {
   const next = String.fromCharCode(A + ((i.letters.charCodeAt(slot) - A + dir + 26) % 26));
   return { letters: setLetter(i.letters, slot, next), cursor: slot };
 }
+
+/** The scores with the first unposted entry equal to `e` (same name, time, date and levels) marked posted; the same object back if there is none. */
+export function markPosted(s: Scores, board: string, e: Entry): Scores {
+  const rows = s.boards[board] ?? [];
+  const i = rows.findIndex((x) => !x.posted && x.name === e.name && x.ms === e.ms && x.date === e.date && clearedOf(x) === clearedOf(e));
+  if (i < 0) return s;
+  return { ...s, boards: { ...s.boards, [board]: rows.map((x, k) => (k === i ? { ...x, posted: true } : x)) } };
+}
+
+/** The entries still to send to the global board, in board order: not posted, not a cheated run. */
+export const unposted = (s: Scores): { board: string; entry: Entry }[] =>
+  BOARDS.flatMap((board) => (s.boards[board] ?? []).filter((e) => !e.posted && !e.dev).map((entry) => ({ board, entry })));

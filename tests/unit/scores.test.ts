@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOARDS, boardOf, DEFAULT_INITIALS, TOP, addEntry, backInitial, emptyScores, formatDate, loadScores, qualifies, saveScores, stepInitial, typeInitial, type Entry } from '../../src/scores';
+import { BOARDS, boardOf, clearedOf, DEFAULT_INITIALS, TOP, addEntry, backInitial, emptyScores, formatDate, loadScores, qualifies, saveScores, stepInitial, typeInitial, type Entry } from '../../src/scores';
 
 const KEY = 'chronogrip.scores.v1';
 const store = (raw: string | null) => ({ getItem: (k: string) => (k === KEY ? raw : null) });
@@ -233,5 +233,80 @@ describe('typing initials', () => {
     expect(stepInitial(start, 0, 1)).toEqual({ letters: 'BAA', cursor: 0 });
     expect(stepInitial(start, 2, -1)).toEqual({ letters: 'AAZ', cursor: 2 });
     expect(stepInitial({ letters: 'AZA', cursor: 3 }, 1, 1)).toEqual({ letters: 'AAA', cursor: 1 });
+  });
+});
+
+describe('partial runs: ranked by levels cleared, then time, then date', () => {
+  const part = (ms: number, cleared: number, date = '2026-11-04', name = 'ABC'): Entry => ({ name, ms, date, cleared });
+  const names = (s: ReturnType<typeof emptyScores>) => s.boards['campaign-medium']!.map((e) => e.name);
+
+  it('counts an entry without cleared as 20', () => {
+    expect(clearedOf(lvl(1000))).toBe(20);
+    expect(clearedOf(part(1000, 7))).toBe(7);
+  });
+  it('puts more levels first even when slower, and uses time within the same count', () => {
+    let s = emptyScores();
+    s = addEntry(s, 'campaign-medium', part(100_000, 3, '2026-11-04', 'THR'));
+    s = addEntry(s, 'campaign-medium', lvl(900_000, '2026-11-04', 'ALL')); // an old entry: 20 cleared
+    s = addEntry(s, 'campaign-medium', part(300_000, 12, '2026-11-04', 'TWL'));
+    s = addEntry(s, 'campaign-medium', part(200_000, 12, '2026-11-04', 'TWF'));
+    s = addEntry(s, 'campaign-medium', { name: 'FUL', ms: 800_000, date: '2026-11-04', cleared: 20 });
+    expect(names(s)).toEqual(['FUL', 'ALL', 'TWF', 'TWL', 'THR']);
+  });
+  it('breaks a tie on count and time by the earlier date', () => {
+    let s = emptyScores();
+    s = addEntry(s, 'campaign-medium', part(5000, 4, '2026-11-04', 'NEW'));
+    s = addEntry(s, 'campaign-medium', part(5000, 4, '2026-11-01', 'OLD'));
+    expect(names(s)).toEqual(['OLD', 'NEW']);
+  });
+  it('qualifies a partial run by its rank against a board of ten', () => {
+    let s = emptyScores();
+    for (let i = 1; i <= 10; i++) s = addEntry(s, 'campaign-medium', part(i * 1000, 5));
+    expect(qualifies(s, 'campaign-medium', part(99_000, 6))).toEqual({ ok: true, rank: 1 });
+    expect(qualifies(s, 'campaign-medium', part(500, 4))).toEqual({ ok: false, rank: 11 });
+    expect(qualifies(s, 'campaign-medium', lvl(99_000))).toEqual({ ok: true, rank: 1 });
+    expect(qualifies(s, 'campaign-medium', part(5500, 5))).toEqual({ ok: true, rank: 6 });
+  });
+  it('a full board of partials gives way to a finished run, which drops the last', () => {
+    let s = emptyScores();
+    for (let i = 1; i <= 10; i++) s = addEntry(s, 'campaign-medium', part(i * 1000, 19));
+    s = addEntry(s, 'campaign-medium', lvl(800_000, '2026-11-04', 'WIN'));
+    expect(s.boards['campaign-medium']).toHaveLength(TOP);
+    expect(names(s)[0]).toBe('WIN');
+    expect(s.boards['campaign-medium']!.at(-1)!.ms).toBe(9000);
+  });
+  it('refuses a bad cleared: 0, 21, fractional, NaN, a string', () => {
+    const s = emptyScores();
+    for (const c of [0, -1, 21, 2.5, NaN, Infinity, '7' as never]) expect(qualifies(s, 'campaign-medium', part(1000, c)).ok, `${c}`).toBe(false);
+    for (const c of [1, 19, 20]) expect(qualifies(s, 'campaign-medium', part(1000, c)).ok, `${c}`).toBe(true);
+  });
+  it('stores cleared on a partial entry and leaves a 20 entry in the old shape', () => {
+    let s = addEntry(emptyScores(), 'campaign-medium', part(1000, 7));
+    s = addEntry(s, 'campaign-medium', part(2000, 20, '2026-11-04', 'ALL'));
+    expect(s.boards['campaign-medium']!.find((e) => e.name === 'ABC')!.cleared).toBe(7);
+    expect(clearedOf(s.boards['campaign-medium']!.find((e) => e.name === 'ALL')!)).toBe(20);
+  });
+  it('round trips and loads old entries as 20 and drops bad cleared', () => {
+    const data: Record<string, string> = {};
+    let s = addEntry(emptyScores(), 'campaign-hard', part(7200, 9, '2026-11-04', 'PAR'));
+    saveScores({ setItem: (k, v) => void (data[k] = v) }, s);
+    expect(loadScores({ getItem: (k) => data[k] ?? null })).toEqual(s);
+    const raw = JSON.stringify({
+      version: 1,
+      initials: 'ABC',
+      boards: {
+        'campaign-medium': [
+          { name: 'OLD', ms: 9000, date: '2026-11-04' },
+          { name: 'PAR', ms: 1000, date: '2026-11-04', cleared: 6 },
+          { name: 'ZER', ms: 1000, date: '2026-11-04', cleared: 0 },
+          { name: 'BIG', ms: 1000, date: '2026-11-04', cleared: 21 },
+          { name: 'FRC', ms: 1000, date: '2026-11-04', cleared: 2.5 },
+          { name: 'STR', ms: 1000, date: '2026-11-04', cleared: '7' },
+        ],
+      },
+    });
+    const m = loadScores(store(raw)).boards['campaign-medium']!;
+    expect(m.map((e) => e.name)).toEqual(['OLD', 'PAR']);
+    expect(clearedOf(m[0]!)).toBe(20);
   });
 });

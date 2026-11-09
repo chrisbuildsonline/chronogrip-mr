@@ -46,8 +46,9 @@ describe('scorePayload', () => {
 });
 
 describe('boardUrl', () => {
-  it('asks for the completed runs (step 20), fastest first, ten rows', () => {
-    expect(boardUrl('campaign-medium')).toBe(`${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.campaign-medium&step=eq.20&order=seconds.asc&limit=10`);
+  it('asks for every run, most levels first then fastest, ten rows, with no step filter', () => {
+    expect(boardUrl('campaign-medium')).toBe(`${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.campaign-medium&order=step.desc,seconds.asc&limit=10`);
+    expect(boardUrl('campaign-medium')).not.toContain('step=eq');
   });
   it('carries only the publishable key', () => {
     expect(GLOBAL_KEY).toMatch(/^sb_publishable_/);
@@ -77,7 +78,6 @@ describe('parseRows', () => {
       { ...row, seconds: null },
       { ...row, step: null },
       { ...row, step: 0 },
-      { ...row, step: 19 },
       { ...row, step: 1001 },
       { ...row, step: 2.5 },
       { ...row, created_at: 'yesterday' },
@@ -85,9 +85,14 @@ describe('parseRows', () => {
     ];
     expect(parseRows([...junk, row], 'campaign-medium')).toEqual([entry]);
   });
-  it('shows only completed runs (step 20), and gives nothing for a board that does not exist', () => {
-    expect(parseRows([{ ...row, step: 7 }], 'campaign-medium')).toEqual([]);
+  it('keeps partial runs (step 1 to 19) with their level, a full run without one, and drops step 21', () => {
+    expect(parseRows([{ ...row, step: 7 }], 'campaign-medium')).toEqual([{ ...entry, cleared: 7 }]);
+    expect(parseRows([{ ...row, step: 1 }], 'campaign-medium')).toEqual([{ ...entry, cleared: 1 }]);
+    expect(parseRows([{ ...row, step: 19 }], 'campaign-medium')).toEqual([{ ...entry, cleared: 19 }]);
+    expect(parseRows([{ ...row, step: 20 }], 'campaign-medium')).toEqual([entry]);
     expect(parseRows([{ ...row, step: 21 }], 'campaign-medium')).toEqual([]);
+  });
+  it('gives nothing for a board that does not exist', () => {
     expect(parseRows([row], 'random-expert')).toEqual([]);
     expect(parseRows([row], 'l1')).toEqual([]);
     expect(parseRows([row], 'random')).toEqual([]);
@@ -128,6 +133,11 @@ describe('submitGlobal', () => {
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({ apikey: GLOBAL_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' });
     expect(JSON.parse(init.body as string)).toEqual({ level: 'campaign-medium', initials: 'ABC', seconds: 641.23, step: 20 });
+  });
+  it('posts the levels cleared as the step of a partial run', async () => {
+    const f = vi.fn(async () => new Response(null, { status: 201 }));
+    expect(await submitGlobal('campaign-hard', 'ABC', 99_000, 7, f)).toBe(true);
+    expect(JSON.parse((f.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).toEqual({ level: 'campaign-hard', initials: 'ABC', seconds: 99, step: 7 });
   });
   it('sends nothing for an invalid score, or for a run that cleared nothing', async () => {
     const f = vi.fn(async () => new Response(null, { status: 201 }));
