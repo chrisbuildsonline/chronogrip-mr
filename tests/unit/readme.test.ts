@@ -107,7 +107,7 @@ describe('README submission write-up', () => {
 const pngs = import.meta.glob('/docs/*.png', { query: '?inline', import: 'default', eager: true }) as Record<string, string>;
 const bytesOf = (dataUrl: string) => Uint8Array.from(atob(dataUrl.slice(dataUrl.indexOf(',') + 1)), (c) => c.charCodeAt(0));
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-const SHOTS = ['title', 'puzzle', 'complete'] as const;
+const SHOTS = ['title', 'stages', 'puzzle', 'cleared'] as const;
 
 /** Real screenshots of the game near the top, so a judge sees it before reading. */
 describe('README screenshots', () => {
