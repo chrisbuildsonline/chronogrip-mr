@@ -118,16 +118,16 @@ test('finishing a stage: level 20 asks for a name, the time lands on that stage\
   // High scores opens on the stage last played; the stage tabs switch between the three boards.
   await click(page, 'scores');
   await cardIs(page, 'board');
-  expect(await words(page)).toEqual(expect.arrayContaining(['HARD · FASTEST RUNS', 'HRD', 'EASY', 'MEDIUM', 'HARD']));
+  expect(await words(page)).toEqual(expect.arrayContaining(['HARD · BEST RUNS', 'HRD', 'EASY', 'MEDIUM', 'HARD']));
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
   await page.screenshot({ path: `${OUT}/board-hard.png` });
   await click(page, 'tab-easy');
   await frames(page);
-  expect(await words(page)).toEqual(expect.arrayContaining(['EASY · FASTEST RUNS', 'No finished runs yet.']));
+  expect(await words(page)).toEqual(expect.arrayContaining(['EASY · BEST RUNS', 'No finished runs yet.']));
   expect(await words(page)).not.toContain('HRD');
   await click(page, 'tab-medium');
   await frames(page);
-  expect(await words(page)).toContain('MEDIUM · FASTEST RUNS');
+  expect(await words(page)).toContain('MEDIUM · BEST RUNS');
   await click(page, 'tab-hard');
   await frames(page);
   expect(await words(page)).toContain('HRD');

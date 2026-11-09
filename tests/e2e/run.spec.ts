@@ -78,7 +78,7 @@ test('desktop: solving level 1 shows no initials card, only Next; the run has cl
   expect(errors).toEqual([]);
 });
 
-test('desktop: Give up shows a short result card (Level 2 reached and the time) with New Game and Main menu: no name entry, nothing saved or sent', async ({ page }) => {
+test('desktop: Give up with nothing cleared shows a short result card (Level 1 reached and the time) with New Game and Main menu: no name entry, nothing saved or sent', async ({ page }) => {
   const posts: unknown[] = [];
   await page.route('**/rest/v1/chronogrip_scores**', (r) => {
     if (r.request().method() === 'POST') {
@@ -90,9 +90,6 @@ test('desktop: Give up shows a short result card (Level 2 reached and the time) 
   const errors = await open(page);
   await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  await solve(page);
-  await click(page, 'next');
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1);
 
   await click(page, 'pause');
   await cardIs(page, 'paused');
@@ -104,7 +101,7 @@ test('desktop: Give up shows a short result card (Level 2 reached and the time) 
   expect(await page.evaluate(() => window.__chrono!.flow)).toBe('title');
   expect(await page.evaluate(() => window.__chrono!.run), 'the run is over').toBeNull();
   const w = await words(page);
-  expect(w).toContain('LEVEL 2 REACHED');
+  expect(w).toContain('LEVEL 1 REACHED');
   expect(w.some((x) => /^\d+:\d\d(\.\d)?$/.test(x)), 'the total time is on the card').toBe(true);
   expect(await page.evaluate(() => window.__chrono!.initials), 'no name entry for an unfinished run').toBeNull();
   expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['New Game', 'Main menu']);
@@ -129,16 +126,13 @@ test('desktop: the result card New Game starts a fresh run at level 1', async ({
   expect(errors).toEqual([]);
 });
 
-test('desktop: the time limit running out ends the run with the result card, no name entry', async ({ page }) => {
+test('desktop: the time limit running out with nothing cleared ends the run with the result card, no name entry', async ({ page }) => {
   const errors = await open(page);
   await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  await solve(page);
-  await click(page, 'next');
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 1);
   await page.evaluate(() => window.__chrono!.advanceClock(2000));
   await cardIs(page, 'result');
-  expect(await words(page)).toContain('LEVEL 2 REACHED');
+  expect(await words(page)).toContain('LEVEL 1 REACHED');
   expect(await page.evaluate(() => window.__chrono!.flow)).toBe('title');
   expect(await page.evaluate(() => window.__chrono!.initials)).toBeNull();
   expect(await runOf(page)).toBeNull();
@@ -255,9 +249,6 @@ test('phone 375x812: the pause card, the result card and the name entry fit', as
   const errors = await open(page);
   await newGame(page, (id) => click(page, id));
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
-  await solve(page);
-  await click(page, 'next');
-  await page.waitForFunction(() => window.__chrono!.levelIndex === 1);
   const fits = async (name: string) => {
     await frames(page);
     for (const b of await page.evaluate(() => window.__chrono!.buttons())) {

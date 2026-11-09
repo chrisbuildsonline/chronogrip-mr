@@ -22,7 +22,7 @@ export async function calibrateByMouse(page: Page, opts: { onInBand?: () => Prom
 
 /** After the reward plays the complete card is up (no initials after a level: a score is asked for once, when a run ends). */
 export async function waitForComplete(page: Page) {
-  await page.waitForFunction(() => window.__chrono!.card?.screen === 'complete', undefined, { timeout: 15_000 });
+  await page.waitForFunction(() => ['complete', 'cleared'].includes(window.__chrono!.card?.screen ?? ''), undefined, { timeout: 15_000 });
 }
 
 type Q = { x: number; y: number; z: number; w: number };

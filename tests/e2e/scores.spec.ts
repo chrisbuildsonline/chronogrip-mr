@@ -61,7 +61,7 @@ async function solve(page: Page, solution: Record<string, string>) {
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   for (const [gear, axle] of Object.entries(solution)) await place(page, gear, axle);
   await calibrateByMouse(page);
-  await page.waitForFunction(() => window.__chrono!.card?.screen === 'complete');
+  await page.waitForFunction(() => ['complete', 'cleared'].includes(window.__chrono!.card?.screen ?? ''));
   await frames(page);
 }
 
@@ -166,7 +166,7 @@ test('desktop: against a full board a slower finished run asks for nothing; a fa
   await click(page, 'next');
   await cardIs(page, 'title'); // 11+ minutes against ten runs of 1 s: not on the board, no name entry
   expect(await initials(page)).toBeNull();
-  expect((await scores(page)).boards['campaign-medium']).toEqual(full(1_000, 1));
+  expect((await scores(page)).boards['campaign-medium']!.map(({ posted, ...e }) => e)).toEqual(full(1_000, 1)); // the outbox marks them posted
   expect(errors).toEqual([]);
 });
 
@@ -177,7 +177,7 @@ test('desktop: the board shows the ten fastest finished runs in one column, rank
   await click(page, 'scores');
   await cardIs(page, 'board');
   const labels = await page.evaluate(() => window.__chrono!.labels());
-  expect(labels.map((l) => l.text)).toEqual(expect.arrayContaining(['HIGH SCORES', 'EASY · FASTEST RUNS']));
+  expect(labels.map((l) => l.text)).toEqual(expect.arrayContaining(['HIGH SCORES', 'EASY · BEST RUNS']));
   expect(labels.filter((l) => /^(AAA|BBB|CCC|DDD|EEE)$/.test(l.text)).map((l) => l.text)).toEqual(['DDD', 'BBB', 'CCC', 'EEE', 'EEE', 'EEE', 'EEE', 'EEE', 'EEE', 'AAA']);
   const ranks = labels.filter((l) => /^(10|[1-9])$/.test(l.text));
   expect(ranks.map((l) => l.text).sort()).toEqual(['1', '10', '2', '3', '4', '5', '6', '7', '8', '9']);
