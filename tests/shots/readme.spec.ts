@@ -1,97 +1,101 @@
 import { test, type Page } from '@playwright/test';
 
-import { GHOST_PERIOD_S } from '../../src/ghost';
 import { calibrateByMouse } from '../e2e/calibrate';
 
-// The README screenshots, at full resolution (?shots keeps the pixel ratio up on software GL). Run with `bun run screenshots`.
+// The README screenshots: the whole 1440 x 900 window, with ?shots for the full look (the high quality tier, full pixel ratio on
+// software GL). Run with `bun run screenshots`. The global scores backend is stubbed, so nothing reaches the real table.
 const OUT = 'docs';
-/** The tray, its card and the bird, with a margin of the dark room round them (CSS px of the 1280 x 720 view). */
-const CLIP = { x: 305, y: 64, width: 700, height: 700 };
+const RUN = 'chronogrip.run.v1';
+/** A Hard run with 19 levels cleared in 31:47, so the title offers Continue and level 20 is next. */
+const SAVED_RUN = { stage: 'hard', cleared: 19, ms: 1_907_000 };
+
+const frames = (page: Page, n = 2) =>
+  page.evaluate((k) => new Promise<void>((done) => {
+    const step = (i: number) => (i <= 0 ? done() : requestAnimationFrame(() => step(i - 1)));
+    step(k);
+  }), n);
 
 async function click(page: Page, id: string) {
-  await page.waitForFunction((b) => window.__chrono!.buttons().some((x) => x.id === b), id);
+  await page.waitForFunction((b) => !window.__chrono!.cameraMoving && window.__chrono!.buttons().some((x) => x.id === b), id);
   const [x, y] = await page.evaluate((b) => window.__chrono!.buttons().find((x) => x.id === b)!.screen, id);
   await page.mouse.click(x, y);
 }
+
+const cardIs = (page: Page, s: string) => page.waitForFunction((x) => window.__chrono!.card?.screen === x, s, { timeout: 60_000 });
 
 const screen = (page: Page, kind: 'gears' | 'axles', id: string) =>
   page.evaluate(([k, i]) => window.__chrono!.toScreen(window.__chrono![k as 'gears' | 'axles'][i!]!), [kind, id] as const);
 
 async function place(page: Page, gear: string, axle: string) {
+  await page.waitForFunction(() => !window.__chrono!.cameraMoving);
+  await frames(page);
   const from = await screen(page, 'gears', gear);
   const to = await screen(page, 'axles', axle);
   await page.mouse.move(from[0], from[1]);
   await page.mouse.down();
+  await page.waitForFunction((g) => window.__chrono!.held === g, gear);
   await page.mouse.move(to[0], to[1], { steps: 8 });
   await page.mouse.up();
+  await page.waitForFunction(([g, a]) => window.__chrono!.placements[g!] === a, [gear, axle]);
 }
 
-type Held = { releaseFrames?: () => void };
-
-/**
- * A screenshot of the moment `when` holds (`now` is the frame's start time, as the game reads it). A software-GL screenshot
- * takes seconds, longer than the ring pulse or a wing beat, so the page's animation frames are held for the shot. The game
- * moves things in scene.onBeforeRender, which three runs after it updates the world matrices, so a pose set in one frame is
- * drawn in the next: the hold starts one frame after the one where `when` first holds.
- */
-async function shotWhen(page: Page, name: string, when: string) {
-  await page.evaluate((src) => new Promise<void>((done) => {
-    const holds = new Function('now', `return (${src});`) as (now: number) => boolean;
-    const raf = window.requestAnimationFrame.bind(window);
-    const queued: FrameRequestCallback[] = [];
-    let held = false;
-    let armed = false;
-    window.requestAnimationFrame = (cb) => raf((t) => {
-      if (held) return void queued.push(cb);
-      const now = performance.now();
-      cb(t);
-      if (armed || !holds(now)) return;
-      armed = true;
-      // Queued after the game's next frame request, so it runs once that frame is drawn.
-      raf(() => ((held = true), done()));
-    });
-    (window as Held).releaseFrames = () => {
-      window.requestAnimationFrame = raf;
-      for (const cb of queued.splice(0)) raf(cb);
-    };
-  }), when);
-  await page.screenshot({ path: `${OUT}/${name}.png`, clip: CLIP });
-  await page.evaluate(() => (window as Held).releaseFrames!());
+/** A still frame: the mouse parked in a corner (no hover highlight), a moment for the cards and the camera to settle. */
+async function shot(page: Page, name: string) {
+  await page.waitForFunction(() => !window.__chrono!.cameraMoving);
+  await page.waitForTimeout(1500);
+  await frames(page, 3);
+  await page.screenshot({ path: `${OUT}/${name}.png` });
 }
 
-test('README screenshots: title, a gear in hand mid-puzzle, level complete', async ({ page }) => {
+test('README screenshots: title menu, stage picker, Hard in play, stage cleared', async ({ page }) => {
+  await page.route('**/rest/v1/chronogrip_scores**', (r) => (r.request().method() === 'POST' ? r.fulfill({ status: 201, body: '' }) : r.fulfill({ json: [] })));
+  await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [RUN, JSON.stringify(SAVED_RUN)] as const);
   await page.goto('/?shots');
   await page.waitForFunction(() => window.__chrono?.ready === true);
-  // The loading card has faded out of the way.
   await page.locator('#loading').waitFor({ state: 'hidden' });
-  // The page heading and Enter MR note sit in the corners, outside the crop; hidden so no clipped text shows at its edge.
-  await page.addStyleTag({ content: '#title, #xr-entry { visibility: hidden !important; }' });
+  await page.waitForFunction(() => window.__chrono!.scenery.backdrop === 'c2');
+  await page.mouse.move(4, 896);
 
-  // Title: the card over the tray, the level 1 ghost hand partway through its carry (ghost.ts loops on performance.now).
-  await shotWhen(page, 'title', `(now / 1000 / ${GHOST_PERIOD_S}) % 1 > 0.36 && (now / 1000 / ${GHOST_PERIOD_S}) % 1 < 0.44`);
+  // The title menu, with the saved run's Continue on top.
+  await cardIs(page, 'title');
+  await shot(page, 'title');
 
-  // Mid-puzzle on level 10 (a generated puzzle, so no two shots are the same): one gear placed, the next carried by the mouse towards its axle, the axles it fits pulsing amber.
-  await page.evaluate(() => window.__chrono!.jump(10));
-  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 9);
+  // Continue: Hard level 20, the Iron Tower behind it. One gear placed, the next carried towards its axle, the axles it fits ringed amber.
+  await click(page, 'continue');
+  await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 19);
+  await page.waitForFunction(() => window.__chrono!.scenery.backdrop === 'c3' && window.__chrono!.ambient?.stage === 'hard');
   const parts = Object.entries(await page.evaluate(() => window.__chrono!.solution)) as [string, string][];
   const [[firstGear, firstAxle], [gear, axle]] = parts;
   await place(page, firstGear!, firstAxle!);
-  await page.waitForFunction((g) => window.__chrono!.placements[g!] !== undefined, firstGear);
+  await frames(page);
   const from = await screen(page, 'gears', gear!);
   const to = await screen(page, 'axles', axle!);
   await page.mouse.move(from[0], from[1]);
   await page.mouse.down();
-  const at = 0.65; // most of the way: the gear reads as lifted and in hand, and does not cover the rings
-  await page.mouse.move(from[0] + (to[0] - from[0]) * at, from[1] + (to[1] - from[1]) * at, { steps: 10 });
+  await page.waitForFunction((g) => window.__chrono!.held === g, gear);
+  await page.mouse.move(from[0] + (to[0] - from[0]) * 0.65, from[1] + (to[1] - from[1]) * 0.65, { steps: 10 });
   await page.waitForFunction(() => window.__chrono!.validAxles.length > 0);
-  // The rings at the top of their pulse (main.ts: sin(now / 160)).
-  await shotWhen(page, 'puzzle', 'Math.sin(now / 160) > 0.85');
+  await page.waitForTimeout(800);
+  await frames(page, 3);
+  await page.screenshot({ path: `${OUT}/puzzle.png` });
 
-  // Complete: drop it on its axle, calibrate, then catch the bird with its wings up over the complete card.
+  // Finish the train, regulate the escapement: the stage is cleared, the confetti comes down, then the stage-cleared card.
   await page.mouse.move(to[0], to[1], { steps: 4 });
   await page.mouse.up();
-  for (const [g, a] of parts.slice(2)) await place(page, g, a); // the rest of the train
+  await page.waitForFunction(([g, a]) => window.__chrono!.placements[g!] === a, [gear, axle]);
+  for (const [g, a] of parts.slice(2)) await place(page, g, a);
   await calibrateByMouse(page);
-  await page.waitForFunction(() => window.__chrono!.buttons().some((b) => b.id === 'next'));
-  await shotWhen(page, 'complete', 'window.__chrono.tickPhase % 1 < 0.05');
+  await cardIs(page, 'cleared');
+  await page.mouse.move(4, 896);
+  await shot(page, 'cleared');
+
+  // Continue goes to the name entry; Skip saves nothing. Then New Game: the three stage cards.
+  await click(page, 'next');
+  await cardIs(page, 'initials');
+  await click(page, 'skip');
+  await cardIs(page, 'title');
+  await click(page, 'start');
+  await cardIs(page, 'stages');
+  await page.mouse.move(4, 896);
+  await shot(page, 'stages');
 });
