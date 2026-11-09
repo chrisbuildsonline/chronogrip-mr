@@ -212,10 +212,27 @@ interface ChronoHook {
   readonly cameraAt: [number, number, number];
   /** Live: true while the desktop camera eases to a new fit (a level or card change on a narrow window). */
   readonly cameraMoving: boolean;
+  /** The stage-cleared celebration: when it began (performance.now ms, -Infinity before any), whether the gear confetti is flying, its gear count, how many fanfares played, and whether it runs calm (reduced motion). */
+  readonly celebration: { readonly at: number; readonly flying: boolean; readonly gears: number; readonly fanfares: number; readonly calm: boolean };
   /** Page pixel coordinates of a world point, for driving the mouse in tests. */
   toScreen(p: readonly [number, number, number]): [number, number];
 }
 
 interface Window {
   __chrono?: ChronoHook;
+  /** Only in a DEV_MODE=on build (src/cheats.ts): the cheat panel's actions, for tests. */
+  __chronoDev?: ChronoDev;
+}
+
+/** Build-time flag from DEV_MODE=on (vite.config.ts define). */
+declare const __DEV_MODE__: boolean;
+
+/** The cheat panel's actions: each runs the game's real flow (the level-complete card, the run, the stage-cleared celebration). */
+interface ChronoDev {
+  /** Solves the level on the board as if played: calibrated, complete card, the run counts it. */
+  solve(): void;
+  /** Plays level n (1-20) of a stage in a run that has cleared n-1 levels. */
+  jump(n: number, stage?: 'easy' | 'medium' | 'hard'): void;
+  /** Level 20 of the stage, solved at once: the stage-cleared celebration. */
+  clearStage(stage?: 'easy' | 'medium' | 'hard'): void;
 }

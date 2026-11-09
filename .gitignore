@@ -11,3 +11,4 @@ PLAN.md
 CLAUDE.md
 art/backdrops/out/
 __pycache__/
+dist-dev/

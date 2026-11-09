@@ -1,8 +1,16 @@
 import { injectIWER } from '@iwsdk/vite-plugin-iwer';
+import { loadEnv } from 'vite';
+
 import { defineConfig } from 'vitest/config';
+
+// No @types/node in this project; only the env is read from Node.
+declare const process: { env: Record<string, string | undefined> };
 
 export default defineConfig(({ mode }) => ({
   base: './',
+  // DEV_MODE=on (in .env or the shell) builds in the cheat panel (src/cheats.ts). Any other value folds the flag to false, so
+  // the panel's import is dead code and no build without it carries a byte of it.
+  define: { __DEV_MODE__: JSON.stringify((process.env.DEV_MODE ?? loadEnv(mode, '.', '').DEV_MODE) === 'on') },
   build: {
     outDir: 'dist',
     // Splitting cannot get under the default 500 kB: the biggest chunks are @iwsdk/core (5.5 MB, needed at boot, one unsplittable

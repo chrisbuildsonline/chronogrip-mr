@@ -16,7 +16,9 @@ import { trackMr } from './mr';
 import { isSoftwareGl, tuneForSoftwareGl } from './render';
 import { qualityOf } from './quality';
 import { createAmbient, poseOf, type Ambient } from './ambient';
-import { setPlainMetals } from './metal';
+import { brass, setPlainMetals } from './metal';
+import { createConfetti, spinUpBeats } from './celebrate';
+import { gearGeometry } from './gear';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
 import { MENU_SCREENS, PLAY_SCREENS, SCRIM_OPACITY, buttonAt, clockTenths, layout, menuAnchor, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
@@ -189,6 +191,11 @@ let ambSeconds = 0;
 let ambBeats = 0;
 let ambOffset = 0;
 let ambMul = 1;
+// The stage-cleared celebration (src/celebrate.ts): when it began (ms), and whether it runs calm (reduced motion: no confetti, no spin-up).
+let celebratedAt = -Infinity;
+/** A run the cheat panel touched (DEV_MODE builds): it plays out in full, but its time never goes to the global board. */
+let cheatedRun = false;
+const calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ambientEye = new Vector3();
 const ambientEye0 = new Vector3(...DESKTOP_EYE);
 function useAmbient(id: StageId | null): void {
@@ -218,7 +225,9 @@ function tickAmbient(dt: number): void {
   const raw = sound.beats() ?? (ambSeconds * THEMES[sound.theme].bpm) / 60;
   if (frozen) ambOffset = ambBeats - raw;
   else ambBeats = raw + ambOffset;
-  ambMul = ambient.update(ambBeats, ambSeconds).bgMul;
+  // After a stage is cleared the parts whirr up and settle: extra beats on top of the music's (src/celebrate.ts spinUpBeats).
+  const spin = calm || celebratedAt < 0 ? 0 : spinUpBeats((performance.now() - celebratedAt) / 1000);
+  ambMul = ambient.update(ambBeats + spin, ambSeconds).bgMul;
   // The parts were placed by direction from the tuned eye; the camera backs off and orbits, so the group rides along with it
   // (never rotating), which keeps every part in its painted spot of the cubemap (the second hand on the clock hub).
   ambient.group.position.copy(world.camera.getWorldPosition(ambientEye)).sub(ambientEye0);
@@ -519,6 +528,19 @@ function letGoKnob(): void {
 }
 
 // Reward: an amber ring that bursts from the target gear when the train is solved, and round the dial when calibrated.
+// Gear confetti for a cleared stage: small brass gears thrown up from the dial, landing on the bench (src/celebrate.ts).
+const confetti = createConfetti(gearGeometry({ module: 0.0018, teeth: 12, thickness: 0.0025 }), brass());
+world.scene.add(confetti.mesh);
+/** All 20 levels of the stage solved: the fanfare over the chime, the gear confetti and the backdrop's spin-up (calm: the sound only). */
+function celebrate(): void {
+  celebratedAt = performance.now();
+  sound.fanfare();
+  if (calm) return;
+  const from = built.tray.localToWorld(new Vector3(...trayLocal(0, 0, 0.03))); // the middle of the tray
+  // On the bench they land on its top; in immersive-ar, on the real table just under the tray.
+  const floor = world.renderer.xr.isPresenting ? -0.03 : BENCH_TOP_Y - from.y;
+  confetti.start(from, new Vector3(0, 1, 0), celebratedAt, 20, floor);
+}
 const burst = new Mesh(new RingGeometry(0.03, 0.036, 48), new MeshBasicMaterial({ color: 0xd99a2b, transparent: true, depthWrite: false, side: DoubleSide }));
 burst.rotation.x = -Math.PI / 2;
 burst.visible = false;
@@ -614,6 +636,7 @@ function playRandom(d: Difficulty): void {
 
 /** A fresh run of a stage from its level 1. */
 function newRun(id: StageId): void {
+  cheatedRun = false;
   stage = id;
   run = startRun(id);
   saveRun(storage, run);
@@ -732,7 +755,7 @@ function pressOverlay(id: string): void {
     else if (id === 'save') {
       scores = addEntry(scores, o.board, { ...o.entry, name: o.letters });
       saveScores(storage, scores);
-      void submitGlobal(o.board, scores.initials, o.entry.ms, RUN_STEP); // fire and forget: the card never waits on it
+      if (!(__DEV_MODE__ && cheatedRun)) void submitGlobal(o.board, scores.initials, o.entry.ms, RUN_STEP); // fire and forget: the card never waits on it
       overlay = null;
     } else if (id === 'skip') overlay = null;
     else return;
@@ -775,6 +798,7 @@ function send(e: FlowEvent): void {
     if (run && levelIndex < CAMPAIGN) {
       run = solvedLevel(run, levelClock.seconds);
       saveRun(storage, run);
+      if (won(run)) celebrate(); // level 20: the stage is cleared
     }
     burst.position.set(...trayLocal(DIAL_AT[0], DIAL_AT[1], 0.008));
   }
@@ -1442,6 +1466,7 @@ world.scene.onBeforeRender = () => {
   const knobLit = turning !== null || (flow.name === 'calibrate' && (mouseKnob || (['left', 'right'] as const).some((h) => handPoints[h] && nearKnob(handPoints[h]!))));
   escapement.update({ setting: regulator.setting, target: regulator.target, phase: regulator.phase, ticking, hold: regulator.hold, inBand: regulator.inBand, calibrated: regulator.calibrated, lit: knobLit });
   automaton.update(now / 1000, regulator.phase, regulator.calibrated, built.tray.rotation.x);
+  confetti.update(now);
 
   // Reward, on solve and again on calibrated: every gear flashes amber, fading out, and a ring bursts.
   const sinceReward = (now - rewardAt) / 1000;
@@ -1551,6 +1576,7 @@ function showPanel(now = performance.now()): void {
   panels.show(waiting ? null : (overlay?.kind ?? screenOf(flow)), {
     initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms } : undefined,
     result: overlay?.kind === 'result' ? { level: overlay.level, ms: overlay.ms } : undefined,
+    cleared: flow.name === 'complete' && run && won(run) ? { ms: run.ms } : undefined,
     countdown: overlay?.kind === 'countdown' ? countdownNumber(overlay.at, now) : undefined,
     aboutScroll: overlay?.kind === 'about' ? overlay.scroll : undefined,
     board: overlay?.kind === 'board' ? boardCard(overlay.board, overlay.tab) : undefined,
@@ -1890,6 +1916,9 @@ window.__chrono = Object.freeze({
   get automatonRunning() {
     return regulator.calibrated;
   },
+  get celebration() {
+    return { at: celebratedAt, flying: confetti.flying, gears: confetti.mesh.count, fanfares: sound.counts.fanfares, calm };
+  },
   get tickPhase() {
     return regulator.phase;
   },
@@ -1954,3 +1983,29 @@ window.__chrono = Object.freeze({
   },
   toScreen,
 });
+
+// DEV_MODE=on builds only (vite.config.ts): the cheat panel. In any other build __DEV_MODE__ is false, this block is dead code,
+// and the bundler drops it with src/cheats.ts. Each cheat runs the real flow, so what follows (the complete card, the run, the
+// stage-cleared celebration and the name entry) is exactly what playing would give.
+if (__DEV_MODE__) {
+  /** The level on the board, solved as if played: regulated, then the complete card. */
+  const solve = () => {
+    if (flow.name === 'paused' || overlay?.kind === 'countdown') return;
+    if (flow.name === 'playing') send({ type: 'solve' });
+    if (flow.name === 'calibrate') send({ type: 'calibrated' });
+  };
+  /** Level n of a stage, in a run that has cleared the n-1 before it (its time carried if it is the same stage's run). */
+  const jump = (n: number, st: StageId = stage) => {
+    const i = Math.min(CAMPAIGN, Math.max(1, Math.round(Number.isFinite(n) ? n : 1))) - 1;
+    overlay = null;
+    stage = st;
+    // A nominal minute per skipped level, so the run has a time (a 0 ms run scores nothing) and the name entry comes up.
+    run = { stage: st, cleared: i, ms: run?.stage === st ? run.ms : i * 60_000 };
+    cheatedRun = true;
+    saveRun(storage, run);
+    send({ type: 'play', level: i });
+  };
+  const dev: ChronoDev = { solve, jump, clearStage: (st = stage) => (jump(CAMPAIGN, st), solve()) };
+  window.__chronoDev = dev;
+  void import('./cheats').then((m) => m.mountCheats(dev, () => ({ stage, level: levelIndex + 1, flow: flow.name })));
+}
