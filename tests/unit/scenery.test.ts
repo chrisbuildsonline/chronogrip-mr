@@ -4,7 +4,7 @@ import { DEFAULT_PLACEMENT, type Placement } from '../../src/anchor';
 import { C, SCENE } from '../../src/palette';
 import { backdropDir } from '../../src/backdrop';
 import { buildScenery, createScenery } from '../../src/scenery';
-import { metalEnv, setMetalEnv } from '../../src/metal';
+import { brass, metalEnv, setMetalEnv, setPlainMetals } from '../../src/metal';
 import { benchTopGeometry, brassInlay, planarUv, type WoodSet } from '../../src/wood';
 import { BOARD_MARGIN, COMFORT, TRAY_HALF, TRAY_POSE, inZone, type Vec3 } from '../../src/seat';
 import { PANEL_ZONE } from '../../src/ui';
@@ -217,6 +217,20 @@ describe('createScenery: the stage environment for the metals', () => {
     sc.setBackdrop('c1', new CubeTexture());
     expect(metalEnv()).toBeNull();
     expect(sc.state().environment).toBe('neutral');
+  });
+});
+
+describe('createScenery: Hard\'s dark night environment', () => {
+  it('the metals read the c3 environment stronger than the attics\', and back to normal for the others', () => {
+    const sc = createScenery(new Scene());
+    setPlainMetals(true); // no canvas in node
+    setMetalEnv(null);
+    const probe = () => brass().envMapIntensity;
+    sc.setBackdrop('c3', new CubeTexture());
+    expect(probe()).toBeGreaterThan(20);
+    sc.setBackdrop('c2', new CubeTexture());
+    expect(probe()).toBe(10);
+    setPlainMetals(false);
   });
 });
 

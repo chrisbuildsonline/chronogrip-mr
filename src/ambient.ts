@@ -66,6 +66,19 @@ export function cubeDirection(face: 'nz', x: number, y: number, size: number): V
  * ring (r about 62, centre 1425, 986) and the outer edge (r about 88, centre 1427, 991): face pixel (1426.5, 988.5) (+0.5 = texel centre).
  */
 export const EASY_HUB = cubeDirection('nz', 1426.5, 988.5, 2048);
+
+/**
+ * Hard's animation spots on the Iron Tower render (art/backdrops/c3e_skyline.py, run.py prints them): azimuth (degrees right of the
+ * view's forward, the game's -z) and elevation from the eye. Pendulum pivot and bob are the two ends of a 4 m rod about 9 m out;
+ * the wheel arbor is the bare axle in open sky on the right.
+ */
+export const HARD_SPOTS = { pendulum: { az: -27, el: 14 }, bob: { az: -27, el: -11.8 }, wheel: { az: 23, el: -3 } } as const;
+type HardSpot = { readonly az: number; readonly el: number };
+/** The world direction of an azimuth and elevation (degrees) from the eye: forward is -z, up +y, +az to the right (+x). */
+export function spotDirection({ az, el }: HardSpot): Vec3 {
+  const a = MathUtils.degToRad(az), e = MathUtils.degToRad(el);
+  return [Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)];
+}
 const MODULE = 0.034;
 
 /** One escapement step per beat: a quick jump with a small overshoot in the first 22 % of the beat, then rest. */
@@ -236,24 +249,28 @@ export function createAmbient(stage: AmbientStage, opts: AmbientOptions): Ambien
   }
 
   if (stage === 'hard') {
-    // big gears close up: top-left, and bottom-right under the giant balance wheel and hairspring (kept clear)
-    const left = face(new Group(), at(55, 25, 2.6)); left.scale.setScalar(px(165, 2.6) / ((MODULE * 40) / 2)); group.add(left);
-    const gl = train(left, [{ teeth: 40 }, { teeth: 12, mat: darkBrass, angle: -1.05 }]);
-    const right = face(new Group(), at(1262, 445, 2.3)); right.scale.setScalar(px(135, 2.3) / ((MODULE * 30) / 2)); group.add(right);
-    const gr = train(right, [{ teeth: 30, mat: darkBrass }, { teeth: 10, mat: darkBrass, angle: 2.6 }]);
-    updates.push((b) => { const d = Math.floor(b) + stepEase(b % 1); turn(gl, (d * Math.PI * 2) / 40); turn(gr, -(d * Math.PI * 2) / 30); });
+    // Iron Tower, Midnight (art/backdrops/c3e_skyline.py): a pendulum across the moon and a wheel train on the bare axle in open sky, both
+    // anchored by the directions the render prints (HARD_SPOTS), a cold beat flash and a few slow blue mist motes.
+    const spot = (d: HardSpot, dist: number) => new Vector3(...spotDirection(d)).multiplyScalar(dist).add(eye);
+    const pend = new Group(), swing = new Group(); // not turned to face the eye: it hangs straight down in the world
+    pend.position.copy(spot(HARD_SPOTS.pendulum, 9));
+    pend.add(swing); group.add(pend);
+    const rod = mesh(new CylinderGeometry(0.022, 0.022, 4, 10), steel); rod.position.y = -2;
+    const bob = mesh(new CylinderGeometry(0.3, 0.3, 0.06, 48), bobBrass); bob.rotation.x = Math.PI / 2; bob.position.y = -4;
+    swing.add(rod, bob); pend.add(mesh(new SphereGeometry(0.07, 16, 12), darkBrass));
+    updates.push((b) => (swing.rotation.z = 0.2 * Math.sin(Math.PI * b))); // one swing per beat, through the middle on the tick
 
-    if (!opts.phone) { // warm haze: a few huge soft puffs drifting across the movement
-      const puff = softDot('255,170,90');
-      const puffs = Array.from({ length: 7 }, (_, i) => {
-        const m = mesh(new PlaneGeometry(1, 1), additive({ map: puff, opacity: 0.07 })), d = 3 + (i % 3);
-        m.scale.setScalar(px(520 + (i % 2) * 260, d)); group.add(m);
-        return { m, sx: (i / 7) * 1500 - 100, sy: 120 + (i % 3) * 110, d, speed: 9 + (i % 4) * 4 };
-      });
-      updates.push((_b, s) => puffs.forEach((u) => face(u.m, at(((u.sx + s * u.speed) % 1600) - 160, u.sy + Math.sin(s * 0.3 + u.sx) * 20, u.d))));
-    }
-    dust(450, [0, 0, 1280, 560], 0.8, 3.2, '235,225,205', 0.01, 0.03, 0.6);
-    updates.push((_b, _s, frac) => { const k = thumpLight(frac); bgMul *= k; lightMul *= 1 + ((k - 1) / THUMP) * 0.4; });
+    const wheel = face(new Group(), spot(HARD_SPOTS.wheel, 9));
+    wheel.scale.setScalar(px(84, 9) / ((MODULE * 30) / 2)); group.add(wheel);
+    const gw = train(wheel, [{ teeth: 30 }, { teeth: 10, mat: steel, angle: 3.3 }, { teeth: 22, mat: darkBrass, angle: 2.7 }]);
+    updates.push((b) => turn(gw, ((Math.floor(b) + stepEase(b % 1)) * Math.PI * 2) / 30)); // one tooth of the big wheel per beat
+
+    // the beat: the room light thumps a little, and a cold wash of light pulses with it
+    const flashMat = additive({ map: softDot('120,160,230'), opacity: 0 }), flash = mesh(new PlaneGeometry(90, 90), flashMat);
+    group.add(face(flash, at(640, 380, 25)));
+    updates.push((b, _s, frac) => { const k = thumpLight(frac); bgMul *= k; lightMul *= 1 + ((k - 1) / THUMP) * 0.4; flashMat.opacity = b > 0 ? 0.35 * ((k - 1) / THUMP) * 0.25 : 0; });
+
+    dust(70, [0, 0, 1280, 560], 1.5, 6, '150,190,255', 0.02, 0.004, 0.55);
   }
 
   for (const u of updates) u(0, 0, 0); // place everything once at rest (reduced motion keeps this pose)

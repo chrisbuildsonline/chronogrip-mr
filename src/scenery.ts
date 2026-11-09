@@ -25,7 +25,7 @@ import type { Placement } from './anchor';
 import { type BackdropId } from './backdrop';
 import { C, SCENE } from './palette';
 import { TRAY_POSE } from './seat';
-import { metalEnv, setMetalEnv } from './metal';
+import { metalEnv, setMetalEnv, setMetalEnvIntensity } from './metal';
 import { type WoodSet, benchTopGeometry, benchWood } from './wood';
 
 /** 'inline' is the desktop and phone view (the bench under the tray, a rendered cubemap behind it); 'xr' is immersive-ar (a few props on the real table, nothing else). */
@@ -40,6 +40,8 @@ export type Scenery = {
 
 /** Top of the workbench: just under the lowest point of the tilted tray (its near edge, about y = -0.332). */
 export const BENCH_Y = -0.336;
+/** How strongly the metals read Hard's night environment (the attics' is 10). */
+const HARD_ENV_INTENSITY = 34;
 
 /** Direction the workshop's light comes from (the game's key light, from the upper left), for the baked shading. */
 const KEY = new Vector3(-0.6, 0.8, 0.25).normalize();
@@ -252,6 +254,7 @@ export function createScenery(scene: Scene, wood: WoodSet | null = null, pmrem: 
     setBackdrop(id, texture) {
       if (backdrop && backdrop.texture !== texture) backdrop.texture.dispose();
       backdrop = { id, texture };
+      setMetalEnvIntensity(id === 'c3' ? HARD_ENV_INTENSITY : 10); // Hard's night environment is far darker than the attics'
       if (pmrem) {
         stageEnv?.dispose();
         stageEnv = pmrem.fromCubemap(texture);

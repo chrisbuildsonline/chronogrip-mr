@@ -93,7 +93,7 @@ test('phone 375x812: the parts are there, trimmed, and the page is clean', async
   await page.waitForFunction(() => window.__chrono!.ambient?.stage === 'hard');
   await frames(page);
   const hard = (await ambient(page))!;
-  expect(hard.parts, "no haze puffs on a phone").toBe(3);
+  expect(hard.parts, "the pendulum, the wheel train, the beat flash and the mist").toBe(4);
   await page.screenshot({ path: `${OUT}/phone-hard.png` });
   expect(errors).toEqual([]);
 });

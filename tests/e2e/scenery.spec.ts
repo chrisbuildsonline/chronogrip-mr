@@ -1,5 +1,5 @@
 import { expect, test, type Page } from './fixtures';
-import { choose } from './start';
+import { choose, newGame } from './start';
 
 import { RENDER_BUDGET } from '../../src/budget';
 import { LEVELS } from '../../src/levels';
@@ -152,9 +152,12 @@ async function brightness(page: Page, regions: { x: number; y: number; w: number
   );
 }
 
-test('every brass gear reads as brass, never near black, from three orbit angles', async ({ page }) => {
-  const errors = await open(page, 1440, 900);
-  await choose(page, () => Promise.resolve(), 5);
+async function brassCheck(page: Page, stage: 'easy' | 'hard', query = '') {
+  const errors = await open(page, 1440, 900, [], query);
+  if (stage === 'hard') {
+    await newGame(page, (id) => click(page, id), 'hard');
+    await page.evaluate(() => window.__chrono!.jump(5));
+  } else await choose(page, () => Promise.resolve(), 5);
   await page.waitForFunction(() => window.__chrono!.flow === 'playing');
   await page.waitForFunction(() => !window.__chrono!.cameraMoving);
   const seen: string[] = [];
@@ -175,10 +178,31 @@ test('every brass gear reads as brass, never near black, from three orbit angles
       seen.push(`angle ${i} ${g.id}: ${lums[k]!.toFixed(0)}`);
       expect(lums[k]!, `angle ${i} gear ${g.id}`).toBeGreaterThan(BRASS_FLOOR);
     });
-    await page.screenshot({ path: `${OUT}/orbit-${i}.png` });
+    await page.screenshot({ path: `${OUT}/orbit-${stage}${query ? '-high' : ''}-${i}.png` });
   }
   console.log(seen.join('\n'));
   expect(seen.length).toBeGreaterThan(6);
+  expect(errors).toEqual([]);
+}
+
+test('every brass gear reads as brass, never near black, from three orbit angles', async ({ page }) => {
+  await brassCheck(page, 'easy');
+});
+
+test('Hard on the night skyline: the gears read as brass (low tier)', async ({ page }) => {
+  await brassCheck(page, 'hard');
+});
+
+test('Hard loads the Iron Tower cubemap (c3): its six faces, as a cube background', async ({ page }) => {
+  const requests: string[] = [];
+  const errors = await open(page, 1440, 900, requests);
+  await newGame(page, (id) => click(page, id), 'hard');
+  await page.waitForFunction(() => window.__chrono!.scenery.backdrop === 'c3', undefined, { timeout: 20_000 });
+  for (const f of FACES) expect(requests.some((u) => u.endsWith(`/backdrops/c3_cube_1024/${f}`)), f).toBe(true);
+  expect(requests.some((u) => /c3_pano|c3_cube\/(?!.*1024)/.test(u) && !u.includes('_1024'))).toBe(false);
+  const s = await page.evaluate(() => window.__chrono!.scenery);
+  expect(s.cube).toBe(true);
+  expect(s.background).toBe(true);
   expect(errors).toEqual([]);
 });
 

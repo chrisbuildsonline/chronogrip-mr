@@ -114,7 +114,12 @@ function track<M extends MeshStandardMaterial>(m: M): M {
   return m;
 }
 /** The backdrops are dim, warm LDR images, so a metal reads them stronger than 1. */
-const ENV_INTENSITY = 10;
+let ENV_INTENSITY = 10;
+/** Hard's night skyline is much darker than the attics: its metals read the environment stronger so the gears keep their brass. */
+export function setMetalEnvIntensity(k: number): void {
+  ENV_INTENSITY = k;
+  for (const m of live) m.envMapIntensity = k;
+}
 
 /** Polished brass: metalness 1, roughness about 0.3, a warm colour, a subtle brushing. */
 export const brass = (repeat = 40): MeshStandardMaterial =>

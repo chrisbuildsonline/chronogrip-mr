@@ -94,14 +94,14 @@ describe('createAmbient', () => {
     a.dispose();
   });
 
-  it('a phone drops the haze on Hard and halves the dust', () => {
-    expect(parts(make('hard', { phone: true }).group)).toBeLessThan(parts(make('hard').group));
+  it('a phone halves the dust (Hard\'s mist motes, Easy\'s dust)', () => {
     const motes = (g: Object3D) => {
       let n = 0;
       g.traverse((c) => (c as Points).isPoints && (n += (c as Points).geometry.attributes.position!.count));
       return n;
     };
     expect(motes(make('easy', { phone: true }).group)).toBe(motes(make('easy').group) / 2);
+    expect(motes(make('hard', { phone: true }).group)).toBe(motes(make('hard').group) / 2);
   });
 
   it('uses the real gear geometry: Medium and Hard stay far under the prototype\'s 21k triangles', () => {
@@ -183,6 +183,42 @@ describe('createAmbient', () => {
       const tail = discs.filter((d) => d.y < 0);
       expect(tail).toHaveLength(1);
       expect(tail[0]!.r, 'the counterweight is at most half the cap').toBeLessThanOrEqual(big.r / 2 + 1e-9);
+      a.dispose();
+    });
+  });
+
+  describe('Hard on the Iron Tower render', () => {
+    // az and el from out/final.log of the render (c3e_skyline SPOT lines): azimuth right of the view's forward (-z), elevation up.
+    const dirOf = (az: number, el: number) => new Vector3(Math.sin((az * Math.PI) / 180) * Math.cos((el * Math.PI) / 180), Math.sin((el * Math.PI) / 180), -Math.cos((az * Math.PI) / 180) * Math.cos((el * Math.PI) / 180));
+    const eye = new Vector3(...DESKTOP_EYE);
+    const angle = (a: Vector3, b: Vector3) => (a.angleTo(b) * 180) / Math.PI;
+
+    it('anchors the pendulum pivot and bob, and the wheel arbor, within 0.3 degrees of the logged spots', () => {
+      const a = make('hard');
+      a.group.updateMatrixWorld(true);
+      const from = (o: Object3D) => o.getWorldPosition(new Vector3()).sub(eye).normalize();
+      const pend = a.group.children[0]!;
+      expect(angle(from(pend), dirOf(-27, 14)), 'pendulum pivot').toBeLessThan(0.3);
+      expect(angle(from(a.group.children[1]!), dirOf(23, -3)), 'wheel arbor').toBeLessThan(0.3);
+      // the bob hangs 4 m below at rest: its direction from the eye is the logged bob spot
+      const bob = new Vector3();
+      pend.traverse((o) => ((o as Mesh).isMesh && (o as Mesh).geometry.type === 'CylinderGeometry' && (o as Mesh).position.y <= -4 ? o.getWorldPosition(bob) : null));
+      expect(angle(bob.clone().sub(eye).normalize(), dirOf(-27, -11.8)), 'pendulum bob at rest').toBeLessThan(0.3);
+      a.dispose();
+    });
+
+    it('swings the pendulum once per beat, through the middle on the tick, and turns the wheel a tooth a beat', () => {
+      const a = make('hard');
+      const rot = () => {
+        const swing = a.group.children[0]!.children[0]!;
+        return swing.rotation.z;
+      };
+      a.update(0, 0);
+      expect(rot()).toBeCloseTo(0, 9);
+      a.update(0.5, 1);
+      expect(Math.abs(rot())).toBeCloseTo(0.2, 6);
+      a.update(1, 2);
+      expect(rot()).toBeCloseTo(0, 6);
       a.dispose();
     });
   });
