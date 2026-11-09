@@ -31,6 +31,9 @@ export const C = {
   menuMuted: '#a8977f',
   /** The surface the menu words are checked on: walnut night, darker than the 90% layer over any wall. */
   menuBed: '#15110d',
+  /** The stage-cleared card: a walnut-night panel, lighter at the top, under an amber hairline. */
+  clearedTop: '#2a1d12',
+  clearedFoot: '#100b07',
 } as const;
 
 /**

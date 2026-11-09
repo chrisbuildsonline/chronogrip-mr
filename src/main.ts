@@ -904,6 +904,22 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
 const live = () => flow.name === 'playing';
 /** The complete card waits while the automaton and the running train play the reward. */
 const COMPLETE_DELAY_MS = 2000;
+/** How long the board takes to sink away under the stage-cleared card, and how far it goes. */
+const BOARD_HIDE_MS = 600;
+const BOARD_SINK_M = 0.22;
+/** 0: the board where it belongs; 1: sunk, shrunk and hidden. The tray's own pose is kept and put back at 0. */
+let boardHidden = 0;
+let trayHome: { y: number; scale: number } | null = null;
+function hideBoard(k: number): void {
+  if (k === boardHidden) return;
+  if (k > 0 && !trayHome) trayHome = { y: built.tray.position.y, scale: built.tray.scale.x };
+  boardHidden = k;
+  if (!trayHome) return;
+  const e = k * k * (3 - 2 * k); // smoothstep: eases out of place and into hiding
+  built.tray.position.y = trayHome.y - BOARD_SINK_M * e;
+  built.tray.scale.setScalar(trayHome.scale * (1 - 0.35 * e));
+  if (k === 0) trayHome = null;
+}
 /** The stage-cleared card waits for the confetti to come down and the bird to sing. */
 const CLEARED_DELAY_MS = 2800;
 /** What the stage-cleared card shows: the run's time, its place on this device's board (0: off it) and every stage with a time. */
@@ -1598,8 +1614,9 @@ function showPanel(now = performance.now()): void {
   // After level 20 of a run the complete card is the stage-cleared one, and it waits a little longer: the confetti and the bird first.
   const stageCleared = flow.name === 'complete' && !!run && won(run);
   const waiting = flow.name === 'complete' && now - calibratedAt < (stageCleared ? CLEARED_DELAY_MS : COMPLETE_DELAY_MS);
-  // The stage-cleared card dims the room only halfway, so the board goes while it is up (as it does on the pause card): the words stay clear.
-  built.tray.visible = flow.name !== 'paused' && !(stageCleared && !waiting && !overlay);
+  // The stage-cleared card: the board sinks and shrinks away under the dim layer (as the pause card hides it), then stays hidden.
+  hideBoard(stageCleared && !waiting && !overlay ? Math.min(1, (now - calibratedAt - CLEARED_DELAY_MS) / BOARD_HIDE_MS) : 0);
+  built.tray.visible = flow.name !== 'paused' && boardHidden < 1;
   panels.show(waiting ? null : (overlay?.kind ?? (stageCleared ? 'cleared' : screenOf(flow))), {
     initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms } : undefined,
     result: overlay?.kind === 'result' ? { level: overlay.level, ms: overlay.ms } : undefined,

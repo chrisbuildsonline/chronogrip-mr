@@ -501,6 +501,51 @@ function drawAbout(g: Draw, l: Layout, ctx: PanelCtx, at: (x: number, y: number)
   void bottom;
 }
 
+/**
+ * The stage-cleared card's own panel (the other menus have none): walnut night, lighter at the top, an amber hairline and a
+ * large faint gear turning out of the lower right corner.
+ */
+function clearedCard(g: Draw, W: number, H: number) {
+  g.save();
+  g.shadowColor = C.shadow;
+  g.shadowBlur = 40;
+  g.shadowOffsetY = 12;
+  g.beginPath();
+  g.roundRect(MARGIN, MARGIN, W, H, mm(18));
+  const fill = g.createLinearGradient(0, MARGIN, 0, MARGIN + H);
+  fill.addColorStop(0, C.clearedTop);
+  fill.addColorStop(1, C.clearedFoot);
+  g.fillStyle = fill;
+  g.fill();
+  g.restore();
+  g.save();
+  g.beginPath();
+  g.roundRect(MARGIN, MARGIN, W, H, mm(18));
+  g.clip();
+  // the watermark gear: 24 teeth, centred just off the corner
+  const [gx, gy, r] = [MARGIN + W * 0.92, MARGIN + H * 0.86, H * 0.42];
+  g.beginPath();
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * Math.PI * 2, rr = i % 2 ? r : r * 1.1;
+    g.lineTo(gx + rr * Math.cos(a), gy + rr * Math.sin(a));
+  }
+  g.closePath();
+  g.moveTo(gx + r * 0.18, gy);
+  g.arc(gx, gy, r * 0.18, 0, Math.PI * 2, true);
+  g.globalAlpha = 0.045;
+  g.fillStyle = C.amber;
+  g.fill('evenodd');
+  g.restore();
+  g.save();
+  g.beginPath();
+  g.roundRect(MARGIN + 1, MARGIN + 1, W - 2, H - 2, mm(18));
+  g.globalAlpha = 0.55;
+  g.lineWidth = 2;
+  g.strokeStyle = C.amber;
+  g.stroke();
+  g.restore();
+}
+
 /** A run's time in words: "48.2 s" under a minute, else "19 min 03 s". */
 export const spoken = (ms: number): string => {
   const s = Math.max(0, ms) / 1000;
@@ -653,6 +698,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   const shared = special && !!ctx.shared;
   const random = special && !!ctx.random;
   const name = random ? `Random · ${ctx.difficulty ?? ''}` : shared ? 'Shared puzzle' : `Level ${level}`;
+  if (screen === 'cleared') clearedCard(g, W, H);
   if (menu) drawMenu(g, screen, l, ctx, at);
   switch (screen) {
     case 'hud':

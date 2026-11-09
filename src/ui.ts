@@ -9,7 +9,7 @@ export const SCREENS: readonly Screen[] = ['title', 'hud', 'complete', 'paused']
 /** How opaque the black layer behind the menus is. */
 export const SCRIM_OPACITY = 0.9;
 /** The stage-cleared card dims the room only halfway, so the celebration still shows through; the layer fades in over this many ms. */
-export const CLEARED_SCRIM = { opacity: 0.5, fadeMs: 700 } as const;
+export const CLEARED_SCRIM = { opacity: 0.72, fadeMs: 700 } as const;
 /** The menus: the game behind them is dimmed to 90% black (a full-view layer on a flat screen, a backing panel in AR). */
 export const MENU_SCREENS: readonly Screen[] = ['title', 'stages', 'picker', 'board', 'options', 'about', 'paused', 'countdown', 'result', 'initials', 'cleared'];
 /** The cards the board is played with: the camera fits for these, the menus are centred over a black layer. */
