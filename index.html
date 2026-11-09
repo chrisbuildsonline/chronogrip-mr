@@ -24,6 +24,8 @@
       h1::after { content: ""; position: absolute; left: 0; right: 0.32em; bottom: -9px; height: 2px; background: linear-gradient(90deg, #d99a2b, transparent); }
       /* Top right, opposite the wordmark, so it never covers the board in the desktop view. */
       /* One row in the corner: the level progress (when shown) left of the Enter MR column, so the two can never overlap or run off the edge. */
+      /* A soft dark band behind the header row on every screen (the logo, the level pill, Enter MR): 0 to 35% of the palette's walnut night (C.menuBed #15110d) over the top 90 px, so a bright moon or clock face never washes the wordmark. */
+      #hdr-fade { position: fixed; top: 0; left: 0; right: 0; height: 90px; z-index: 0; pointer-events: none; background: linear-gradient(to bottom, rgba(21, 17, 13, 0.35), rgba(21, 17, 13, 0)); }
       #hdr { position: fixed; top: 14px; right: 24px; z-index: 1; display: flex; align-items: flex-start; gap: 12px; max-width: calc(100vw - 48px); }
       #xr-entry {
         max-width: 220px; text-align: right;
@@ -152,6 +154,7 @@
         <p class="cg-detail" id="loading-detail"></p>
       </div>
     </div>
+    <div id="hdr-fade" aria-hidden="true"></div>
     <h1 id="title" aria-label="ChronoGrip">CHR<svg viewBox="-1.05 -1.05 2.1 2.1" aria-hidden="true"><path d="M0.740 0.000 L0.994 0.113 L0.980 0.200 L0.704 0.229 L0.599 0.435 L0.738 0.675 L0.675 0.738 L0.435 0.599 L0.229 0.704 L0.200 0.980 L0.113 0.994 L0.000 0.740 L-0.229 0.704 L-0.414 0.910 L-0.493 0.870 L-0.435 0.599 L-0.599 0.435 L-0.870 0.493 L-0.910 0.414 L-0.704 0.229 L-0.740 0.000 L-0.994 -0.113 L-0.980 -0.200 L-0.704 -0.229 L-0.599 -0.435 L-0.738 -0.675 L-0.675 -0.738 L-0.435 -0.599 L-0.229 -0.704 L-0.200 -0.980 L-0.113 -0.994 L-0.000 -0.740 L0.229 -0.704 L0.414 -0.910 L0.493 -0.870 L0.435 -0.599 L0.599 -0.435 L0.870 -0.493 L0.910 -0.414 L0.704 -0.229Z M0.34 0 A0.34 0.34 0 1 0 -0.34 0 A0.34 0.34 0 1 0 0.34 0Z"/></svg>N<svg viewBox="-1.05 -1.05 2.1 2.1" aria-hidden="true"><path d="M0.740 0.000 L0.994 0.113 L0.980 0.200 L0.704 0.229 L0.599 0.435 L0.738 0.675 L0.675 0.738 L0.435 0.599 L0.229 0.704 L0.200 0.980 L0.113 0.994 L0.000 0.740 L-0.229 0.704 L-0.414 0.910 L-0.493 0.870 L-0.435 0.599 L-0.599 0.435 L-0.870 0.493 L-0.910 0.414 L-0.704 0.229 L-0.740 0.000 L-0.994 -0.113 L-0.980 -0.200 L-0.704 -0.229 L-0.599 -0.435 L-0.738 -0.675 L-0.675 -0.738 L-0.435 -0.599 L-0.229 -0.704 L-0.200 -0.980 L-0.113 -0.994 L-0.000 -0.740 L0.229 -0.704 L0.414 -0.910 L0.493 -0.870 L0.435 -0.599 L0.599 -0.435 L0.870 -0.493 L0.910 -0.414 L0.704 -0.229Z M0.34 0 A0.34 0.34 0 1 0 -0.34 0 A0.34 0.34 0 1 0 0.34 0Z"/></svg>GRIP</h1>
     <div id="hdr">
     <div id="progress" aria-live="polite" hidden>

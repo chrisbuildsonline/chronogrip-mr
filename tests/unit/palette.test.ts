@@ -87,3 +87,15 @@ describe('palette contrast (WCAG AA)', () => {
     }
   });
 });
+
+describe('the header fade (index.html)', () => {
+  it('is a 0 to 35 % gradient of the palette\'s walnut night over the top 90 px, behind the header', async () => {
+    const html = (await import('../../index.html?raw')).default as string;
+    const { C } = await import('../../src/palette');
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(C.menuBed.slice(i, i + 2), 16));
+    expect(html).toContain('id="hdr-fade"');
+    expect(html).toContain(`linear-gradient(to bottom, rgba(${r}, ${g}, ${b}, 0.35), rgba(${r}, ${g}, ${b}, 0))`);
+    expect(html).toMatch(/#hdr-fade \{[^}]*height: 90px/);
+    expect(html).toMatch(/#hdr-fade \{[^}]*pointer-events: none/);
+  });
+});
