@@ -170,7 +170,7 @@ interface ChronoHook {
   /** Live: the black layer behind the menus: `full` over a flat view, `backing` panel behind the card in XR, null in play. */
   readonly scrim: { readonly mode: 'full' | 'backing' | null; readonly opacity: number; readonly backingOpacity: number };
   /** Live: the card now up (its screen and panel-space size in metres), null when none is shown. */
-  readonly card: { readonly screen: 'title' | 'stages' | 'picker' | 'countdown' | 'about' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options' | 'result'; readonly width: number; readonly height: number } | null;
+  readonly card: { readonly screen: 'title' | 'stages' | 'picker' | 'countdown' | 'about' | 'hud' | 'complete' | 'paused' | 'initials' | 'board' | 'options' | 'result' | 'cleared'; readonly width: number; readonly height: number } | null;
   /** The words on the card now up: text, font size in panel metres, and that size in page pixels as seen now. */
   labels(): { text: string; size: number; height: number; y: number; left: number; right: number }[];
   /** Live: the puzzle code of the loaded level (a tinker level), null for a hand-made one. */

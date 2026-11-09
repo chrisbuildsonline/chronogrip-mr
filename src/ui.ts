@@ -3,13 +3,15 @@ import { STAGES } from './stages';
 import { COMFORT, TRAY_POSE, inZone, layerLift, ledgeFar, partsStrip, trayToWorld, type TrayPose, type Vec3 } from './seat';
 
 /** Layouts and placement of the in-world panels (see design/DESIGN.md). Panel space: metres, origin at the bottom centre, +Y up, +Z towards the player. */
-export type Screen = 'title' | 'stages' | 'picker' | 'hud' | 'complete' | 'paused' | 'countdown' | 'about' | 'initials' | 'board' | 'options' | 'result';
+export type Screen = 'title' | 'stages' | 'picker' | 'hud' | 'complete' | 'paused' | 'countdown' | 'about' | 'initials' | 'board' | 'options' | 'result' | 'cleared';
 export const SCREENS: readonly Screen[] = ['title', 'hud', 'complete', 'paused'];
 /** Cards laid over the title or the complete card: the initials entry, the high scores board, the options and the difficulty picker. */
 /** How opaque the black layer behind the menus is. */
 export const SCRIM_OPACITY = 0.9;
+/** The stage-cleared card dims the room only halfway, so the celebration still shows through; the layer fades in over this many ms. */
+export const CLEARED_SCRIM = { opacity: 0.5, fadeMs: 700 } as const;
 /** The menus: the game behind them is dimmed to 90% black (a full-view layer on a flat screen, a backing panel in AR). */
-export const MENU_SCREENS: readonly Screen[] = ['title', 'stages', 'picker', 'board', 'options', 'about', 'paused', 'countdown', 'result', 'initials'];
+export const MENU_SCREENS: readonly Screen[] = ['title', 'stages', 'picker', 'board', 'options', 'about', 'paused', 'countdown', 'result', 'initials', 'cleared'];
 /** The cards the board is played with: the camera fits for these, the menus are centred over a black layer. */
 export const PLAY_SCREENS: readonly Screen[] = SCREENS.filter((s) => !MENU_SCREENS.includes(s));
 export const OVERLAY_SCREENS: readonly Screen[] = ['initials', 'board', 'options', 'about', 'stages', 'picker', 'result'];
@@ -78,6 +80,8 @@ export const ROW_H = 0.05;
 export const ROW_W = 0.26;
 /** Room over the rows for the amber eyebrow and the big light heading. */
 const MENU_HEAD = 0.11;
+/** The stage-cleared card's room over its button: the sentence, the high score line and three stage rows. */
+const CLEARED_EXTRA = 0.13;
 const startHeight = (rows: number) => PAD + rows * ROW_H + (rows - 1) * MENU_GAP + MENU_HEAD;
 /** Wide enough for "Turn the marked gear ↻ 37.5 rpm" in body type, and for the countdown ring and its time between the clock and the pause button. */
 const HUD_W = 0.3;
@@ -150,6 +154,12 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
       // A run that did not finish: "Level 7 reached" and the time; New Game or the Main menu. A line more of room for the words.
       const items: Parameters<typeof stack>[1] = [['start', 'New Game', 'primary'], ['menu', 'Main menu', 'secondary']];
       return { width: NARROW_W, height: startHeight(items.length) + 0.03, buttons: stack(PAD, items, ROW_W, ROW_H) };
+    }
+    case 'cleared': {
+      // All 20 levels of a stage: "Good job", the run's time, a high score line, every stage with its time, then Continue
+      // (to the name entry when the time makes the board). Room over the row for the sentence, that line and three stage rows.
+      const items: Parameters<typeof stack>[1] = [['next', 'Continue', 'primary']];
+      return { width: NARROW_W, height: startHeight(items.length) + CLEARED_EXTRA, buttons: stack(PAD, items, ROW_W, ROW_H) };
     }
     case 'hud': {
       // The goal line runs across the top; under it the level, a time with tenths (0:04.7) and the pause button. The

@@ -63,8 +63,11 @@ export type PanelCtx = {
   initials?: { rank: number; letters: string; cursor: number; ms: number };
   /** The result card of a run that did not finish: the level it reached and its total time in ms. */
   result?: { level: number; ms: number };
-  /** The complete card after level 20 of a run: the stage is cleared; `ms` is the whole run's time. */
-  cleared?: { ms: number };
+  /**
+   * After level 20 of a run, the stage-cleared card: the whole run's time, its place on this device's board for the stage
+   * (1-10, or 0 when it does not make it) and every stage with a time (this run for the stage just cleared, the best otherwise).
+   */
+  cleared?: { ms: number; rank?: number; stage?: string; stages?: { name: string; ms: number | null; current: boolean }[] };
   /** The resume countdown: 3, 2 or 1. */
   countdown?: number;
   /** The About window: how far the text is scrolled, metres. */
@@ -498,6 +501,13 @@ function drawAbout(g: Draw, l: Layout, ctx: PanelCtx, at: (x: number, y: number)
   void bottom;
 }
 
+/** A run's time in words: "48.2 s" under a minute, else "19 min 03 s". */
+export const spoken = (ms: number): string => {
+  const s = Math.max(0, ms) / 1000;
+  if (s < 60) return `${(Math.floor(s * 10) / 10).toFixed(1)} s`;
+  return `${Math.floor(s / 60)} min ${String(Math.floor(s % 60)).padStart(2, '0')} s`;
+};
+
 /** The words of a menu: the amber eyebrow and the big light heading at the left, and the high scores' rows. */
 function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: number, y: number) => [number, number]) {
   const left = at(-l.width / 2 + 0.024, 0)[0];
@@ -536,6 +546,22 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
       text(g, clock(ctx.time), left, y(l.height - 0.092), jfont(400, T.body * 0.9), C.menuMuted, 'left', 2);
       text(g, 'The board is hidden while paused', left, y(l.height - 0.108), jfont(400, T.body * 0.8), C.menuMuted, 'left', 0);
       break;
+    case 'cleared': {
+      const c = ctx.cleared!;
+      const name = c.stage ?? ctx.stage ?? 'Stage';
+      head(`STAGE CLEARED · ${name.toUpperCase()}`, 'GOOD JOB');
+      text(g, `You solved ${name} in ${spoken(c.ms)}`, left, y(l.height - 0.094), jfont(400, T.body * 0.9), C.logo, 'left', 0);
+      const rank = c.rank ?? 0;
+      if (rank) text(g, rank === 1 ? 'New local best!' : `#${rank} on your local board`, left, y(l.height - 0.116), jfont(600, T.body * 0.8), C.amber, 'left', 1);
+      const right = at(l.width / 2 - 0.024, 0)[0];
+      (c.stages ?? []).forEach((st, i) => {
+        const ry = y(l.height - 0.152 - i * 0.026);
+        const col = st.current ? C.logo : C.menuMuted;
+        text(g, st.current ? `${st.name} · this run` : st.name, left, ry, jfont(st.current ? 600 : 400, T.body * 0.85), col, 'left', 1);
+        text(g, st.ms === null ? '—' : clockTenths(st.ms / 1000), right, ry, jfont(st.current ? 600 : 400, T.body * 0.85), col, 'right', 1);
+      });
+      break;
+    }
     case 'countdown':
       text(g, 'GET READY', at(0, 0)[0], y(l.height - 0.03), jfont(600, T.eyebrow), C.amber, 'center', 6);
       text(g, String(ctx.countdown ?? 3), at(0, 0)[0], y(l.height / 2 - 0.01), jfont(300, 78), C.logo, 'center', 0);
@@ -664,19 +690,16 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       else if (ctx.goal) goalLine(g, ctx.goal, left(0.016), y(0.077));
       break;
     case 'complete': {
-      // After level 20 the card is the stage's: "Easy cleared", and the whole run's time instead of this level's.
-      const cleared = ctx.cleared;
-      const pillEnd = status(g, cleared ? 'STAGE CLEARED' : 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);
-      if (ctx.par && !cleared) text(g, `PAR ${clock(ctx.par)}`, pillEnd + mm(5), y(0.146) + 1, font(700, T.eyebrow), C.muted, 'left', 1);
+      const pillEnd = status(g, 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);
+      if (ctx.par) text(g, `PAR ${clock(ctx.par)}`, pillEnd + mm(5), y(0.146) + 1, font(700, T.eyebrow), C.muted, 'left', 1);
       // Shrunk, if need be, to stop short of the time at the right (a long name on a phone).
-      const title = cleared ? `${ctx.stage ?? 'Stage'} cleared` : `${name} complete`;
+      const title = `${name} complete`;
       g.font = font(600, T.heading, SERIF);
-      const titleSize = T.heading * Math.min(1, (right(0.016) - left(0.016) - mm(ctx.outcome === 'pass' && !cleared ? 109 : 95)) / g.measureText(title).width); // a pass puts an amber check before the time
+      const titleSize = T.heading * Math.min(1, (right(0.016) - left(0.016) - mm(ctx.outcome === 'pass' ? 109 : 95)) / g.measureText(title).width); // a pass puts an amber check before the time
       text(g, title, left(0.016), y(0.11), font(600, titleSize, SERIF), C.ink, 'left');
-      const shown = cleared ? cleared.ms / 1000 : ctx.time;
-      text(g, cleared ? 'TOTAL' : 'TIME', right(0.016), y(0.148), font(700, T.eyebrow), C.muted, 'right', 1);
-      text(g, clock(shown), right(0.016), y(0.11), font(700, T.xl), C.ink, 'right');
-      if (ctx.outcome === 'pass' && !cleared) {
+      text(g, 'TIME', right(0.016), y(0.148), font(700, T.eyebrow), C.muted, 'right', 1);
+      text(g, clock(ctx.time), right(0.016), y(0.11), font(700, T.xl), C.ink, 'right');
+      if (ctx.outcome === 'pass') {
         // Under par: the amber check sits just before the time.
         g.font = font(700, T.xl);
         check(g, right(0.016) - g.measureText(clock(ctx.time)).width - mm(8), y(0.11));

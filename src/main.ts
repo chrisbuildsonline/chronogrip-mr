@@ -20,7 +20,7 @@ import { createConfetti, spinUpBeats } from './celebrate';
 import { gearGeometry } from './gear';
 import { TRAY_POSE, layerLift, partsStrip, trayLocal, worldToTray, type TrayPose, type Vec3 } from './seat';
 import { TITLE, createClock, reloads, screenOf, step, type Flow, type FlowEvent } from './flow';
-import { MENU_SCREENS, PLAY_SCREENS, SCRIM_OPACITY, buttonAt, clockTenths, layout, menuAnchor, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
+import { CLEARED_SCRIM, MENU_SCREENS, PLAY_SCREENS, SCRIM_OPACITY, buttonAt, clockTenths, layout, menuAnchor, panelAnchor, panelToWorld, pokeHit, worldToPanel, type Anchor, type Button, type Screen } from './ui';
 import { aboutMax, createPanels, RING, SMALL_TABLE_TEXT, type PanelCtx } from './panels';
 import { createGhostHand, ghostAt, ghostTwistAt } from './ghost';
 import { TWEEN_MS, easeOut, tweenAt } from './tween';
@@ -401,7 +401,11 @@ const placePanels = () => {
   panels.setAnchor(anchor);
   placedFor = menu && `${menu.screen}${menu.layout.height}`;
   // Flat: a full-view black layer; XR keeps the passthrough, so its menus get the backing panel behind the card instead.
+  const wasDim = scrim.visible;
   scrim.visible = !!menu && !world.renderer.xr.isPresenting;
+  // The stage-cleared card dims the room halfway and fades the layer in; every other menu is at once 90% black.
+  scrimFadeAt = scrim.visible && menu?.screen === 'cleared' ? (wasDim ? scrimFadeAt : performance.now()) : null;
+  (scrim.material as MeshBasicMaterial).opacity = scrimOpacity(performance.now());
   if (scrim.visible) {
     const d = 0.2;
     const h = 2 * d * Math.tan((world.camera.fov * Math.PI) / 360);
@@ -410,6 +414,10 @@ const placePanels = () => {
     scrim.scale.set(3 * h * (window.innerWidth / window.innerHeight), 3 * h, 1); // oversize: a phone's raised view is offset from the middle
   }
 };
+/** When the stage-cleared card's dim layer started fading in (ms); null for the other menus (no fade). */
+let scrimFadeAt: number | null = null;
+/** The dim layer's opacity at `now`: 90% for a menu at once; the stage-cleared card's half, faded in. */
+const scrimOpacity = (now: number) => (scrimFadeAt === null ? SCRIM_OPACITY : CLEARED_SCRIM.opacity * Math.min(1, Math.max(0, now - scrimFadeAt) / CLEARED_SCRIM.fadeMs));
 /** Which menu card (and size) the anchor was last placed for; null for a card that is not a menu. */
 let placedFor: string | null = null;
 placePanels();
@@ -896,6 +904,18 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
 const live = () => flow.name === 'playing';
 /** The complete card waits while the automaton and the running train play the reward. */
 const COMPLETE_DELAY_MS = 2000;
+/** The stage-cleared card waits for the confetti to come down and the bird to sing. */
+const CLEARED_DELAY_MS = 2800;
+/** What the stage-cleared card shows: the run's time, its place on this device's board (0: off it) and every stage with a time. */
+function clearedCard(r: Run): NonNullable<PanelCtx['cleared']> {
+  const q = qualifies(scores, boardOf(r.stage), { name: scores.initials, ms: r.ms, date: todayISO() });
+  return {
+    ms: r.ms,
+    rank: q.ok ? q.rank : 0,
+    stage: stageOf(r.stage).name,
+    stages: STAGES.map((st) => ({ name: st.name, ms: st.id === r.stage ? r.ms : (scores.boards[boardOf(st.id)]?.[0]?.ms ?? null), current: st.id === r.stage })),
+  };
+}
 const shownButtons = (): Button[] => (panels.panelMesh.visible ? [...(panels.current?.layout.buttons ?? [])] : []);
 
 /** The loose gear nearest a world point, if one is within reach and the board is live. */
@@ -1469,6 +1489,7 @@ world.scene.onBeforeRender = () => {
   escapement.update({ setting: regulator.setting, target: regulator.target, phase: regulator.phase, ticking, hold: regulator.hold, inBand: regulator.inBand, calibrated: regulator.calibrated, lit: knobLit });
   automaton.update(now / 1000, regulator.phase, regulator.calibrated, built.tray.rotation.x);
   confetti.update(now);
+  if (scrimFadeAt !== null && scrim.visible) (scrim.material as MeshBasicMaterial).opacity = scrimOpacity(now);
 
   // Reward, on solve and again on calibrated: every gear flashes amber, fading out, and a ring bursts.
   const sinceReward = (now - rewardAt) / 1000;
@@ -1574,11 +1595,15 @@ let menuWas = false;
 
 /** Draws the card for the current state; run every frame and after every transition, so the buttons on show never lag the flow. */
 function showPanel(now = performance.now()): void {
-  const waiting = flow.name === 'complete' && now - calibratedAt < COMPLETE_DELAY_MS;
-  panels.show(waiting ? null : (overlay?.kind ?? screenOf(flow)), {
+  // After level 20 of a run the complete card is the stage-cleared one, and it waits a little longer: the confetti and the bird first.
+  const stageCleared = flow.name === 'complete' && !!run && won(run);
+  const waiting = flow.name === 'complete' && now - calibratedAt < (stageCleared ? CLEARED_DELAY_MS : COMPLETE_DELAY_MS);
+  // The stage-cleared card dims the room only halfway, so the board goes while it is up (as it does on the pause card): the words stay clear.
+  built.tray.visible = flow.name !== 'paused' && !(stageCleared && !waiting && !overlay);
+  panels.show(waiting ? null : (overlay?.kind ?? (stageCleared ? 'cleared' : screenOf(flow))), {
     initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms } : undefined,
     result: overlay?.kind === 'result' ? { level: overlay.level, ms: overlay.ms } : undefined,
-    cleared: flow.name === 'complete' && run && won(run) ? { ms: run.ms } : undefined,
+    cleared: stageCleared && run ? clearedCard(run) : undefined,
     countdown: overlay?.kind === 'countdown' ? countdownNumber(overlay.at, now) : undefined,
     aboutScroll: overlay?.kind === 'about' ? overlay.scroll : undefined,
     board: overlay?.kind === 'board' ? boardCard(overlay.board, overlay.tab) : undefined,
