@@ -227,20 +227,21 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
 }
 
 /**
- * The best times card, one column and one phone wide: from the foot up, Back, the level switcher, the ten rows, the Local /
- * Global control and the heading. `y0` is the centre of the first row from the card's foot, `pitch` the distance between rows,
- * `labelW` the room for "Level 3" between the arrows, `headY` the heading's centre.
+ * The high scores card, one centred column, from the foot up: Back, the table area, the Local / Global switch, the stage tabs and
+ * the heading. The table area is fixed: ten rows (`y0` is the centre of the first from the foot, `pitch` the distance between rows)
+ * and a note strip `noteH` high above them, where the empty-board lines are centred, so the card is one height in every state.
  */
 export function boardGrid(narrow: boolean) {
   const [cols, rows] = [1, 10];
   const pitch = narrow ? 0.0165 : 0.0185;
+  const noteH = 0.014;
   const tabH = BH - 0.006;
   const rowsFoot = PAD + ROW_H + 0.012;
   const y0 = rowsFoot + pitch / 2 + (rows - 1) * pitch;
-  const tabsY = rowsFoot + rows * pitch + GAP + 0.003 + tabH / 2;
+  const tabsY = rowsFoot + rows * pitch + noteH + GAP + 0.003 + tabH / 2;
   const stageY = tabsY + tabH + 0.01;
   const headY = stageY + tabH / 2 + 0.04;
-  return { width: NARROW_W, cols, rows, gap: 0, pitch, y0, headY, tabsY, stageY, tabH, height: headY + 0.06, colW: NARROW_W - 2 * PAD };
+  return { width: NARROW_W, cols, rows, gap: 0, pitch, noteH, y0, headY, tabsY, stageY, tabH, height: headY + 0.06, colW: NARROW_W - 2 * PAD };
 }
 
 /** The button under a panel-space point that is within touch depth of the face, else null. */

@@ -1,6 +1,6 @@
 import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace } from 'three';
 import { MENU_SCREENS, ROW_H, SCRIM_OPACITY, boardGrid, clock, clockTenths, layout, type Anchor, type Button, type Layout, type Screen } from './ui';
-import { formatDate, type Entry } from './scores';
+import { clearedOf, formatDate, RUN_STEP, type Entry } from './scores';
 import { C } from './palette';
 import { createStageCards } from './cards';
 import type { StageId } from './stages';
@@ -107,6 +107,28 @@ function text(g: Draw, s: string, x: number, y: number, f: string, color: string
   g.letterSpacing = '0px';
   const x0 = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
   drawn?.push({ text: s.trim(), x, y, px: Number(/([\d.]+)px/.exec(f)![1]), x0, x1: x0 + w });
+}
+
+/**
+ * A figure string right-aligned at x with every digit in one fixed cell (tabular numbers: the face's own digits are proportional), so a
+ * column of times lines up digit under digit. It is one word to the test hook.
+ */
+function tabular(g: Draw, s: string, x: number, y: number, f: string, color: string) {
+  g.font = f;
+  g.fillStyle = color;
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  g.letterSpacing = '0px';
+  const cell = Math.max(...[...'0123456789'].map((d) => g.measureText(d).width));
+  const widths = [...s].map((ch) => (/\d/.test(ch) ? cell : g.measureText(ch).width));
+  const total = widths.reduce((a, b) => a + b, 0);
+  let cx = x - total;
+  [...s].forEach((ch, i) => {
+    const w = widths[i]!;
+    g.fillText(ch, cx + (w - g.measureText(ch).width) / 2, y);
+    cx += w;
+  });
+  drawn?.push({ text: s, x, y, px: Number(/([\d.]+)px/.exec(f)![1]), x0: x - total, x1: x });
 }
 
 /** A short tinted status pill centred (or left/right aligned) at x, y; `size` is its text height in mm. Returns its right edge. */
@@ -382,8 +404,14 @@ function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: numb
   const left = x - w / 2;
   if (b.kind === 'tab') {
     const picked = b.id === 'tab-local' || b.id === 'tab-global' ? ctx.board?.tab === (b.id === 'tab-global' ? 'global' : 'local') : b.id === `tab-${ctx.board?.stage}`;
+    const sw = b.id === 'tab-local' || b.id === 'tab-global'; // the two-way switch: the chosen side is a lit pill; a stage tab has the underline
+    if (sw && picked) {
+      pill(g, x, y, w - mm(1.2), h - mm(1.2));
+      g.fillStyle = 'rgba(217,154,43,0.22)';
+      g.fill();
+    }
     text(g, b.label.toUpperCase(), x, y + 1, jfont(picked ? 600 : 400, T.button * 0.9), picked ? C.amber : C.menuInk, 'center', 3);
-    if (picked) {
+    if (picked && !sw) {
       g.fillStyle = C.amber;
       g.fillRect(x - w * 0.34, y + h / 2 - mm(1.5), w * 0.68, mm(1));
     }
@@ -412,6 +440,7 @@ function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: numb
   if (lit) selectedRow(g, x, y, w, h);
   const word = b.label.toUpperCase();
   const color = lit ? C.menuHi : C.menuInk;
+  if (b.id === 'back' && ctx.board) return text(g, word, x, y + 1, jfont(400, T.button * 1.1), color, 'center', 4.2); // the High scores card is one centred axis
   text(g, word, left + mm(11), y + 1, jfont(400, T.button * 1.1), color, 'left', 4.2);
   if (b.kind === 'toggle') {
     const on = !!(b.id === 'sound' ? ctx.sound : b.id === 'music' ? ctx.music : ctx.relaxed);
@@ -559,13 +588,14 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
   const y = (v: number) => at(0, v)[1];
   const W = l.width * PX;
   /** The eyebrow, then the big heading shrunk to fit the card. */
-  const head = (eyebrow: string, big: string, bigSize = 34, top = l.height - 0.02) => {
-    text(g, eyebrow, left, y(top), jfont(600, T.eyebrow), C.amber, 'left', 6);
+  const head = (eyebrow: string, big: string, bigSize = 34, top = l.height - 0.02, centred = false) => {
+    const [hx, align] = centred ? [at(0, 0)[0], 'center' as const] : [left, 'left' as const];
+    text(g, eyebrow, hx, y(top), jfont(600, T.eyebrow), C.amber, align, 6);
     g.font = jfont(300, bigSize);
     g.letterSpacing = '4px';
     const size = bigSize * Math.min(1, (W - mm(2 * 24)) / g.measureText(big).width);
     g.letterSpacing = '0px';
-    text(g, big, left, y(top - 0.04), jfont(300, size), C.logo, 'left', 4);
+    text(g, big, hx, y(top - 0.04), jfont(300, size), C.logo, align, 4);
   };
   switch (screen) {
     case 'title':
@@ -631,32 +661,30 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
     case 'board': {
       const b = ctx.board!;
       const grid = boardGrid(!!ctx.narrow);
-      head(`${b.label.toUpperCase()} · FASTEST RUNS`, 'HIGH SCORES', 30, grid.headY + 0.02);
-      const lowered = !!b.note;
-      if (b.note) {
-        const [nx, ny] = at(-l.width / 2 + 0.024, grid.y0);
-        text(g, b.note, nx, ny + 1, jfont(400, ctx.narrow ? 10.5 : 10.5), C.menuMuted, 'left', 1);
-      }
+      head(`${b.label.toUpperCase()} · BEST RUNS`, 'HIGH SCORES', 30, grid.headY + 0.02, true);
+      // The table area has a fixed height (ten rows and a note strip above them), so the card never jumps between tabs.
+      const midY = grid.y0 - ((grid.rows - 1) / 2) * grid.pitch;
+      if (b.note) text(g, b.note, at(0, 0)[0], at(0, grid.y0 + grid.pitch / 2 + grid.noteH / 2)[1] + 1, jfont(400, 10.5), C.menuMuted, 'center', 1);
       if (!b.entries.length) {
+        const line = b.empty;
         g.font = jfont(400, T.body * 0.8);
-        const [ex, ey] = at(-l.width / 2 + 0.024, grid.y0 - ((grid.rows - 1) / 2) * grid.pitch);
-        text(g, b.empty, ex, ey, jfont(400, T.body * 0.8 * Math.min(1, mm((l.width - 0.048) * 1000) / g.measureText(b.empty).width)), C.menuMuted, 'left');
+        const fit = Math.min(1, mm((l.width - 0.048) * 1000) / g.measureText(line).width);
+        text(g, line, at(0, 0)[0], at(0, midY)[1], jfont(400, T.body * 0.8 * fit), C.menuMuted, 'center');
         break;
       }
       const [size, small] = ctx.narrow ? [11.5, 11] : [12.5, 11.5];
-      const cols = ctx.narrow ? { name: 0.026, time: 0.2 } : { name: 0.028, time: 0.2 };
-      (lowered ? b.entries.slice(0, grid.rows - 1) : b.entries).forEach((e, n) => {
-        const i = n + (lowered ? 1 : 0);
-        const rowY = grid.y0 - (i % grid.rows) * grid.pitch;
-        const x0 = -l.width / 2 + 0.024;
-        const put = (s: string, dx: number, f: string, color: string, align: CanvasTextAlign) => {
-          const [px, py] = at(x0 + dx, rowY);
-          text(g, s, px, py + 1, f, color, align);
-        };
-        put(String(n + 1), 0, jfont(400, small), C.menuMuted, 'left');
-        put(e.name, cols.name, jfont(600, size), C.menuHi, 'left');
-        put(clockTenths(e.ms / 1000), cols.time, jfont(400, size), C.menuInk, 'right');
-        put(formatDate(e.date), cols.time + 0.012, jfont(400, small), C.menuMuted, 'left'); // right after the time
+      // Columns, panel metres from the card's centre: rank and name and level left, time and date right (digits in fixed cells).
+      const col = { rank: -0.126, name: -0.104, level: -0.056, time: 0.058, date: 0.126 };
+      b.entries.slice(0, grid.rows).forEach((e, n) => {
+        const rowY = grid.y0 - n * grid.pitch;
+        const px = (dx: number) => at(dx, rowY)[0];
+        const py = at(0, rowY)[1] + 1;
+        const done = clearedOf(e) >= RUN_STEP;
+        text(g, String(n + 1), px(col.rank), py, jfont(400, small), C.menuMuted, 'left');
+        text(g, e.name, px(col.name), py, jfont(600, size), C.menuHi, 'left');
+        text(g, done ? `${RUN_STEP}/${RUN_STEP}` : `L${clearedOf(e) + 1}`, px(col.level), py, jfont(done ? 400 : 600, small), done ? C.menuMuted : C.amber, 'left');
+        tabular(g, clockTenths(e.ms / 1000), px(col.time), py, jfont(400, size), C.menuInk);
+        text(g, formatDate(e.date), px(col.date), py, jfont(400, small), C.menuMuted, 'right');
       });
       break;
     }

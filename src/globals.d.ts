@@ -182,7 +182,7 @@ interface ChronoHook {
   /** The solution of the level on the board, gear id to axle id. */
   readonly solution: Record<string, string>;
   /** Live: the saved high score boards (a copy): the last initials used, and per board id (campaign) its top ten completed runs, fastest first. */
-  readonly scores: { readonly initials: string; readonly boards: Readonly<Record<string, readonly { readonly name: string; readonly ms: number; readonly date: string }[]>> };
+  readonly scores: { readonly initials: string; readonly boards: Readonly<Record<string, readonly { readonly name: string; readonly ms: number; readonly date: string; readonly cleared?: number; readonly posted?: boolean; readonly dev?: boolean }[]>> };
   /** Live: whether sound is on (Options; saved as chronogrip.sound.v1). */
   readonly soundOn: boolean;
   /** Live: whether the background music is on (Options; saved as chronogrip.music.v1). */
