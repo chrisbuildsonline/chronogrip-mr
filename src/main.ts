@@ -36,6 +36,7 @@ import { loadRelaxed, outcomeOf, parFor, saveRelaxed, timerView, type Outcome } 
 import { fallbackLevel, tinkerLevel } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
 import { fetchGlobal, submitGlobal } from './global';
+import { createOutbox } from './outbox';
 import { BOARDS, RUN_STEP, boardOf, addEntry, backInitial, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
 import { CAMPAIGN, DIFFICULTIES, freshSeed, puzzleFor, randomLevel, type Difficulty } from './random';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
@@ -130,7 +131,7 @@ type Overlay =
   | { kind: 'result'; level: number; ms: number }
   | { kind: 'countdown'; at: number }
   | { kind: 'about'; scroll: number }
-  | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; letters: string; cursor: number };
+  | { kind: 'initials'; board: string; rank: number; entry: Omit<Entry, 'name'>; letters: string; cursor: number; reached?: number };
 let overlay: Overlay | null = null;
 // The global top tens (src/global.ts): the last good board per id, kept so a tab switch does not ask again, and how this
 // opening of the scores screen has fared per board (asking, or gave up). Opening the screen asks afresh.
@@ -653,16 +654,39 @@ function newRun(id: StageId): void {
   send({ type: 'play', level: 0 });
 }
 
-/** The name entry for a completed run, over the title: the total time large, then three letters. */
-function askInitials(ms: number, board: string): void {
-  const entry = { ms, date: todayISO() };
+/**
+ * The name entry for a run, over the title: the total time large, then three letters. `cleared` below 20 is a run that ran out of
+ * time or was given up: the card says which level it reached. True when the entry is up (it makes the board's top ten).
+ */
+function askInitials(ms: number, board: string, cleared = RUN_STEP): boolean {
+  const entry: Omit<Entry, 'name'> = { ms, date: todayISO(), ...(cleared < RUN_STEP ? { cleared } : {}) };
   const q = qualifies(scores, board, { ...entry, name: scores.initials });
-  if (q.ok) overlay = { kind: 'initials', board, rank: q.rank, entry, letters: scores.initials, cursor: 0 };
+  if (q.ok) overlay = { kind: 'initials', board, rank: q.rank, entry, letters: scores.initials, cursor: 0, reached: cleared < RUN_STEP ? cleared + 1 : undefined };
+  return q.ok;
 }
 
+/** Whether the run being saved is a cheated one (DEV_MODE builds), so its entry is kept off the global board. */
+const isDevRun = (): boolean => __DEV_MODE__ && cheatedRun;
+
+// Every local score reaches the global board: sent on save, and again on boot and whenever the High scores card opens if it failed.
+const outbox = createOutbox(
+  () => scores,
+  (s) => {
+    scores = s;
+    saveScores(storage, scores);
+  },
+  (board, name, ms, cleared) => submitGlobal(board, name, ms, cleared),
+  (board) => {
+    globalAsk.delete(board); // the global rows for it are stale now
+    if (overlay?.kind === 'board' && overlay.tab === 'global' && overlay.board === board) loadGlobal(board);
+  },
+);
+void outbox.flush();
+
 /**
- * The run ends: back to the title. Level 20 solved asks for a name (the time on the board); Give up and the time running out
- * show a short result card, "Level 7 reached", and score nothing. The time on the puzzle it ended on counts.
+ * The run ends: back to the title. Level 20 solved asks for a name (the time on the board). The time running out, and Give up, on a
+ * timed run with at least one level cleared, ask for one too, with "Level 7 reached" above it; with none cleared (or in Relaxed)
+ * they show a short result card and score nothing. The time on the puzzle it ended on counts.
  */
 function endRun(why: 'timeout' | 'giveup' | 'won'): void {
   const r = run;
@@ -672,7 +696,7 @@ function endRun(why: 'timeout' | 'giveup' | 'won'): void {
   if (r && why === 'won') askInitials(r.ms, boardOf(r.stage));
   else if (r) {
     const end = reached(r, levelClock.seconds);
-    overlay = { kind: 'result', level: end.level, ms: end.ms };
+    if (relaxed || r.cleared < 1 || !askInitials(end.ms, boardOf(r.stage), r.cleared)) overlay = { kind: 'result', level: end.level, ms: end.ms };
   }
   showPanel();
   fitView(true);
@@ -763,9 +787,9 @@ function pressOverlay(id: string): void {
     const arrow = /^(up|down)-([0-2])$/.exec(id);
     if (arrow) overlay = { ...o, ...stepInitial(o, Number(arrow[2]), arrow[1] === 'up' ? 1 : -1) };
     else if (id === 'save') {
-      scores = addEntry(scores, o.board, { ...o.entry, name: o.letters });
+      scores = addEntry(scores, o.board, { ...o.entry, name: o.letters, ...(isDevRun() ? { dev: true } : {}) });
       saveScores(storage, scores);
-      if (!(__DEV_MODE__ && cheatedRun)) void submitGlobal(o.board, scores.initials, o.entry.ms, RUN_STEP); // fire and forget: the card never waits on it
+      void outbox.flush(); // fire and forget: the card never waits on it; a failed post is retried
       overlay = null;
     } else if (id === 'skip') overlay = null;
     else return;
@@ -849,6 +873,7 @@ function press(id: string, by: 'hand' | 'mouse' | 'key' = 'hand'): void {
   if (overlay) return pressOverlay(id);
   if ((id === 'scores' || id === 'options') && flow.name === 'title') {
     globalAsk.clear();
+    if (id === 'scores') void outbox.flush();
     overlay = id === 'scores' ? { kind: 'board', board: boardOf(stage), tab: 'local' } : { kind: 'options', confirm: false };
     showPanel();
     return fitView(true);
@@ -1618,7 +1643,7 @@ function showPanel(now = performance.now()): void {
   hideBoard(stageCleared && !waiting && !overlay ? Math.min(1, (now - calibratedAt - CLEARED_DELAY_MS) / BOARD_HIDE_MS) : 0);
   built.tray.visible = flow.name !== 'paused' && boardHidden < 1;
   panels.show(waiting ? null : (overlay?.kind ?? (stageCleared ? 'cleared' : screenOf(flow))), {
-    initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms } : undefined,
+    initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms, reached: overlay.reached } : undefined,
     result: overlay?.kind === 'result' ? { level: overlay.level, ms: overlay.ms } : undefined,
     cleared: stageCleared && run ? clearedCard(run) : undefined,
     countdown: overlay?.kind === 'countdown' ? countdownNumber(overlay.at, now) : undefined,

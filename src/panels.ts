@@ -60,7 +60,7 @@ export type PanelCtx = {
   outcome?: Outcome | null;
   par?: number | null;
   /** The initials card: the rank this solve would take, the three letters, the slot typing fills next (3: all in) and the run's total in ms. */
-  initials?: { rank: number; letters: string; cursor: number; ms: number };
+  initials?: { rank: number; letters: string; cursor: number; ms: number; /** A run that did not finish: the level it reached. */ reached?: number };
   /** The result card of a run that did not finish: the level it reached and its total time in ms. */
   result?: { level: number; ms: number };
   /**
@@ -623,7 +623,7 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
     }
     case 'initials': {
       const ini = ctx.initials!;
-      text(g, `RUN COMPLETE · #${ini.rank}`, left, y(l.height - 0.02), jfont(600, T.eyebrow), C.amber, 'left', 6);
+      text(g, ini.reached ? `LEVEL ${ini.reached} REACHED · #${ini.rank}` : `RUN COMPLETE · #${ini.rank}`, left, y(l.height - 0.02), jfont(600, T.eyebrow), C.amber, 'left', 6);
       text(g, clock(ini.ms / 1000), left, y(l.height - 0.062), jfont(300, 30), C.logo, 'left', 3);
       text(g, 'YOUR NAME', left, y(l.height - 0.1), jfont(400, T.body * 0.8), C.menuMuted, 'left', 4);
       break;
