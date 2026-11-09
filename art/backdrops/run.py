@@ -34,8 +34,48 @@ mod = importlib.import_module(concept)
 t0 = time.time()
 cfg = mod.build(mode) or {}
 print('BUILD_SECONDS', round(time.time() - t0, 1))
-dev = common.setup_render(mode, samples, scale, exposure=cfg.get('exposure', 0.0), look=cfg.get('look', 'AgX - Medium High Contrast'), glare=cfg.get('glare', True))
+if cfg.get('spots'):
+    # where each animation spot lands in the 1920 x 1080 game reference frame, plus its direction from the eye
+    import math
+    from bpy_extras.object_utils import world_to_camera_view
+    s0 = bpy.context.scene
+    s0.render.resolution_x, s0.render.resolution_y = 1920, 1080
+    bpy.context.view_layer.update()
+    cam = bpy.data.objects['game']
+    for name, p in cfg['spots'].items():
+        v = world_to_camera_view(s0, cam, common.Vector(p))
+        d = common.Vector(p) - common.EYE
+        print('SPOT', concept, name, f'x={v.x * 1920:.0f} y={(1 - v.y) * 1080:.0f}',
+              f'az={math.degrees(math.atan2(d.x, d.y)):.1f} el={math.degrees(math.atan2(d.z, d.xy.length)):.1f} dist={d.length:.1f}')
+dev = common.setup_render('preview' if mode.startswith('turn') else mode, samples, scale, exposure=cfg.get('exposure', 0.0), look=cfg.get('look', 'AgX - Medium High Contrast'), glare=cfg.get('glare', True))
 sc = bpy.context.scene
+if mode.startswith('turn'):
+    # the desktop orbit at its clamp: 40 deg of turn around the target and 12 deg lower (main.ts), so the view tips up
+    import math
+    from mathutils import Matrix
+    side = cfg.get('turn', 'left') if mode == 'turn' else mode[5:]
+    home = common.EYE - common.TARGET
+    r = home.length
+    polar = math.acos(home.z / r) + math.radians(12)
+    az = math.atan2(home.y, home.x) + math.radians(40 if side == 'left' else -40)
+    eye = common.TARGET + r * common.Vector((math.sin(polar) * math.cos(az), math.sin(polar) * math.sin(az), math.cos(polar)))
+    cd = bpy.data.cameras.new('turn')
+    cd.sensor_fit = 'VERTICAL'
+    cd.sensor_height = 24.0
+    cd.angle_y = common.FOV_V
+    cd.clip_start = 0.02
+    cd.clip_end = 50000
+    ob = bpy.data.objects.new('turn', cd)
+    ob.location = eye
+    common.look(ob, common.TARGET)
+    sc.collection.objects.link(ob)
+    sc.camera = ob
+    path = os.path.join(OUT, f'{concept}_turn_{side}.png')
+    sc.render.filepath = path
+    t1 = time.time()
+    bpy.ops.render.render(write_still=True)
+    print('RENDER_SECONDS', concept, mode, round(time.time() - t1, 1))
+    raise SystemExit(0)
 if 'glare' in cfg and mode == 'preview' and cfg.get('glare_settings'):
     pass
 if mode.startswith('cube'):

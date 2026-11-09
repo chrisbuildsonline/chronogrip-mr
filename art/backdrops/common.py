@@ -619,7 +619,7 @@ def game_camera(dof_fstop=None, focus=None):
     cd.sensor_height = 24.0
     cd.angle_y = FOV_V
     cd.clip_start = 0.02
-    cd.clip_end = 200
+    cd.clip_end = 50000
     ob = bpy.data.objects.new('game', cd)
     ob.location = EYE
     look(ob, TARGET)
@@ -638,7 +638,7 @@ def pano_camera():
     cd.type = 'PANO'
     cd.panorama_type = 'EQUIRECTANGULAR'
     cd.clip_start = 0.02
-    cd.clip_end = 200
+    cd.clip_end = 50000
     ob = bpy.data.objects.new('pano', cd)
     ob.location = TARGET
     # image centre faces three.js +X (Blender +X): three's scene.background convention puts -Z (game forward) at u = 0.25
@@ -747,7 +747,7 @@ def cube_cameras():
         cd.sensor_fit = 'HORIZONTAL'
         cd.angle = math.pi / 2
         cd.clip_start = 0.02
-        cd.clip_end = 200
+        cd.clip_end = 50000
         ob = bpy.data.objects.new('cube-' + name, cd)
         ob.location = TARGET
         ob.rotation_euler = M.to_euler()
