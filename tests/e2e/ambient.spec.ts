@@ -213,3 +213,30 @@ test.describe('the Easy second hand on the clock hub', () => {
     });
   }
 });
+
+test.describe('Hard: the wheel train and the pendulum stay out of the header', () => {
+  test.use({ classic: false });
+  for (const [w, h] of [[1280, 720], [1440, 900], [1920, 1080]] as const) {
+    test(`${w}x${h}: no part of the wheel train touches the logo, the level pill or the Enter MR block, or the top 70 px; the pendulum clears the logo`, async ({ page }) => {
+      const errors = await open(page, { width: w, height: h });
+      await newGame(page, (id) => click(page, id), 'hard');
+      await page.waitForFunction(() => window.__chrono!.ambient?.stage === 'hard');
+      await page.waitForTimeout(600);
+      const rects = await page.evaluate(() => ['#title', '#progress', '#xr-entry'].map((q) => { const r = document.querySelector(q)!.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }));
+      const { parts } = await page.evaluate(() => window.__chrono!.ambientBoxes());
+      const hit = (a: readonly number[], b: readonly number[]) => a[0]! < b[2]! && a[2]! > b[0]! && a[1]! < b[3]! && a[3]! > b[1]!;
+      const wheel = parts.filter((p) => p.part === 'wheel');
+      await page.screenshot({ path: `${OUT}/hard-header-${w}x${h}.png` });
+      expect(wheel.length).toBeGreaterThan(2);
+      const bar = h * 70 / 900;
+      for (const p of wheel) {
+        expect(p.box[1], `the train reaches y ${Math.round(p.box[1])}, inside the top ${Math.round(bar)} px`).toBeGreaterThanOrEqual(bar);
+        for (const r of rects) expect(hit(p.box, r), `a wheel box ${p.box.map(Math.round)} touches the header rect ${r.map(Math.round)}`).toBe(false);
+      }
+      // the bob (the pendulum's one wide, short box) stays under the logo row; the rod is a hairline that runs past the moon
+      for (const p of parts.filter((q) => q.part === 'pendulum' && q.box[3] - q.box[1] < 120 && q.box[1] > -50)) expect(hit(p.box, rects[0]!), `the bob ${p.box.map(Math.round)} touches the logo ${rects[0]!.map(Math.round)}`).toBe(false);
+      await page.screenshot({ path: `${OUT}/hard-header-${w}x${h}.png` });
+      expect(errors).toEqual([]);
+    });
+  }
+});

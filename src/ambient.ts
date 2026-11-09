@@ -68,17 +68,18 @@ export function cubeDirection(face: 'nz', x: number, y: number, size: number): V
 export const EASY_HUB = cubeDirection('nz', 1426.5, 988.5, 2048);
 
 /**
- * Hard's animation spots on the Iron Tower render (art/backdrops/c3e_skyline.py, run.py prints them): azimuth (degrees right of the
- * view's forward, the game's -z) and elevation from the eye. Pendulum pivot and bob are the two ends of a 4 m rod about 9 m out;
- * the wheel arbor is the bare axle in open sky on the right.
+ * Hard's anchors on the Iron Tower cubemap (public/backdrops/c3_cube/nz.jpg, 2048 px; art/backdrops/c3e_skyline.py). The cubemap is
+ * rendered from the orbit target, not the eye, so each spot is a face pixel (EASY_HUB's way), not the eye-relative azimuth the render
+ * logs: the wheel arbor is the bare axle's round end on the right (crop zoomed 8x: centre (1533.1, 1047), radius 6 px); the pendulum
+ * pivot is the dark mount on the left truss arm (the log's spot az -27, el 14, 9 m, re-seen from the target, is (462, 664); the mount's
+ * centre measures (460, 662)).
  */
-export const HARD_SPOTS = { pendulum: { az: -27, el: 14 }, bob: { az: -27, el: -11.8 }, wheel: { az: 23, el: -3 } } as const;
-type HardSpot = { readonly az: number; readonly el: number };
-/** The world direction of an azimuth and elevation (degrees) from the eye: forward is -z, up +y, +az to the right (+x). */
-export function spotDirection({ az, el }: HardSpot): Vec3 {
-  const a = MathUtils.degToRad(az), e = MathUtils.degToRad(el);
-  return [Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)];
-}
+export const HARD_SPOTS = { pendulum: cubeDirection('nz', 461, 663, 2048), wheel: cubeDirection('nz', 1420, 1225, 2048) } as const;
+/**
+ * The painted arbor stub itself (face pixel (1533.1, 1047)) lands at the top right of every default framing, under the Enter MR block,
+ * so the wheel train is hung about 10 degrees below it (face pixel (1420, 1225)), in the open sky over the city lights, clear of the header.
+ */
+export const HARD_ARBOR = cubeDirection('nz', 1533.1, 1047, 2048);
 const MODULE = 0.034;
 
 /** One escapement step per beat: a quick jump with a small overshoot in the first 22 % of the beat, then rest. */
@@ -251,18 +252,22 @@ export function createAmbient(stage: AmbientStage, opts: AmbientOptions): Ambien
   if (stage === 'hard') {
     // Iron Tower, Midnight (art/backdrops/c3e_skyline.py): a pendulum across the moon and a wheel train on the bare axle in open sky, both
     // anchored by the directions the render prints (HARD_SPOTS), a cold beat flash and a few slow blue mist motes.
-    const spot = (d: HardSpot, dist: number) => new Vector3(...spotDirection(d)).multiplyScalar(dist).add(eye);
-    const pend = new Group(), swing = new Group(); // not turned to face the eye: it hangs straight down in the world
+    const spot = (d: Vec3, dist: number) => new Vector3(...d).multiplyScalar(dist).add(eye);
+    // the rod is short enough that the bob swings over the moon's dark water (2 to 6 degrees below the horizon), above the shelf
+    const ROD = 3.2;
+    const pend = new Group(), swing = new Group(); pend.name = 'pendulum'; // not turned to face the eye: it hangs straight down in the world
     pend.position.copy(spot(HARD_SPOTS.pendulum, 9));
     pend.add(swing); group.add(pend);
-    const rod = mesh(new CylinderGeometry(0.022, 0.022, 4, 10), steel); rod.position.y = -2;
-    const bob = mesh(new CylinderGeometry(0.3, 0.3, 0.06, 48), bobBrass); bob.rotation.x = Math.PI / 2; bob.position.y = -4;
+    const rod = mesh(new CylinderGeometry(0.02, 0.02, ROD, 10), steel); rod.position.y = -ROD / 2;
+    const bob = mesh(new CylinderGeometry(0.22, 0.22, 0.05, 48), bobBrass); bob.rotation.x = Math.PI / 2; bob.position.y = -ROD;
     swing.add(rod, bob); pend.add(mesh(new SphereGeometry(0.07, 16, 12), darkBrass));
-    updates.push((b) => (swing.rotation.z = 0.2 * Math.sin(Math.PI * b))); // one swing per beat, through the middle on the tick
+    updates.push((b) => (swing.rotation.z = 0.38 * Math.sin(Math.PI * b))); // one swing per beat, through the middle on the tick, wide enough to cross the moon's column
 
     const wheel = face(new Group(), spot(HARD_SPOTS.wheel, 9));
-    wheel.scale.setScalar(px(84, 9) / ((MODULE * 30) / 2)); group.add(wheel);
-    const gw = train(wheel, [{ teeth: 30 }, { teeth: 10, mat: steel, angle: 3.3 }, { teeth: 22, mat: darkBrass, angle: 2.7 }]);
+    wheel.scale.setScalar(0.42 / ((MODULE * 30) / 2)); group.add(wheel); // the big wheel 0.42 m in radius on a 4 cm arbor: small beside the painted movement
+    wheel.name = 'wheel';
+    const pinion = tone(metalBrass(), k * 0.7, 0x2a1a06); // darker brass, not steel: the blue night environment turned a steel gear lilac
+    const gw = train(wheel, [{ teeth: 30 }, { teeth: 10, mat: pinion, angle: 3.3 }, { teeth: 22, mat: darkBrass, angle: 2.7 }]);
     updates.push((b) => turn(gw, ((Math.floor(b) + stepEase(b % 1)) * Math.PI * 2) / 30)); // one tooth of the big wheel per beat
 
     // the beat: the room light thumps a little, and a cold wash of light pulses with it

@@ -1929,13 +1929,14 @@ window.__chrono = Object.freeze({
   },
   /** Each solid ambient part (additive light planes and dust left out): its screen box (CSS px) and how near it comes to the camera, and the tray's distance, for the "nothing floats in front of the tray" test. */
   ambientBoxes() {
+    const topOf = (m: Object3D) => { let o = m; while (o.parent && o.parent !== ambient?.group) o = o.parent; return o.name; };
     const eye = world.camera.getWorldPosition(new Vector3());
     const tray = built.tray.getWorldPosition(new Vector3()).distanceTo(eye);
     return {
       tray,
       parts: (ambient ? meshesIn(ambient.group) : [])
         .filter((m) => (m.material as { blending?: number }).blending !== 2)
-        .map((m) => ({ box: screenBox([m])!, near: new Box3().setFromObject(m).distanceToPoint(eye), maxZ: new Box3().setFromObject(m).max.z, minY: new Box3().setFromObject(m).min.y, minZ: new Box3().setFromObject(m).min.z })),
+        .map((m) => ({ part: topOf(m), box: screenBox([m])!, near: new Box3().setFromObject(m).distanceToPoint(eye), maxZ: new Box3().setFromObject(m).max.z, minY: new Box3().setFromObject(m).min.y, minZ: new Box3().setFromObject(m).min.z })),
     };
   },
   /** Unit direction from the camera to each ambient part's anchor (the group's own children; dust left out), to test they stay locked to the panorama. */

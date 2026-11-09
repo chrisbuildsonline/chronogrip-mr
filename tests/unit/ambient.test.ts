@@ -1,4 +1,4 @@
-import { Box3, CircleGeometry, Mesh, Points, Scene, Vector3, type BufferGeometry, type Object3D } from 'three';
+import { Box3, CircleGeometry, type CylinderGeometry, Mesh, Points, Scene, Vector3, type BufferGeometry, type Object3D } from 'three';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BIRD, CLOUD, FLICKER, THUMP, cloudLight, createAmbient, poseOf, stepEase, thumpLight, type AmbientStage } from '../../src/ambient';
 import { DESKTOP_EYE, DESKTOP_TARGET } from '../../src/fit';
@@ -188,35 +188,61 @@ describe('createAmbient', () => {
   });
 
   describe('Hard on the Iron Tower render', () => {
-    // az and el from out/final.log of the render (c3e_skyline SPOT lines): azimuth right of the view's forward (-z), elevation up.
-    const dirOf = (az: number, el: number) => new Vector3(Math.sin((az * Math.PI) / 180) * Math.cos((el * Math.PI) / 180), Math.sin((el * Math.PI) / 180), -Math.cos((az * Math.PI) / 180) * Math.cos((el * Math.PI) / 180));
+    // Measured on public/backdrops/c3_cube/nz.jpg (2048 px). The cubemap is rendered from the orbit target, not the eye, so a spot
+    // is a face pixel, not the eye-relative azimuth the render logs. The wheel arbor is the bare axle's round end seen on the right
+    // (zoomed crop: centre (1533.1, 1047), radius 6 px). The pendulum pivot is the dark mount on the left truss arm (the log's az -27, el 14,
+    // 9 m spot seen from the target: (462, 664); the mount's centre measures (460, 662)).
+    const PIVOT_PX: [number, number] = [461, 663];
+    const ARBOR_PX: [number, number] = [1533.1, 1047];
+    // The stub lands under the Enter MR block at every default framing, so the train hangs below it in the open sky:
+    const WHEEL_PX: [number, number] = [1420, 1225];
     const eye = new Vector3(...DESKTOP_EYE);
     const angle = (a: Vector3, b: Vector3) => (a.angleTo(b) * 180) / Math.PI;
+    // GL -z face, three's x flip: d = (sc/ma, -tc/ma... ) derived independently of src/ambient.ts
+    const dirOfPixel = ([x, y]: [number, number]) => new Vector3(2 * x / 2048 - 1, -(2 * y / 2048 - 1), -1).normalize();
 
-    it('anchors the pendulum pivot and bob, and the wheel arbor, within 0.3 degrees of the logged spots', () => {
+    it('anchors the pendulum pivot on its painted mount and the wheel train in the open sky below the arbor stub, within 0.3 degrees', () => {
       const a = make('hard');
       a.group.updateMatrixWorld(true);
       const from = (o: Object3D) => o.getWorldPosition(new Vector3()).sub(eye).normalize();
-      const pend = a.group.children[0]!;
-      expect(angle(from(pend), dirOf(-27, 14)), 'pendulum pivot').toBeLessThan(0.3);
-      expect(angle(from(a.group.children[1]!), dirOf(23, -3)), 'wheel arbor').toBeLessThan(0.3);
-      // the bob hangs 4 m below at rest: its direction from the eye is the logged bob spot
-      const bob = new Vector3();
-      pend.traverse((o) => ((o as Mesh).isMesh && (o as Mesh).geometry.type === 'CylinderGeometry' && (o as Mesh).position.y <= -4 ? o.getWorldPosition(bob) : null));
-      expect(angle(bob.clone().sub(eye).normalize(), dirOf(-27, -11.8)), 'pendulum bob at rest').toBeLessThan(0.3);
+      expect(angle(from(a.group.children[0]!), dirOfPixel(PIVOT_PX)), 'pendulum pivot').toBeLessThan(0.3);
+      const wheel = from(a.group.children[1]!);
+      expect(angle(wheel, dirOfPixel(WHEEL_PX)), 'wheel train anchor').toBeLessThan(0.3);
+      expect(angle(wheel, dirOfPixel(ARBOR_PX)), 'still beside the painted arbor stub').toBeLessThan(12);
       a.dispose();
     });
 
-    it('swings the pendulum once per beat, through the middle on the tick, and turns the wheel a tooth a beat', () => {
+    it('the bob hangs low enough to cross the moon\'s dark water but not the shelf: 2 to 6 degrees below the horizon at rest', () => {
       const a = make('hard');
-      const rot = () => {
-        const swing = a.group.children[0]!.children[0]!;
-        return swing.rotation.z;
-      };
+      a.group.updateMatrixWorld(true);
+      const bob = new Vector3();
+      a.group.children[0]!.traverse((o) => ((o as Mesh).isMesh && (o as Mesh).geometry.type === 'CylinderGeometry' && (o as Mesh).position.y < -2 && ((o as Mesh).geometry as CylinderGeometry).parameters.height < 0.1 ? o.getWorldPosition(bob) : null));
+      const d = bob.sub(eye).normalize();
+      const el = (Math.asin(d.y) * 180) / Math.PI;
+      expect(el).toBeLessThan(-2);
+      expect(el).toBeGreaterThan(-6);
+      a.dispose();
+    });
+
+    it('the wheel train is small: its big wheel is at most 0.5 m across from the arbor (the painted movement beside it is far larger)', () => {
+      const a = make('hard');
+      a.group.updateMatrixWorld(true);
+      const box = new Box3().setFromObject(a.group.children[1]!);
+      expect(box.max.x - box.min.x).toBeLessThan(2);
+      expect(box.max.y - box.min.y).toBeLessThan(2);
+      const big = new Box3();
+      a.group.children[1]!.traverse((o) => { const m = o as Mesh; if (m.isMesh && m.geometry.type === 'ExtrudeGeometry' && m.position.length() < 1e-6) big.setFromObject(m); });
+      expect(big.max.x - big.min.x, 'the big wheel\'s diameter').toBeLessThan(1);
+      a.dispose();
+    });
+
+    it('swings the pendulum once per beat, through the middle on the tick', () => {
+      const a = make('hard');
+      const rot = () => a.group.children[0]!.children[0]!.rotation.z;
       a.update(0, 0);
       expect(rot()).toBeCloseTo(0, 9);
       a.update(0.5, 1);
-      expect(Math.abs(rot())).toBeCloseTo(0.2, 6);
+      expect(Math.abs(rot())).toBeGreaterThan(0.3);
       a.update(1, 2);
       expect(rot()).toBeCloseTo(0, 6);
       a.dispose();
