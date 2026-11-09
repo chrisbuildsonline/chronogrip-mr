@@ -677,7 +677,7 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
       const cx = at(0, 0)[0];
       const [size, small] = ctx.narrow ? [11.5, 11] : [12.5, 11.5];
       // Columns, panel metres from the card's centre: rank and name and level left, time and date right (digits in fixed cells).
-      const col = { rank: -0.126, name: -0.104, level: -0.032, time: 0.058, date: 0.126 };
+      const col = { rank: -0.126, name: -0.104, level: -0.056, time: 0.058, date: 0.126 };
       const px = (rowY: number, dx: number) => at(dx, rowY)[0];
       if (b.note) text(g, b.note, cx, at(0, grid.noteY)[1] + 1, jfont(400, 10.5), C.menuMuted, 'center', 1);
       const labelY = at(0, grid.headRowY)[1] + 1;
@@ -716,30 +716,21 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
         const done = clearedOf(e) >= RUN_STEP;
         text(g, String(n + 1), px(0, col.rank), py, jfont(n < 3 ? 600 : 400, small), n < 3 ? C.brass : C.menuMuted, 'left');
         text(g, e.name, px(0, col.name), py, jfont(600, size), C.menuHi, 'left');
-        if (e.dev) {
-          g.font = jfont(600, size);
-          text(g, 'DEV', px(0, col.name) + g.measureText(e.name).width + mm(3), py, jfont(600, small * 0.7), C.menuMuted, 'left', 1); // a cheat-panel run: it stays on this device
-        }
         text(g, done ? `${RUN_STEP}/${RUN_STEP}` : `L${clearedOf(e) + 1}`, px(0, col.level), py, jfont(done ? 400 : 600, small), done ? C.menuMuted : C.amber, 'left');
         tabular(g, clockTenths(e.ms / 1000), px(0, col.time), py, jfont(400, size), C.menuInk);
         text(g, formatDate(e.date), px(0, col.date), py, jfont(400, small), C.menuMuted, 'right');
       }
-      if (b.tab === 'local' && b.entries.slice(0, grid.rows).some((e) => e.dev)) text(g, 'DEV runs (cheat panel) stay local', cx, at(0, grid.footY)[1], jfont(400, 10), C.menuMuted, 'center', 1);
       if (!b.entries.length) {
         // The empty, loading or offline line sits inside the table, on a patch of the panel so it reads over the faint slots.
-        const lines = b.empty.split('\n');
         g.font = jfont(400, T.body * 0.8);
-        const widest = Math.max(...lines.map((t) => g.measureText(t).width));
-        const fit = Math.min(1, mm((l.width - 0.048) * 1000) / widest);
-        const f = jfont(400, T.body * 0.8 * fit);
-        g.font = f;
-        const bw = Math.max(...lines.map((t) => g.measureText(t).width)) + mm(16);
+        const fit = Math.min(1, mm((l.width - 0.048) * 1000) / g.measureText(b.empty).width);
+        g.font = jfont(400, T.body * 0.8 * fit);
+        const bw = g.measureText(b.empty).width + mm(16);
         const my = at(0, grid.y0 - ((grid.rows - 1) / 2) * grid.pitch)[1];
-        const lineH = grid.pitch * PX * 1.1;
-        pill(g, cx, my, bw, grid.pitch * PX * 1.7 + (lines.length - 1) * lineH, mm(4));
+        pill(g, cx, my, bw, grid.pitch * PX * 1.7, mm(4));
         g.fillStyle = 'rgba(16,11,7,0.92)';
         g.fill();
-        lines.forEach((t, i) => text(g, t, cx, my + (i - (lines.length - 1) / 2) * lineH, f, C.menuMuted, 'center'));
+        text(g, b.empty, cx, my, jfont(400, T.body * 0.8 * fit), C.menuMuted, 'center');
       }
       break;
     }

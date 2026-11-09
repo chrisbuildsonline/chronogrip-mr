@@ -37,7 +37,7 @@ import { fallbackLevel, tinkerLevel } from './tinker';
 import { decodeSeed, encodeSeed } from './seed';
 import { fetchGlobal, submitGlobal } from './global';
 import { createOutbox } from './outbox';
-import { BOARDS, RUN_STEP, allDev, boardOf, addEntry, backInitial, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
+import { BOARDS, RUN_STEP, boardOf, addEntry, backInitial, loadScores, qualifies, saveScores, stepInitial, todayISO, typeInitial, type Entry, type Scores } from './scores';
 import { CAMPAIGN, DIFFICULTIES, freshSeed, puzzleFor, randomLevel, type Difficulty } from './random';
 import { HAND_JOINTS, createHandOccluder } from './occlude';
 import { createPlaceCue, cueFor } from './cue';
@@ -709,7 +709,7 @@ function boardCard(id: string, tab: 'local' | 'global'): NonNullable<PanelCtx['b
   if (tab === 'local') return local;
   // Global: the last good rows; with none, "Loading" while asking and the local rows with a quiet note once it failed.
   const rows = globalRows.get(id);
-  if (rows) return { ...local, entries: rows, empty: !rows.length && allDev(scores.boards[id]!) ? 'Your runs used the cheat panel, so they stay local.\nFinish a level without it to post.' : 'No global runs yet. Be the first.' };
+  if (rows) return { ...local, entries: rows, empty: 'No global runs yet. Be the first.' };
   if (globalAsk.get(id) === 'offline') return { ...local, note: 'Global scores offline · your runs' };
   return { ...local, entries: [], empty: 'Loading global scores' };
 }

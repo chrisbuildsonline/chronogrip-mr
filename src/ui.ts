@@ -235,8 +235,7 @@ export function boardGrid(narrow: boolean) {
   const pitch = narrow ? 0.0165 : 0.0185;
   const [noteH, headH] = [0.012, 0.016];
   const tabH = BH - 0.006;
-  const rowsFoot = PAD + ROW_H + 0.02; // room under the rows for a quiet footnote
-  const footY = PAD + ROW_H + 0.01;
+  const rowsFoot = PAD + ROW_H + 0.012;
   const y0 = rowsFoot + pitch / 2 + (rows - 1) * pitch;
   const rowsTop = rowsFoot + rows * pitch;
   const headRowY = rowsTop + headH / 2;
@@ -244,7 +243,7 @@ export function boardGrid(narrow: boolean) {
   const tabsY = rowsTop + headH + noteH + 0.006 + tabH / 2;
   const stageY = tabsY + tabH + 0.004;
   const headY = stageY + tabH / 2 + 0.04;
-  return { width: NARROW_W, cols, rows, gap: 0, pitch, noteH, headH, headRowY, noteY, footY, y0, headY, tabsY, stageY, tabH, height: headY + 0.06, colW: NARROW_W - 2 * PAD };
+  return { width: NARROW_W, cols, rows, gap: 0, pitch, noteH, headH, headRowY, noteY, y0, headY, tabsY, stageY, tabH, height: headY + 0.06, colW: NARROW_W - 2 * PAD };
 }
 
 /** The button under a panel-space point that is within touch depth of the face, else null. */
