@@ -254,7 +254,7 @@ export function createAmbient(stage: AmbientStage, opts: AmbientOptions): Ambien
     // anchored by the directions the render prints (HARD_SPOTS), a cold beat flash and a few slow blue mist motes.
     const spot = (d: Vec3, dist: number) => new Vector3(...d).multiplyScalar(dist).add(eye);
     // the rod is short enough that the bob swings over the moon's dark water (2 to 6 degrees below the horizon), above the shelf
-    const ROD = 3.2;
+    const ROD = 3.4;
     const pend = new Group(), swing = new Group(); pend.name = 'pendulum'; // not turned to face the eye: it hangs straight down in the world
     pend.position.copy(spot(HARD_SPOTS.pendulum, 9));
     pend.add(swing); group.add(pend);
