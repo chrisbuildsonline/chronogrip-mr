@@ -84,30 +84,24 @@
         .cg-more { display: none; }
       }
 
-      /* Loading card: plain markup and CSS, so it is up at first paint while the 5.5 MB SDK chunk loads. main.ts adds
-         .done once the world is built (it fades and stops taking the pointer); a startup error adds .failed. */
+      /* Loading: two brass gears ticking on the page's own dark, no box. Plain markup and CSS, so it is up at first paint while the 5.5 MB SDK
+         chunk loads. main.ts adds .done once the world is built: the gears fade out (0.4 s) as the board and menu fade in; a startup
+         error adds .failed and the reason shows in light type under the paused gears. */
       #loading {
         position: fixed; inset: 0; z-index: 2; display: grid; place-items: center;
-        transition: opacity 0.5s ease, visibility 0s linear 0.5s;
+        transition: opacity 0.4s ease, visibility 0s linear 0.4s;
       }
       #loading.done { opacity: 0; visibility: hidden; pointer-events: none; }
-      #loading:not(.done) ~ #title, #loading:not(.done) ~ #xr-entry { opacity: 0; }
-      #title, #xr-entry { transition: opacity 0.5s ease 0.2s; }
-      .cg-card {
-        width: min(340px, calc(100vw - 48px)); box-sizing: border-box; padding: 30px 36px 32px; border-radius: 24px;
-        background: #f6efe2; text-align: center; font-family: system-ui, sans-serif;
-        box-shadow: 0 10px 30px rgba(20, 12, 4, 0.35), 0 30px 80px rgba(0, 0, 0, 0.35);
-        animation: cg-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-        transition: transform 0.5s ease;
-      }
-      #loading.done .cg-card { transform: translateY(-8px) scale(0.98); }
-      .cg-gears { display: block; width: 128px; height: 80px; margin: 0 auto 14px; overflow: visible; }
-      .cg-eyebrow { margin: 0; font: 700 0.7rem/1 system-ui, sans-serif; letter-spacing: 0.2em; color: #665a4c; }
-      .cg-wordmark { margin: 8px 0 14px; font: 600 2.25rem/1 Georgia, serif; color: #1c1712; }
-      .cg-status { margin: 0; font: 600 0.95rem/1.35 system-ui, sans-serif; color: #665a4c; }
-      .cg-detail { margin: 8px 0 0; font: 500 0.85rem/1.4 system-ui, sans-serif; color: #665a4c; }
-      .cg-detail:empty { display: none; }
-      #loading.failed .cg-status { color: #1c1712; }
+      #loading:not(.done) ~ #title, #loading:not(.done) ~ #hdr, #loading:not(.done) ~ #app { opacity: 0; }
+      #title, #hdr { transition: opacity 0.5s ease 0.2s; }
+      #app { transition: opacity 0.4s ease 0.1s; }
+      .cg-card { box-sizing: border-box; max-width: min(420px, calc(100vw - 48px)); text-align: center; font-family: system-ui, sans-serif; }
+      .cg-gears { display: block; width: 128px; height: 80px; margin: 0 auto; overflow: visible; }
+      /* Words only for a screen reader, until a startup error needs them. */
+      .cg-eyebrow, .cg-wordmark, .cg-status, .cg-detail { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+      #loading.failed .cg-status, #loading.failed .cg-detail { position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: normal; color: #f1e8d8; }
+      #loading.failed .cg-status { margin-top: 16px; font: 600 0.95rem/1.35 system-ui, sans-serif; }
+      #loading.failed .cg-detail { margin-top: 8px; font: 500 0.85rem/1.4 system-ui, sans-serif; color: #c9bba6; }
       /* Escapement motion: each gear jumps one tooth per beat (outer group, steps) while the inner group eases the jump
          out over the first quarter of the beat, so the train ticks and rests like a clock. Both beat every 0.5 s. */
       .cg-big .cg-turn { animation: cg-big 6s steps(12, jump-start) infinite; }
@@ -119,10 +113,12 @@
       @keyframes cg-small { to { transform: rotate(-360deg); } }
       @keyframes cg-big-ease { 0% { transform: rotate(-30deg); animation-timing-function: cubic-bezier(0.3, 1.6, 0.5, 1); } 28%, 100% { transform: rotate(0); } }
       @keyframes cg-small-ease { 0% { transform: rotate(45deg); animation-timing-function: cubic-bezier(0.3, 1.6, 0.5, 1); } 28%, 100% { transform: rotate(0); } }
-      @keyframes cg-rise { from { opacity: 0; transform: translateY(12px) scale(0.98); } }
+      @keyframes cg-pulse { 50% { opacity: 0.4; } }
       @media (prefers-reduced-motion: reduce) {
-        .cg-card, .cg-turn, .cg-ease { animation: none; }
-        #loading, .cg-card, #title, #xr-entry, .cg-more { transition: none; }
+        .cg-turn, .cg-ease { animation: none; }
+        .cg-gears { animation: cg-pulse 3s ease-in-out infinite; } /* a slow pulse instead of turning */
+        #loading.failed .cg-gears { animation: none; }
+        #loading, #title, #hdr, #app, .cg-more { transition: none; }
       }
     </style>
   </head>
@@ -132,8 +128,8 @@
         <svg class="cg-gears" viewBox="0 0 128 80" aria-hidden="true">
           <defs>
             <linearGradient id="cg-brass" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#dcb873" />
-              <stop offset="1" stop-color="#a47a40" />
+              <stop offset="0" stop-color="#cfae72" />
+              <stop offset="1" stop-color="#b08d57" />
             </linearGradient>
           </defs>
           <g class="cg-big" transform="translate(44 40)">
