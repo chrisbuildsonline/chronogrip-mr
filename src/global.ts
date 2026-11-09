@@ -3,7 +3,8 @@ import { BOARDS, RUN_STEP, formatDate, sanitiseName, TOP, type Entry } from './s
 /**
  * STATE: the global high scores: a public Supabase table anyone can read and add to. Only a board (campaign), three
  * initials, the levels cleared (the step, 1 to 20 here; the table allows 1 to 1000) and the total time go up. The top ten is read
- * most levels first, then fastest, with no step filter; a row with a step of 1 to 20 is kept, the rest dropped. The key below is the publishable one, safe in a frontend by design; the table's own checks and
+ * most levels first, then fastest. The range (step 1 to 20) is in the query, so the limit only counts rows that can be shown (the table
+ * allows up to 1000, and a row above 20 would otherwise take a place in the ten and then be dropped here); the parse checks it again. The key below is the publishable one, safe in a frontend by design; the table's own checks and
  * policies are what guard it. Everything that comes back is untrusted and is re-checked here before it is drawn.
  */
 export const GLOBAL_BASE = 'https://xsidhlyprisxfnverwdk.supabase.co/rest/v1/chronogrip_scores';
@@ -27,9 +28,9 @@ export function scorePayload(level: string, initials: string, seconds: number, s
   return isStep(step) ? { level, initials, seconds: s, step } : null;
 }
 
-/** The query for a board's top ten: most levels cleared first, then fastest. */
+/** The query for a board's top ten: steps 1 to 20 only, most levels cleared first, then fastest. */
 export const boardUrl = (board: string): string =>
-  `${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.${board}&order=step.desc,seconds.asc&limit=${TOP}`;
+  `${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.${board}&step=gte.1&step=lte.20&order=step.desc,seconds.asc&limit=${TOP}`;
 
 /** Rows off the wire as entries; every row that is not fit for the board is dropped. */
 export function parseRows(body: unknown, board: string): Entry[] {

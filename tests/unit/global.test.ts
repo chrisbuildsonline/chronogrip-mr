@@ -46,8 +46,8 @@ describe('scorePayload', () => {
 });
 
 describe('boardUrl', () => {
-  it('asks for every run, most levels first then fastest, ten rows, with no step filter', () => {
-    expect(boardUrl('campaign-medium')).toBe(`${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.campaign-medium&order=step.desc,seconds.asc&limit=10`);
+  it('asks for steps 1 to 20 only (so the limit never counts an undisplayable row), most levels first then fastest, ten rows', () => {
+    expect(boardUrl('campaign-medium')).toBe(`${GLOBAL_BASE}?select=initials,seconds,step,created_at&level=eq.campaign-medium&step=gte.1&step=lte.20&order=step.desc,seconds.asc&limit=10`);
     expect(boardUrl('campaign-medium')).not.toContain('step=eq');
   });
   it('carries only the publishable key', () => {
@@ -104,6 +104,11 @@ describe('parseRows', () => {
 });
 
 describe('fetchGlobal', () => {
+  it('drops rows outside step 1 to 20 that a server returns anyway, keeping the good ones', async () => {
+    const row = { initials: 'ABC', seconds: 10, created_at: '2026-01-02T00:00:00Z' };
+    const f = ok([{ ...row, step: 1000 }, { ...row, step: 21 }, { ...row, step: 0 }, { ...row, step: 20, initials: 'FUL' }, { ...row, step: 5, initials: 'PAR' }]);
+    expect((await fetchGlobal('campaign-medium', f))!.map((x) => [x.name, x.cleared])).toEqual([['FUL', undefined], ['PAR', 5]]);
+  });
   it('sends the key and returns parsed rows', async () => {
     const f = ok([{ initials: 'ZED', seconds: 509.5, step: 20, created_at: '2026-01-02T00:00:00Z' }]);
     expect(await fetchGlobal('campaign-medium', f)).toEqual([{ name: 'ZED', ms: 509500, date: '2026-01-02' }]);
