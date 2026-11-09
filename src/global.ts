@@ -49,18 +49,23 @@ export function parseRows(body: unknown, board: string): Entry[] {
   return out;
 }
 
-/** Runs a request with a time limit; whatever goes wrong (offline, aborted, thrown) comes back as null. */
-async function send(f: Fetch, url: string, init: RequestInit, timeoutMs: number): Promise<Response | null> {
+/** Runs a request with a time limit; whatever goes wrong (offline, aborted, thrown) comes back as null, any answer as its Response. */
+async function request(f: Fetch, url: string, init: RequestInit, timeoutMs: number): Promise<Response | null> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    const res = await f(url, { ...init, signal: ctl.signal });
-    return res.ok ? res : null;
+    return await f(url, { ...init, signal: ctl.signal });
   } catch {
     return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Like `request`, but only a success comes back as a Response. */
+async function send(f: Fetch, url: string, init: RequestInit, timeoutMs: number): Promise<Response | null> {
+  const res = await request(f, url, init, timeoutMs);
+  return res?.ok ? res : null;
 }
 
 /** A board's global top ten, or null when it cannot be had (offline, an error, a timeout, rubbish back). */
@@ -76,10 +81,20 @@ export async function fetchGlobal(board: string, f: Fetch = fetch, timeoutMs = T
   }
 }
 
-/** Posts a score (time in ms) if it is valid; true when it was accepted. Never throws. */
-export async function submitGlobal(board: string, initials: string, ms: number, cleared: number, f: Fetch = fetch, timeoutMs = TIMEOUT_MS): Promise<boolean> {
+/** What posting a score came to: `ok` (accepted), `retry` (offline, a timeout, a 5xx: try again later) or `reject` (the server will never take it). */
+export type SubmitResult = 'ok' | 'retry' | 'reject';
+
+/**
+ * Posts a score (time in ms). A score that is invalid by our own rules, or an answer in the 4xx (a CHECK violation, a bad request),
+ * is a `reject`: sending it again cannot help. A request timeout (408) or too many requests (429) is a `retry` like the 5xx.
+ * Never throws.
+ */
+export async function submitGlobal(board: string, initials: string, ms: number, cleared: number, f: Fetch = fetch, timeoutMs = TIMEOUT_MS): Promise<SubmitResult> {
   const body = scorePayload(board, initials, ms / 1000, cleared);
-  if (!body) return false;
+  if (!body) return 'reject';
   const headers = { apikey: GLOBAL_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' };
-  return (await send(f, GLOBAL_BASE, { method: 'POST', headers, body: JSON.stringify(body) }, timeoutMs)) !== null;
+  const res = await request(f, GLOBAL_BASE, { method: 'POST', headers, body: JSON.stringify(body) }, timeoutMs);
+  if (!res) return 'retry';
+  if (res.ok) return 'ok';
+  return res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429 ? 'reject' : 'retry';
 }

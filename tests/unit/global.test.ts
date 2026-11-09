@@ -132,7 +132,7 @@ describe('fetchGlobal', () => {
 describe('submitGlobal', () => {
   it('posts the JSON with the key and a minimal return', async () => {
     const f = vi.fn(async () => new Response(null, { status: 201 }));
-    expect(await submitGlobal('campaign-medium', 'ABC', 641234, 20, f)).toBe(true);
+    expect(await submitGlobal('campaign-medium', 'ABC', 641234, 20, f)).toBe('ok');
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(GLOBAL_BASE);
     expect(init.method).toBe('POST');
@@ -141,20 +141,33 @@ describe('submitGlobal', () => {
   });
   it('posts the levels cleared as the step of a partial run', async () => {
     const f = vi.fn(async () => new Response(null, { status: 201 }));
-    expect(await submitGlobal('campaign-hard', 'ABC', 99_000, 7, f)).toBe(true);
+    expect(await submitGlobal('campaign-hard', 'ABC', 99_000, 7, f)).toBe('ok');
     expect(JSON.parse((f.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).toEqual({ level: 'campaign-hard', initials: 'ABC', seconds: 99, step: 7 });
   });
   it('sends nothing for an invalid score, or for a run that cleared nothing', async () => {
     const f = vi.fn(async () => new Response(null, { status: 201 }));
-    expect(await submitGlobal('campaign-medium', 'ab', 5000, 1, f)).toBe(false);
-    expect(await submitGlobal('campaign-medium', 'ABC', 0, 1, f)).toBe(false);
-    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 0, f)).toBe(false);
-    expect(await submitGlobal('t1', 'ABC', 5000, 1, f)).toBe(false);
+    expect(await submitGlobal('campaign-medium', 'ab', 5000, 1, f)).toBe('reject');
+    expect(await submitGlobal('campaign-medium', 'ABC', 0, 1, f)).toBe('reject');
+    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 0, f)).toBe('reject');
+    expect(await submitGlobal('t1', 'ABC', 5000, 1, f)).toBe('reject');
     expect(f).not.toHaveBeenCalled();
   });
-  it('never throws on a 500, a throw or a timeout', async () => {
-    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 2, ok({}, 500))).toBe(false);
-    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 2, vi.fn(async () => Promise.reject(new Error('x'))))).toBe(false);
-    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 2, hang() as never, 20)).toBe(false);
+  it('retries later on a 500, a throw or a timeout, and never throws', async () => {
+    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 2, ok({}, 500))).toBe('retry');
+    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 2, ok({}, 503))).toBe('retry');
+    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 2, vi.fn(async () => Promise.reject(new Error('x'))))).toBe('retry');
+    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 2, hang() as never, 20)).toBe('retry');
+  });
+  it('rejects for good on a 4xx (a CHECK violation, a bad request), but retries a 408 or 429', async () => {
+    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 2, ok({}, 400))).toBe('reject');
+    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 2, ok({}, 409))).toBe('reject');
+    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 2, ok({}, 408))).toBe('retry');
+    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 2, ok({}, 429))).toBe('retry');
+  });
+  it('rejects a time that rounds to a day or more, or no levels (the null payload) without a request', async () => {
+    const f = vi.fn(async () => new Response(null, { status: 201 }));
+    expect(await submitGlobal('campaign-medium', 'ABC', 86_399_999, 20, f)).toBe('reject');
+    expect(await submitGlobal('campaign-medium', 'ABC', 5000, 0, f)).toBe('reject');
+    expect(f).not.toHaveBeenCalled();
   });
 });

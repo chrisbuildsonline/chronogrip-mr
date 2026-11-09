@@ -13,8 +13,8 @@ export const boardOf = (stage: string): string => `campaign-${stage}`;
 export const TOP = 10;
 export const DEFAULT_INITIALS = 'AAA';
 
-/** `ms`: the run's total time; `date`: the local day, YYYY-MM-DD; `cleared`: levels cleared, 1..20 (missing: 20); `posted`: the global board has it; `dev`: a cheated run, never sent. */
-export type Entry = { name: string; ms: number; date: string; cleared?: number; posted?: boolean; dev?: boolean };
+/** `ms`: the run's total time; `date`: the local day, YYYY-MM-DD; `cleared`: levels cleared, 1..20 (missing: 20); `posted`: the outbox is done with it (the global board has it, or `rejected`: it never will); `dev`: a cheated run, never sent. */
+export type Entry = { name: string; ms: number; date: string; cleared?: number; posted?: boolean; rejected?: boolean; dev?: boolean };
 /** A finished run has cleared all 20 levels. */
 export const RUN_STEP = 20;
 /** The levels an entry cleared: an entry from before partial runs is a finished run. */
@@ -58,6 +58,7 @@ function clean(e: Entry): Entry {
   const out: Entry = { name: sanitiseName(e.name), ms: e.ms, date: e.date };
   if (e.cleared !== undefined && e.cleared < RUN_STEP) out.cleared = e.cleared;
   if (e.posted === true) out.posted = true;
+  if (e.rejected === true) out.rejected = true;
   if (e.dev === true) out.dev = true;
   return out;
 }
@@ -96,7 +97,7 @@ export function loadScores(storage: Pick<Storage, 'getItem'> | null | undefined)
       const kept: Entry[] = [];
       for (const r of rows) {
         if (!isObject(r)) continue;
-        const raw: Entry = { name: sanitiseName(r.name), ms: r.ms as number, date: r.date as string, ...(r.cleared === undefined ? {} : { cleared: r.cleared as number }), posted: r.posted === true, dev: r.dev === true };
+        const raw: Entry = { name: sanitiseName(r.name), ms: r.ms as number, date: r.date as string, ...(r.cleared === undefined ? {} : { cleared: r.cleared as number }), posted: r.posted === true, rejected: r.rejected === true, dev: r.dev === true };
         if (valid(board, raw)) kept.push(clean(raw));
       }
       s.boards[board] = kept.sort((a, b) => order(board, a, b)).slice(0, TOP);
@@ -136,12 +137,12 @@ export function stepInitial(i: Initials, slot: number, dir: 1 | -1): Initials {
   return { letters: setLetter(i.letters, slot, next), cursor: slot };
 }
 
-/** The scores with the first unposted entry equal to `e` (same name, time, date and levels) marked posted; the same object back if there is none. */
-export function markPosted(s: Scores, board: string, e: Entry): Scores {
+/** The scores with the first unposted entry equal to `e` (same name, time, date and levels) marked posted (and `rejected` when the server refused it for good); the same object back if there is none. */
+export function markPosted(s: Scores, board: string, e: Entry, rejected = false): Scores {
   const rows = s.boards[board] ?? [];
   const i = rows.findIndex((x) => !x.posted && x.name === e.name && x.ms === e.ms && x.date === e.date && clearedOf(x) === clearedOf(e));
   if (i < 0) return s;
-  return { ...s, boards: { ...s.boards, [board]: rows.map((x, k) => (k === i ? { ...x, posted: true } : x)) } };
+  return { ...s, boards: { ...s.boards, [board]: rows.map((x, k) => (k === i ? { ...x, posted: true, ...(rejected ? { rejected: true } : {}) } : x)) } };
 }
 
 /** The entries still to send to the global board, in board order: not posted, not a cheated run. */

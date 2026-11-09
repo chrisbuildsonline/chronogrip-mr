@@ -1,3 +1,4 @@
+import type { SubmitResult } from './global';
 import { markPosted, unposted, type Scores } from './scores';
 
 /**
@@ -5,12 +6,13 @@ import { markPosted, unposted, type Scores } from './scores';
  * failed or offline post is tried again on the next flush (boot, the High scores card, a new save); an entry from before the global
  * board has no flag and is sent once. A cheated run (`dev`) is never sent. One pass runs at a time, and a flush asked for while a
  * pass is running makes it go round again, so an entry saved meanwhile is not missed. A pass sends one entry at a time and stops
- * at the first that fails (offline: no point hammering).
+ * at the first that needs a `retry` (offline: no point hammering). An entry the server will never take (`reject`: an invalid score, a
+ * 4xx) is marked done (posted, `rejected`) and the pass goes on, so it cannot block the entries behind it.
  */
 export function createOutbox(
   get: () => Scores,
   set: (s: Scores) => void,
-  post: (board: string, name: string, ms: number, cleared: number) => Promise<boolean>,
+  post: (board: string, name: string, ms: number, cleared: number) => Promise<SubmitResult>,
   posted: (board: string) => void = () => {},
 ) {
   let running: Promise<void> | null = null;
@@ -19,15 +21,15 @@ export function createOutbox(
     do {
       again = false;
       for (const { board, entry } of unposted(get())) {
-        let ok = false;
+        let result: SubmitResult = 'retry';
         try {
-          ok = await post(board, entry.name, entry.ms, entry.cleared ?? 20);
+          result = await post(board, entry.name, entry.ms, entry.cleared ?? 20);
         } catch {
-          ok = false;
+          result = 'retry';
         }
-        if (!ok) return;
-        set(markPosted(get(), board, entry)); // marked before the next entry, so a later pass never sends it again
-        posted(board);
+        if (result === 'retry') return;
+        set(markPosted(get(), board, entry, result === 'reject')); // marked before the next entry, so a later pass never sends it again
+        if (result === 'ok') posted(board);
       }
     } while (again);
   }
