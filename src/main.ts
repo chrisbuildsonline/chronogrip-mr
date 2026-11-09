@@ -10,8 +10,7 @@ import { LEVELS, checkLevel, type Level } from './levels';
 import { buildScene } from './scene';
 import { loadBackdrop, type BackdropId } from './backdrop';
 import { MENU_BACKDROP, MENU_THEME, RANDOM_PICK, STAGES, dOf, kindOf, parOf, stageOf, type StageId } from './stages';
-import { BENCH_Y as BENCH_TOP_Y, createScenery } from './scenery';
-import { woodSet } from './wood';
+import { BENCH_Y as BENCH_TOP_Y, contactShadow, createScenery } from './scenery';
 import { trackMr } from './mr';
 import { isSoftwareGl, tuneForSoftwareGl } from './render';
 import { qualityOf } from './quality';
@@ -168,7 +167,7 @@ const low = quality === 'low';
 setPlainMetals(low);
 const built = buildScene(level, world.scene, world.renderer, low);
 // // The bench and a rendered panorama behind the tray on desktop and phone; in immersive-ar only a few props on the real table (src/scenery.ts).
-const scenery = createScenery(world.scene, low ? null : woodSet('bench', isPhone(window.innerWidth, window.innerHeight), world.renderer), low ? null : new PMREMGenerator(world.renderer));
+const scenery = createScenery(world.scene, low ? null : new PMREMGenerator(world.renderer));
 /**
  * The rendered panorama behind the tray: the attic (c2) on every menu, the stage's own while a level is on. One at a time: a
  * new one replaces the old (freeing its texture) once it has loaded, and a switch made while one is loading wins.
@@ -508,6 +507,9 @@ badge.load(level, goal());
 const escapement = createEscapement();
 const automaton = createAutomaton();
 built.tray.add(escapement.root, automaton.root);
+// No workbench (the room's painted floor is under the tray): a soft contact shadow under the tray and the bird's stand instead.
+// Desktop and phone only (the inline scenery); the tray moves only in immersive-ar, where that scenery is hidden.
+scenery.inline.group.add(contactShadow(new Box3().setFromObject(built.tray)));
 /** The knob's centre in tray space [x, y, lift]. */
 const KNOB: Vec3 = [DIAL_AT[0], DIAL_AT[1], KNOB_TOP / 2];
 const nearKnob = (world: Vec3) => {

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_PLACEMENT, type Placement } from '../../src/anchor';
 import { C, SCENE } from '../../src/palette';
 import { backdropDir } from '../../src/backdrop';
-import { buildScenery, createScenery } from '../../src/scenery';
+import { BENCH_Y, SHADOW, buildScenery, contactShadow, createScenery, shadowAlpha } from '../../src/scenery';
 import { brass, metalEnv, setMetalEnv, setPlainMetals } from '../../src/metal';
 import { benchTopGeometry, brassInlay, planarUv, type WoodSet } from '../../src/wood';
 import { BOARD_MARGIN, COMFORT, TRAY_HALF, TRAY_POSE, inZone, type Vec3 } from '../../src/seat';
@@ -23,8 +23,8 @@ describe('buildScenery inline (desktop and phone)', () => {
   const s = buildScenery('inline');
   const n = names(s.group);
 
-  it('keeps only the bench and the stand the tray sits on: the panorama is the room', () => {
-    expect([...n].sort()).toEqual(['tray-stand', 'workbench']);
+  it('has no workbench: the panorama is the whole room, its painted floor under the tray', () => {
+    expect([...n]).toEqual([]);
     for (const gone of ['back-wall', 'shelves', 'shelf-props', 'bench-props', 'lamp', 'lamp-glow']) expect(n, gone).not.toContain(gone);
   });
 
@@ -34,39 +34,32 @@ describe('buildScenery inline (desktop and phone)', () => {
     expect(lights).toBe(0);
   });
 
-  it('stays cheap: two meshes and a small triangle bound', () => {
-    expect(meshes(s.group).length).toBe(2);
-    expect(s.tris).toBe(meshes(s.group).reduce((sum, m) => sum + tris(m.geometry), 0));
-    expect(s.tris).toBeGreaterThan(50);
-    expect(s.tris).toBeLessThanOrEqual(1000);
-  });
-
-  it('keeps the bench below the tray', () => {
-    // The lowest point of the tray is its near edge underside, about y = -0.332.
-    const top = new Box3().setFromObject(meshes(s.group).find((m) => m.name === 'workbench')!);
-    expect(top.max.y).toBeLessThan(-0.33);
+  it('costs nothing: no meshes, no triangles', () => {
+    expect(meshes(s.group).length).toBe(0);
+    expect(s.tris).toBe(0);
   });
 });
 
-describe('buildScenery inline with the lit bench wood', () => {
-  const wood: WoodSet = { map: new Texture(), normalMap: new Texture(), roughnessMap: new Texture() };
-  const s = buildScenery('inline', wood);
-
-  it('adds the planks as one textured mesh (one draw call), keeping the edge strip and stand', () => {
-    expect([...names(s.group)].sort()).toEqual(['tray-stand', 'workbench', 'workbench-top']);
-    const top = meshes(s.group).find((m) => m.name === 'workbench-top')!;
-    const mat = top.material as MeshStandardMaterial;
-    expect(top.geometry.attributes.uv).toBeDefined();
-    expect(mat.map).toBe(wood.map);
-    expect(mat.normalMap).toBe(wood.normalMap);
-    expect(mat.roughnessMap).toBe(wood.roughnessMap);
-    expect(mat.normalScale.x).toBeLessThanOrEqual(0.5);
-    expect(s.tris).toBeLessThanOrEqual(1000);
+describe('the contact shadow under the tray', () => {
+  it('is dark in the middle and fades smoothly to nothing at the edge', () => {
+    expect(shadowAlpha(0.5, 0.5)).toBe(1);
+    for (const [u, v] of [[0, 0.5], [1, 0.5], [0.5, 0], [0.5, 1], [0, 0], [1, 1]] as const) expect(shadowAlpha(u, v)).toBeCloseTo(0, 6);
+    for (let u = 0.5; u < 1; u += 0.05) expect(shadowAlpha(u + 0.05, 0.5)).toBeLessThanOrEqual(shadowAlpha(u, 0.5) + 1e-12);
   });
-
-  it('keeps the planks below the tray', () => {
-    const top = new Box3().setFromObject(meshes(s.group).find((m) => m.name === 'workbench-top')!);
-    expect(top.max.y).toBeLessThan(-0.33);
+  it('lies flat at the floor height, covering the footprint plus its soft spread, drawn without writing depth', () => {
+    const m = contactShadow({ min: { x: -0.25, z: -0.5 }, max: { x: 0.35, z: -0.1 } });
+    const box = new Box3().setFromObject(m);
+    expect(m.name).toBe('contact-shadow');
+    expect(box.max.y - box.min.y).toBeLessThan(1e-6);
+    expect(box.min.y).toBeCloseTo(BENCH_Y + 0.0005, 6);
+    expect(box.min.x).toBeCloseTo(-0.25 - SHADOW.spread, 6);
+    expect(box.max.x).toBeCloseTo(0.35 + SHADOW.spread, 6);
+    expect(box.min.z).toBeCloseTo(-0.5 - SHADOW.spread, 6);
+    expect(box.max.z).toBeCloseTo(-0.1 + SHADOW.spread, 6);
+    const mat = m.material as MeshBasicMaterial;
+    expect(mat.transparent).toBe(true);
+    expect(mat.depthWrite).toBe(false);
+    expect(mat.opacity).toBe(SHADOW.opacity);
   });
 });
 
@@ -192,7 +185,7 @@ describe('createScenery: the stage environment for the metals', () => {
 
   it('a backdrop becomes the metals\' environment (one PMREM, the old one freed); immersive-ar and no backdrop use the scene\'s', () => {
     const { made, pmrem } = fake();
-    const sc = createScenery(new Scene(), null, pmrem);
+    const sc = createScenery(new Scene(), pmrem);
     expect(sc.state().environment).toBe('neutral');
     expect(metalEnv()).toBeNull();
     sc.setBackdrop('c2', new CubeTexture());

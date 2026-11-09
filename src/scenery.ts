@@ -4,14 +4,12 @@ import {
   type BufferGeometry,
   CylinderGeometry,
   Euler,
-  ExtrudeGeometry,
   Group,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   Quaternion,
-  Shape,
   type Scene,
   type CubeTexture,
   type PMREMGenerator,
@@ -19,14 +17,16 @@ import {
   TorusGeometry,
   Vector3,
   Color,
+  DataTexture,
+  LinearFilter,
+  PlaneGeometry,
+  RGBAFormat,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Placement } from './anchor';
 import { type BackdropId } from './backdrop';
 import { C, SCENE } from './palette';
-import { TRAY_POSE } from './seat';
 import { metalEnv, setMetalEnv, setMetalEnvIntensity } from './metal';
-import { type WoodSet, benchTopGeometry, benchWood } from './wood';
 
 /** 'inline' is the desktop and phone view (the bench under the tray, a rendered cubemap behind it); 'xr' is immersive-ar (a few props on the real table, nothing else). */
 export type SceneryMode = 'inline' | 'xr';
@@ -38,10 +38,42 @@ export type Scenery = {
   tris: number;
 };
 
-/** Top of the workbench: just under the lowest point of the tilted tray (its near edge, about y = -0.332). */
+/** The floor under the tray (the workbench top, before it went): the contact shadow's height and where confetti lands. Just under the lowest point of the tilted tray (its near edge, about y = -0.332). */
 export const BENCH_Y = -0.336;
 /** How strongly the metals read Hard's night environment (the attics' is 10). */
 const HARD_ENV_INTENSITY = 34;
+
+/** Darkness at the middle of the contact shadow, and how far its soft edge reaches past the footprint (metres). */
+export const SHADOW = { opacity: 0.75, spread: 0.1 } as const;
+
+/**
+ * Alpha of the contact shadow at (u, v) in 0..1 over its plane: a rounded rectangle, dark inside, with a smooth falloff over
+ * `soft` (a fraction of the plane) at its edge. Pure, for the texture and the tests.
+ */
+export function shadowAlpha(u: number, v: number, soft = 0.25): number {
+  const dx = Math.max(0, Math.abs(u - 0.5) * 2 - (1 - soft * 2)), dy = Math.max(0, Math.abs(v - 0.5) * 2 - (1 - soft * 2));
+  const d = Math.min(1, Math.hypot(dx, dy) / (soft * 2));
+  return (1 - d * d * (3 - 2 * d)); // smoothstep down to 0 at the plane's edge
+}
+
+/**
+ * A soft shadow on the floor under the tray and the bird's stand, now that there is no workbench: a flat dark rounded patch
+ * at BENCH_Y covering `foot` (the tray's world box) plus SHADOW.spread, with a blurred edge, drawn under the tray.
+ */
+export function contactShadow(foot: { min: { x: number; z: number }; max: { x: number; z: number } }): Mesh {
+  const W = 128, H = 64, data = new Uint8Array(W * H * 4);
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) data[(j * W + i) * 4 + 3] = Math.round(255 * shadowAlpha((i + 0.5) / W, (j + 0.5) / H));
+  const tex = new DataTexture(data, W, H, RGBAFormat);
+  tex.magFilter = tex.minFilter = LinearFilter;
+  tex.needsUpdate = true;
+  const sx = foot.max.x - foot.min.x + 2 * SHADOW.spread, sz = foot.max.z - foot.min.z + 2 * SHADOW.spread;
+  const mesh = new Mesh(new PlaneGeometry(sx, sz), new MeshBasicMaterial({ color: C.ink, alphaMap: tex, transparent: true, opacity: SHADOW.opacity, depthWrite: false }));
+  mesh.name = 'contact-shadow';
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set((foot.min.x + foot.max.x) / 2, BENCH_Y + 0.0005, (foot.min.z + foot.max.z) / 2);
+  mesh.renderOrder = -1; // under the tray's own transparent bits
+  return mesh;
+}
 
 /** Direction the workshop's light comes from (the game's key light, from the upper left), for the baked shading. */
 const KEY = new Vector3(-0.6, 0.8, 0.25).normalize();
@@ -98,64 +130,10 @@ class Bag {
 const triangles = (g: BufferGeometry) => (g.index ? g.index.count : g.attributes.position!.count) / 3;
 
 /** Unlit: the light is baked into the vertex colours (Bag), so a screen-filling wall and bench cost almost nothing per pixel, even on a software rasteriser. */
-const matte = () => new MeshBasicMaterial({ vertexColors: true });
-
 function named(name: string, geo: BufferGeometry, material: MeshStandardMaterial | MeshBasicMaterial): Mesh {
   const mesh = new Mesh(geo, material);
   mesh.name = name;
   return mesh;
-}
-
-/** Two wedge cheeks under the board hold the tilted tray up on the bench, 6 mm under its underside. */
-function trayStand(bag: Bag) {
-  const [, py, pz] = TRAY_POSE.position;
-  const c = Math.cos(TRAY_POSE.tilt);
-  const s = Math.sin(TRAY_POSE.tilt);
-  // World (y, z) of the board's underside at tray-local depth lz (towards the player), 18 mm under the surface.
-  const under = (lz: number): [number, number] => [py - 0.018 * c - lz * s - 0.006, pz - 0.018 * s + lz * c];
-  const [farY, farZ] = under(-0.17);
-  const nearZ = under(0.17)[1];
-  const shape = new Shape();
-  // u runs along -z (away from the player).
-  shape.moveTo(-nearZ, BENCH_Y);
-  shape.lineTo(-farZ, BENCH_Y);
-  shape.lineTo(-farZ, farY);
-  shape.closePath();
-  const geo = new ExtrudeGeometry(shape, { depth: 0.03, bevelEnabled: false });
-  // shape (u, y) and extrusion d -> world (x = d, y, z = -u)
-  geo.applyMatrix4(new Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1));
-  for (const x of [-0.17, 0.14]) bag.add(geo, SCENE.shelfEdge, [x, 0, 0]);
-}
-
-/** With a wood set the nine top planks are one lit PBR mesh; without (software GL) they stay the old unlit vertex-coloured boxes. */
-function workbench(wood: WoodSet | null): Mesh[] {
-  const top = new Bag(true);
-  const planks = 9;
-  const depth = 1.5;
-  if (!wood) {
-    const tones = [SCENE.benchTop, SCENE.benchPlank, SCENE.benchGrain, SCENE.benchPlank];
-    for (let i = 0; i < planks; i++) {
-      const w = depth / planks;
-      const z = 0.55 - w * (i + 0.5);
-      top.box([3.4, 0.04, w - 0.004], tones[i % tones.length]!, [0, BENCH_Y - 0.02 - (i % 3) * 0.0006, z]);
-    }
-  }
-  top.box([3.4, 0.07, 0.04], SCENE.benchEdge, [0, BENCH_Y - 0.035, 0.57]);
-  if (!wood) {
-    // A worn dark strip of grain on every other plank, to break the flat colour.
-    for (let i = 0; i < planks; i += 2) {
-      top.box([0.9 + (i % 3) * 0.3, 0.001, 0.012], SCENE.benchEdge, [-0.9 + i * 0.22, BENCH_Y + 0.0005, 0.55 - (depth / planks) * (i + 0.5)]);
-    }
-  }
-  const stand = new Bag(true);
-  trayStand(stand);
-  const out = [named('workbench', top.geometry(), matte()), named('tray-stand', stand.geometry(), matte())];
-  if (wood) {
-    const geos = benchTopGeometry(BENCH_Y);
-    out.push(named('workbench-top', mergeGeometries(geos, false)!, benchWood(wood)));
-    for (const g of geos) g.dispose();
-  }
-  return out;
 }
 
 /** The small props of the real table in MR, each a single mesh named prop-*, lying beside the play area (x measured from the tray's centre). */
@@ -197,14 +175,13 @@ function tableProps(): Mesh[] {
 }
 
 /** Builds the scenery of one mode as a group; nothing is added to a scene here. */
-export function buildScenery(mode: SceneryMode, wood: WoodSet | null = null): Scenery {
+export function buildScenery(mode: SceneryMode): Scenery {
   const group = new Group();
   group.name = `scenery-${mode}`;
   if (mode === 'xr') {
     group.add(...tableProps());
-  } else {
-    group.add(...workbench(wood));
   }
+  // inline: no workbench (Chris, 2026-11-09): the tray stands in front of each room's own painted floor, on a soft contact shadow (contactShadow).
   let tris = 0;
   group.traverse((o) => o instanceof Mesh && (tris += triangles(o.geometry)));
   return { mode, group, tris };
@@ -226,8 +203,8 @@ export type Sceneries = {
 };
 
 /** Adds both sceneries to the scene and returns the switch between them. Starts inline. */
-export function createScenery(scene: Scene, wood: WoodSet | null = null, pmrem: PMREMGenerator | null = null): Sceneries {
-  const inline = buildScenery('inline', wood);
+export function createScenery(scene: Scene, pmrem: PMREMGenerator | null = null): Sceneries {
+  const inline = buildScenery('inline');
   const xr = buildScenery('xr');
   let backdrop: { id: BackdropId; texture: CubeTexture } | null = null;
   // The metals reflect the stage: its cubemap, prefiltered once per stage (one PMREM, the old one freed). In immersive-ar, and
