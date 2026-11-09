@@ -437,9 +437,19 @@ function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: numb
   if (b.kind === 'card') return; // a stage card is drawn by src/cards.ts
   // Nothing is selected when a menu opens: a row lights (amber bar, gradient, ›) only while it is hovered or reached with the keys.
   const lit = hover;
-  if (lit) selectedRow(g, x, y, w, h);
+  if (lit && !(b.id === 'back' && ctx.board)) selectedRow(g, x, y, w, h);
   const word = b.label.toUpperCase();
   const color = lit ? C.menuHi : C.menuInk;
+  if (b.id === 'back' && ctx.board) {
+    // On the High scores card Back is a real button: a centred pill with an amber hairline, lit while hovered.
+    pill(g, x, y, w - mm(8), h - mm(10), mm(6));
+    g.fillStyle = lit ? 'rgba(217,154,43,0.2)' : 'rgba(241,232,216,0.06)';
+    g.fill();
+    g.lineWidth = 1.5;
+    g.strokeStyle = lit ? C.amber : 'rgba(217,154,43,0.55)';
+    g.stroke();
+    return text(g, word, x, y + 1, jfont(600, T.button * 1.1), lit ? C.menuHi : C.logo, 'center', 4.2);
+  }
   text(g, word, left + mm(11), y + 1, jfont(400, T.button * 1.1), color, 'left', 4.2);
   if (b.kind === 'toggle') {
     const on = !!(b.id === 'sound' ? ctx.sound : b.id === 'music' ? ctx.music : ctx.relaxed);
@@ -533,7 +543,7 @@ function drawAbout(g: Draw, l: Layout, ctx: PanelCtx, at: (x: number, y: number)
  * The stage-cleared card's own panel (the other menus have none): walnut night, lighter at the top, an amber hairline and a
  * large faint gear turning out of the lower right corner.
  */
-function clearedCard(g: Draw, W: number, H: number) {
+function clearedCard(g: Draw, W: number, H: number, watermark = true) {
   g.save();
   g.shadowColor = C.shadow;
   g.shadowBlur = 40;
@@ -550,16 +560,18 @@ function clearedCard(g: Draw, W: number, H: number) {
   g.beginPath();
   g.roundRect(MARGIN, MARGIN, W, H, mm(18));
   g.clip();
-  // the watermark gear: 24 teeth, centred just off the corner
+  // the watermark gear: 24 teeth, centred just off the corner (not behind a table: it read as the backdrop showing through)
   const [gx, gy, r] = [MARGIN + W * 0.92, MARGIN + H * 0.86, H * 0.42];
   g.beginPath();
-  for (let i = 0; i < 48; i++) {
+  for (let i = 0; watermark && i < 48; i++) {
     const a = (i / 48) * Math.PI * 2, rr = i % 2 ? r : r * 1.1;
     g.lineTo(gx + rr * Math.cos(a), gy + rr * Math.sin(a));
   }
   g.closePath();
-  g.moveTo(gx + r * 0.18, gy);
-  g.arc(gx, gy, r * 0.18, 0, Math.PI * 2, true);
+  if (watermark) {
+    g.moveTo(gx + r * 0.18, gy);
+    g.arc(gx, gy, r * 0.18, 0, Math.PI * 2, true);
+  }
   g.globalAlpha = 0.045;
   g.fillStyle = C.amber;
   g.fill('evenodd');
@@ -760,7 +772,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   const shared = special && !!ctx.shared;
   const random = special && !!ctx.random;
   const name = random ? `Random · ${ctx.difficulty ?? ''}` : shared ? 'Shared puzzle' : `Level ${level}`;
-  if (screen === 'cleared' || screen === 'board') clearedCard(g, W, H); // these two sit on a panel of their own
+  if (screen === 'cleared' || screen === 'board') clearedCard(g, W, H, screen === 'cleared'); // these two sit on a panel of their own
   if (menu) drawMenu(g, screen, l, ctx, at);
   switch (screen) {
     case 'hud':
