@@ -22,8 +22,8 @@ export type ButtonKind = 'primary' | 'secondary' | 'icon' | 'toggle' | 'arrow' |
 export type Button = { id: string; label: string; kind: ButtonKind; x: number; y: number; w: number; h: number; /** A small line after a menu row's label. */ hint?: string };
 /** A display slot (not a target) in panel space; x, y is its centre. */
 export type Slot = { x: number; y: number; w: number; h: number };
-/** `track`: the rounded bed the Local / Global tab segments sit in; `track2`: the one under the stage tabs. */
-export type Layout = { width: number; height: number; buttons: Button[]; slots?: Slot[]; track?: Slot; track2?: Slot };
+/** `track`: the compact rounded bed the Local / Global segments sit in. */
+export type Layout = { width: number; height: number; buttons: Button[]; slots?: Slot[]; track?: Slot };
 
 /** Smallest side of any button: a fingertip target. */
 export const BUTTON_MIN_M = 0.04;
@@ -219,29 +219,31 @@ export function layout(screen: Screen, ctx: LayoutCtx): Layout {
           tabBtn('tab-global', 'Global', WIDE_TAB / 2, g.tabsY, WIDE_TAB, g.tabH),
           ...STAGES.map((st, i) => tabBtn(`tab-${st.id}`, st.name, (i - 1) * STAGE_TAB, g.stageY, STAGE_TAB, g.tabH)),
         ],
-        track: { x: 0, y: g.tabsY, w: trackW, h: g.tabH + 0.006 },
-        track2: { x: 0, y: g.stageY, w: STAGES.length * STAGE_TAB + 0.006, h: g.tabH + 0.006 },
+        track: { x: 0, y: g.tabsY, w: trackW, h: 0.026 }, // a compact bed, smaller than the touch area of its two segments
       };
     }
   }
 }
 
 /**
- * The high scores card, one centred column, from the foot up: Back, the table area, the Local / Global switch, the stage tabs and
- * the heading. The table area is fixed: ten rows (`y0` is the centre of the first from the foot, `pitch` the distance between rows)
- * and a note strip `noteH` high above them, where the empty-board lines are centred, so the card is one height in every state.
+ * The high scores card, one centred column on its own panel, from the foot up: Back, the table (ten rows, then its column labels
+ * `headH` high, then a note strip `noteH` high), the Local / Global switch, the stage tabs and the heading. `y0` is the centre of
+ * the first row from the card's foot, `pitch` the distance between rows. The area is fixed, so the card is one height in every state.
  */
 export function boardGrid(narrow: boolean) {
   const [cols, rows] = [1, 10];
   const pitch = narrow ? 0.0165 : 0.0185;
-  const noteH = 0.014;
+  const [noteH, headH] = [0.012, 0.016];
   const tabH = BH - 0.006;
   const rowsFoot = PAD + ROW_H + 0.012;
   const y0 = rowsFoot + pitch / 2 + (rows - 1) * pitch;
-  const tabsY = rowsFoot + rows * pitch + noteH + GAP + 0.003 + tabH / 2;
-  const stageY = tabsY + tabH + 0.01;
+  const rowsTop = rowsFoot + rows * pitch;
+  const headRowY = rowsTop + headH / 2;
+  const noteY = rowsTop + headH + noteH / 2;
+  const tabsY = rowsTop + headH + noteH + 0.006 + tabH / 2;
+  const stageY = tabsY + tabH + 0.004;
   const headY = stageY + tabH / 2 + 0.04;
-  return { width: NARROW_W, cols, rows, gap: 0, pitch, noteH, y0, headY, tabsY, stageY, tabH, height: headY + 0.06, colW: NARROW_W - 2 * PAD };
+  return { width: NARROW_W, cols, rows, gap: 0, pitch, noteH, headH, headRowY, noteY, y0, headY, tabsY, stageY, tabH, height: headY + 0.06, colW: NARROW_W - 2 * PAD };
 }
 
 /** The button under a panel-space point that is within touch depth of the face, else null. */

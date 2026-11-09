@@ -56,7 +56,6 @@ async function geometry(page: Page) {
       stages: span(rects(['tab-easy', 'tab-medium', 'tab-hard'])),
       switch: span(rects(['tab-local', 'tab-global'])),
       back: span(rects(['back'])),
-      heights: ['tab-easy', 'tab-local'].map((id) => { const r = c.buttons().find((b) => b.id === id)!.rect; return r[3] - r[1]; }),
     };
   });
 }
@@ -70,7 +69,7 @@ for (const [name, size] of SIZES) {
     const errors = await open(page, size);
     const local = await geometry(page);
     aligned(local);
-    expect(Math.abs(local.heights[0]! - local.heights[1]!), 'both pill rows are the same height').toBeLessThanOrEqual(2);
+    expect(await page.evaluate(() => window.__chrono!.trayVisible), 'the board is out of the room behind the card').toBe(false);
     const w = await words(page);
     expect(w).toEqual(expect.arrayContaining(["20/20", "L8", "L13", "L2", "HIGH SCORES"]));
     // ranked: 20/20 first, then L13, then L8 (fast before slow), then L2

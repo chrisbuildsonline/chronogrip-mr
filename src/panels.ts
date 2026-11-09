@@ -406,16 +406,16 @@ function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: numb
     const picked = b.id === 'tab-local' || b.id === 'tab-global' ? ctx.board?.tab === (b.id === 'tab-global' ? 'global' : 'local') : b.id === `tab-${ctx.board?.stage}`;
     const sw = b.id === 'tab-local' || b.id === 'tab-global'; // the two-way switch: the chosen side is a lit pill; a stage tab has the underline
     if (sw && picked) {
-      pill(g, x, y, w - mm(1.2), h - mm(1.2));
+      pill(g, x, y, w - mm(3), mm(13)); // inside the compact bed
       g.fillStyle = 'rgba(217,154,43,0.22)';
       g.fill();
     }
-    text(g, b.label.toUpperCase(), x, y + 1, jfont(picked ? 600 : 400, T.button * 0.9), picked ? C.amber : C.menuInk, 'center', 3);
+    const size = T.button * (sw ? 0.7 : 0.78);
+    text(g, b.label.toUpperCase(), x, y + 1, jfont(picked ? 600 : 400, size), picked ? C.amber : hover ? C.menuHi : C.menuMuted, 'center', 3);
     if (picked && !sw) {
       g.fillStyle = C.amber;
-      g.fillRect(x - w * 0.34, y + h / 2 - mm(1.5), w * 0.68, mm(1));
+      g.fillRect(x - w * 0.3, y + mm(7.5), w * 0.6, mm(0.8)); // the underline, close under the word
     }
-    if (hover && !picked) text(g, b.label.toUpperCase(), x, y + 1, jfont(400, T.button * 0.9), C.menuHi, 'center', 3);
     return;
   }
   if (b.kind === 'arrow') {
@@ -440,7 +440,6 @@ function menuButton(g: Draw, b: Button, x: number, y: number, w: number, h: numb
   if (lit) selectedRow(g, x, y, w, h);
   const word = b.label.toUpperCase();
   const color = lit ? C.menuHi : C.menuInk;
-  if (b.id === 'back' && ctx.board) return text(g, word, x, y + 1, jfont(400, T.button * 1.1), color, 'center', 4.2); // the High scores card is one centred axis
   text(g, word, left + mm(11), y + 1, jfont(400, T.button * 1.1), color, 'left', 4.2);
   if (b.kind === 'toggle') {
     const on = !!(b.id === 'sound' ? ctx.sound : b.id === 'music' ? ctx.music : ctx.relaxed);
@@ -662,30 +661,65 @@ function drawMenu(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx, at: (x: num
       const b = ctx.board!;
       const grid = boardGrid(!!ctx.narrow);
       head(`${b.label.toUpperCase()} · BEST RUNS`, 'HIGH SCORES', 30, grid.headY + 0.02, true);
-      // The table area has a fixed height (ten rows and a note strip above them), so the card never jumps between tabs.
-      const midY = grid.y0 - ((grid.rows - 1) / 2) * grid.pitch;
-      if (b.note) text(g, b.note, at(0, 0)[0], at(0, grid.y0 + grid.pitch / 2 + grid.noteH / 2)[1] + 1, jfont(400, 10.5), C.menuMuted, 'center', 1);
-      if (!b.entries.length) {
-        const line = b.empty;
-        g.font = jfont(400, T.body * 0.8);
-        const fit = Math.min(1, mm((l.width - 0.048) * 1000) / g.measureText(line).width);
-        text(g, line, at(0, 0)[0], at(0, midY)[1], jfont(400, T.body * 0.8 * fit), C.menuMuted, 'center');
-        break;
-      }
+      // The table area is fixed: a column-label row, then ten slots with thin dividers, so its shape is always there.
+      const cx = at(0, 0)[0];
       const [size, small] = ctx.narrow ? [11.5, 11] : [12.5, 11.5];
       // Columns, panel metres from the card's centre: rank and name and level left, time and date right (digits in fixed cells).
       const col = { rank: -0.126, name: -0.104, level: -0.056, time: 0.058, date: 0.126 };
-      b.entries.slice(0, grid.rows).forEach((e, n) => {
+      const px = (rowY: number, dx: number) => at(dx, rowY)[0];
+      if (b.note) text(g, b.note, cx, at(0, grid.noteY)[1] + 1, jfont(400, 10.5), C.menuMuted, 'center', 1);
+      const labelY = at(0, grid.headRowY)[1] + 1;
+      const label = jfont(600, T.eyebrow * 0.78);
+      text(g, '#', px(0, col.rank), labelY, label, C.amber, 'left', 3);
+      text(g, 'NAME', px(0, col.name), labelY, label, C.amber, 'left', 3);
+      text(g, 'LEVEL', px(0, col.level), labelY, label, C.amber, 'left', 3);
+      text(g, 'TIME', px(0, col.time), labelY, label, C.amber, 'right', 3);
+      text(g, 'DATE', px(0, col.date), labelY, label, C.amber, 'right', 3);
+      const line = (yy: number) => {
+        g.beginPath();
+        g.moveTo(px(0, col.rank), yy);
+        g.lineTo(px(0, col.date), yy);
+        g.lineWidth = 1;
+        g.strokeStyle = 'rgba(241,232,216,0.1)';
+        g.stroke();
+      };
+      line(at(0, grid.y0 + grid.pitch / 2 + 0.0005)[1]);
+      for (let n = 0; n < grid.rows; n++) {
         const rowY = grid.y0 - n * grid.pitch;
-        const px = (dx: number) => at(dx, rowY)[0];
         const py = at(0, rowY)[1] + 1;
+        const e = b.entries[n];
+        if (n < 3 && e) {
+          g.fillStyle = 'rgba(176,141,87,0.1)'; // the top three: a brass tint
+          g.fillRect(px(0, col.rank) - mm(2), at(0, rowY + grid.pitch / 2)[1], px(0, col.date) - px(0, col.rank) + mm(4), grid.pitch * PX);
+        }
+        if (n < grid.rows - 1) line(at(0, rowY - grid.pitch / 2)[1]);
+        if (!e) {
+          g.save();
+          g.globalAlpha = 0.3; // a faint empty slot
+          text(g, String(n + 1), px(0, col.rank), py, jfont(400, small), C.menuMuted, 'left');
+          text(g, '—', px(0, col.name), py, jfont(400, size), C.menuMuted, 'left');
+          g.restore();
+          continue;
+        }
         const done = clearedOf(e) >= RUN_STEP;
-        text(g, String(n + 1), px(col.rank), py, jfont(400, small), C.menuMuted, 'left');
-        text(g, e.name, px(col.name), py, jfont(600, size), C.menuHi, 'left');
-        text(g, done ? `${RUN_STEP}/${RUN_STEP}` : `L${clearedOf(e) + 1}`, px(col.level), py, jfont(done ? 400 : 600, small), done ? C.menuMuted : C.amber, 'left');
-        tabular(g, clockTenths(e.ms / 1000), px(col.time), py, jfont(400, size), C.menuInk);
-        text(g, formatDate(e.date), px(col.date), py, jfont(400, small), C.menuMuted, 'right');
-      });
+        text(g, String(n + 1), px(0, col.rank), py, jfont(n < 3 ? 600 : 400, small), n < 3 ? C.brass : C.menuMuted, 'left');
+        text(g, e.name, px(0, col.name), py, jfont(600, size), C.menuHi, 'left');
+        text(g, done ? `${RUN_STEP}/${RUN_STEP}` : `L${clearedOf(e) + 1}`, px(0, col.level), py, jfont(done ? 400 : 600, small), done ? C.menuMuted : C.amber, 'left');
+        tabular(g, clockTenths(e.ms / 1000), px(0, col.time), py, jfont(400, size), C.menuInk);
+        text(g, formatDate(e.date), px(0, col.date), py, jfont(400, small), C.menuMuted, 'right');
+      }
+      if (!b.entries.length) {
+        // The empty, loading or offline line sits inside the table, on a patch of the panel so it reads over the faint slots.
+        g.font = jfont(400, T.body * 0.8);
+        const fit = Math.min(1, mm((l.width - 0.048) * 1000) / g.measureText(b.empty).width);
+        g.font = jfont(400, T.body * 0.8 * fit);
+        const bw = g.measureText(b.empty).width + mm(16);
+        const my = at(0, grid.y0 - ((grid.rows - 1) / 2) * grid.pitch)[1];
+        pill(g, cx, my, bw, grid.pitch * PX * 1.7, mm(4));
+        g.fillStyle = 'rgba(16,11,7,0.92)';
+        g.fill();
+        text(g, b.empty, cx, my, jfont(400, T.body * 0.8 * fit), C.menuMuted, 'center');
+      }
       break;
     }
   }
@@ -726,7 +760,7 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   const shared = special && !!ctx.shared;
   const random = special && !!ctx.random;
   const name = random ? `Random · ${ctx.difficulty ?? ''}` : shared ? 'Shared puzzle' : `Level ${level}`;
-  if (screen === 'cleared') clearedCard(g, W, H);
+  if (screen === 'cleared' || screen === 'board') clearedCard(g, W, H); // these two sit on a panel of their own
   if (menu) drawMenu(g, screen, l, ctx, at);
   switch (screen) {
     case 'hud':
@@ -784,11 +818,6 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
   if (l.track) {
     const [kx, ky] = at(l.track.x, l.track.y);
     pill(g, kx, ky, l.track.w * PX, l.track.h * PX);
-    bed(g);
-  }
-  if (l.track2) {
-    const [kx, ky] = at(l.track2.x, l.track2.y);
-    pill(g, kx, ky, l.track2.w * PX, l.track2.h * PX);
     bed(g);
   }
   for (const b of l.buttons) button(g, b, at, ctx, menu);

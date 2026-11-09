@@ -961,6 +961,8 @@ function hideBoard(k: number): void {
     fadedMaterials.clear();
   }
 }
+/** The cards read over an empty bench: the title's own menu cards hide the board like the pause card does. */
+const BOARDLESS: readonly Screen[] = ['board', 'about', 'options', 'stages', 'picker'];
 /** The stage-cleared card waits for the confetti to come down and the bird to sing. */
 const CLEARED_DELAY_MS = 2800;
 /** What the stage-cleared card shows: the run's time, its place on this device's board (0: off it) and every stage with a time. */
@@ -1657,8 +1659,10 @@ function showPanel(now = performance.now()): void {
   const waiting = flow.name === 'complete' && now - calibratedAt < (stageCleared ? CLEARED_DELAY_MS : COMPLETE_DELAY_MS);
   // The stage-cleared card: the board sinks and shrinks away under the dim layer (as the pause card hides it), then stays hidden.
   hideBoard(stageCleared && !overlay ? boardFade(now - calibratedAt) : 0); // the celebration plays over an empty bench; the card waits for it
-  built.tray.visible = flow.name !== 'paused' && boardHidden < 1;
-  panels.show(waiting ? null : (overlay?.kind ?? (stageCleared ? 'cleared' : screenOf(flow))), {
+  // The title's cards (High scores, About, Options, the stage picker) are read on their own: the board is out of the room behind them, as on the pause card.
+  const shown = waiting ? null : (overlay?.kind ?? (stageCleared ? 'cleared' : screenOf(flow)));
+  built.tray.visible = flow.name !== 'paused' && boardHidden < 1 && !(shown && BOARDLESS.includes(shown) && !world.renderer.xr.isPresenting);
+  panels.show(shown, {
     initials: overlay?.kind === 'initials' ? { rank: overlay.rank, letters: overlay.letters, cursor: overlay.cursor, ms: overlay.entry.ms, reached: overlay.reached } : undefined,
     result: overlay?.kind === 'result' ? { level: overlay.level, ms: overlay.ms } : undefined,
     cleared: stageCleared && run ? clearedCard(run) : undefined,
@@ -2065,6 +2069,9 @@ window.__chrono = Object.freeze({
   dialFaceBox: () => screenBox([escapement.face]),
   get cameraAt() {
     return world.camera.position.toArray();
+  },
+  get trayVisible() {
+    return built.tray.visible;
   },
   get cameraMoving() {
     return cameraTween !== null;

@@ -153,22 +153,25 @@ describe('high scores board', () => {
       expect(back.h, 'Back is a 50 mm row').toBeGreaterThanOrEqual(0.05);
       expect(l.track!.x).toBe(0);
       expect(a.x + b.x, 'the two segments are centred').toBeCloseTo(0, 9);
-      const rowsTop = g.y0 + g.pitch / 2;
+      const rowsTop = g.y0 + g.pitch / 2 + g.headH + g.noteH; // the column labels and the note strip sit on the rows
       const rowsFoot = g.y0 - (g.rows - 1) * g.pitch - g.pitch / 2;
       expect(l.track!.y - l.track!.h / 2, 'the control is over the rows').toBeGreaterThanOrEqual(rowsTop + 0.012 - 1e-9);
       expect(back.y + back.h / 2, 'Back is under the rows').toBeLessThanOrEqual(rowsFoot - 0.012 + 1e-9);
     }
   });
 
-  it('has pill segments 44 px or more tall at the phone sheet scale, inside their track', () => {
+  it('has tabs 44 px or more tall at the phone sheet scale; the Local / Global bed is compact, the stage tabs have none', () => {
     const l = layout('board', { level: 0, levels: 21, random: true, narrow: true });
     for (const s of l.buttons.filter((x) => x.kind === 'tab')) {
-      const track = s.id === 'tab-local' || s.id === 'tab-global' ? l.track! : l.track2!;
-      expect(s.w, 'a pill, not a circle').toBeGreaterThan(s.h);
+      expect(s.w).toBeGreaterThan(s.h);
       expect(s.h * phonePx(375)).toBeGreaterThanOrEqual(44);
-      expect(s.x - s.w / 2).toBeGreaterThanOrEqual(track.x - track.w / 2 - 1e-9);
-      expect(s.x + s.w / 2).toBeLessThanOrEqual(track.x + track.w / 2 + 1e-9);
+      if (s.id === 'tab-local' || s.id === 'tab-global') {
+        expect(s.x - s.w / 2).toBeGreaterThanOrEqual(l.track!.x - l.track!.w / 2 - 1e-9);
+        expect(s.x + s.w / 2).toBeLessThanOrEqual(l.track!.x + l.track!.w / 2 + 1e-9);
+      }
     }
+    expect(l.track!.h, 'the bed is lighter than a touch row').toBeLessThan(0.03);
+    expect('track2' in l, 'no pill round the stage tabs').toBe(false);
   });
 });
 

@@ -212,6 +212,8 @@ interface ChronoHook {
   readonly cameraAt: [number, number, number];
   /** Live: true while the desktop camera eases to a new fit (a level or card change on a narrow window). */
   readonly cameraMoving: boolean;
+  /** Live: whether the board (tray, parts, gears, dial) is in the room: it is not behind the pause card, the stage-cleared card or the title's own cards. */
+  readonly trayVisible: boolean;
   /** Live: how far the board has faded away in the stage-cleared celebration: 0 all there, 1 gone (sunk and invisible). */
   readonly boardHidden: number;
   /** The stage-cleared celebration: when it began (performance.now ms, -Infinity before any), whether the gear confetti is flying, its gear count, how many fanfares played, and whether it runs calm (reduced motion). */
