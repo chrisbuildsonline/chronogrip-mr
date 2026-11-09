@@ -46,9 +46,10 @@ test('Clear stage: level 20 solved plays the celebration, then Finish asks for a
   expect(c.flying).toBe(!c.calm); // gear confetti unless reduced motion
   expect(c.gears).toBe(48);
   expect(await page.evaluate(() => window.__chrono!.run)).toMatchObject({ stage: 'hard', cleared: 20 });
-  // the confetti lands and the burst ends within its 4.5 s
+  // the confetti lands and the burst ends within its 4.5 s; then the stage-cleared card over a half-dark layer that fades in
   await page.waitForFunction(() => !window.__chrono!.celebration.flying, null, { timeout: 15_000 });
-  await page.waitForFunction(() => window.__chrono!.card?.screen === 'complete');
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'cleared');
+  await page.waitForFunction(() => window.__chrono!.scrim.mode === 'full' && Math.abs(window.__chrono!.scrim.opacity - 0.5) < 1e-6);
   await settled(page);
   const [x, y] = await page.evaluate(() => window.__chrono!.buttons().find((b) => b.id === 'next')!.screen);
   await page.mouse.click(x, y);
@@ -75,5 +76,6 @@ test('reduced motion: the celebration is calm, the sound and the card only', asy
   await page.waitForFunction(() => window.__chrono!.flow === 'complete' && window.__chrono!.levelIndex === 19);
   const c = await page.evaluate(() => window.__chrono!.celebration);
   expect(c).toMatchObject({ calm: true, flying: false, fanfares: 1 });
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'cleared');
   await ctx.close();
 });

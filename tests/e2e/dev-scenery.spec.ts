@@ -48,7 +48,7 @@ async function enterMr(page: Page) {
 const frames = (page: Page) => page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => done())))));
 const scenery = (page: Page) => page.evaluate(() => window.__chrono!.scenery);
 
-const BACKDROP = ['workbench', 'tray-stand'];
+const BACKDROP = ['contact-shadow'];
 const PROPS = ['prop-oil-can', 'prop-screwdriver', 'prop-loupe', 'prop-gear-dish'];
 
 test('immersive-ar without a table: passthrough stays the whole background, no backdrop, no fog, nothing drawn but the game', async ({ page }) => {

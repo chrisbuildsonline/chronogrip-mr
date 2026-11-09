@@ -38,13 +38,12 @@ async function click(page: Page, id: string) {
   await page.mouse.click(x, y);
 }
 
-/** The scenery hook says: the bench is up under a texture background (the cubemap), no props, no fog. */
+/** The scenery hook says: no workbench, just the contact shadow under the tray, over a texture background (the cubemap); no props, no fog. */
 async function expectBackdrop(page: Page, id = 'c2', environment: 'stage' | 'neutral' = 'neutral') {
   await page.waitForFunction((b) => window.__chrono!.scenery.backdrop === b, id);
   const s = await page.evaluate(() => window.__chrono!.scenery);
   expect(s.mode).toBe('inline');
-  expect([...s.parts].sort()).toEqual(expect.arrayContaining(['tray-stand', 'workbench']));
-  expect(s.parts.length).toBeLessThanOrEqual(3);
+  expect([...s.parts]).toEqual(['contact-shadow']);
   expect(s.background).toBe(true);
   expect(s.cube).toBe(true);
   expect(s.environment).toBe(environment);
