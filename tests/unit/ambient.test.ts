@@ -1,4 +1,4 @@
-import { Box3, Mesh, Points, Scene, Vector3, type BufferGeometry, type Object3D } from 'three';
+import { Box3, CircleGeometry, Mesh, Points, Scene, Vector3, type BufferGeometry, type Object3D } from 'three';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BIRD, CLOUD, FLICKER, THUMP, cloudLight, createAmbient, poseOf, stepEase, thumpLight, type AmbientStage } from '../../src/ambient';
 import { DESKTOP_EYE, DESKTOP_TARGET } from '../../src/fit';
@@ -148,5 +148,42 @@ describe('createAmbient', () => {
       });
     }
     a.dispose();
+  });
+
+  describe('the Easy second hand on the painted clock hub', () => {
+    // Measured on public/backdrops/c2_cube/nz.jpg (2048 px): a circle fit (scripts: art/backdrops/fit_hub.ts) on the clock's concentric
+    // inner ring (r about 62 px, centre 1425, 986) and its outer edge (r about 88, centre 1427, 991) puts the hub at face pixel
+    // (1426.5, 988.5). On the -z face of three's CubeTexture (x flipped, +y up) that is the world direction below.
+    const MEASURED_HUB: [number, number, number] = [0.36563, 0.03225, -0.9302];
+    const eye = new Vector3(...DESKTOP_EYE);
+    const angle = (a: Vector3, b: Vector3) => (a.angleTo(b) * 180) / Math.PI;
+
+    it('anchors the hand and the rays within 0.3 degrees of the measured hub direction', () => {
+      const a = make('easy');
+      a.group.updateMatrixWorld(true);
+      const want = new Vector3(...MEASURED_HUB).normalize();
+      const hand = a.group.children[0]!.getWorldPosition(new Vector3()).sub(eye).normalize();
+      const rays = a.group.children[1]!.getWorldPosition(new Vector3()).sub(eye).normalize();
+      expect(angle(hand, want), 'the hand pivot').toBeLessThan(0.3);
+      expect(angle(rays, want), 'the rays').toBeLessThan(0.3);
+      a.dispose();
+    });
+
+    it('reads as turning about its hub: the biggest round part sits at the pivot, with a small, close counterweight', () => {
+      const a = make('easy');
+      const discs: { r: number; y: number }[] = [];
+      a.group.children[0]!.traverse((o) => {
+        const m = o as Mesh;
+        if (m.isMesh && m.geometry instanceof CircleGeometry) discs.push({ r: m.geometry.parameters.radius, y: m.position.y });
+      });
+      expect(discs.length).toBeGreaterThanOrEqual(3);
+      const big = discs.reduce((p, c) => (c.r > p.r ? c : p));
+      expect(big.y, 'the largest disc (the hub cap) is at the pivot').toBeCloseTo(0, 9);
+      for (const d of discs) if (d !== big) expect(d.r, 'every other disc is smaller').toBeLessThan(big.r);
+      const tail = discs.filter((d) => d.y < 0);
+      expect(tail).toHaveLength(1);
+      expect(tail[0]!.r, 'the counterweight is at most half the cap').toBeLessThanOrEqual(big.r / 2 + 1e-9);
+      a.dispose();
+    });
   });
 });

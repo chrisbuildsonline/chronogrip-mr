@@ -49,6 +49,23 @@ export const FLICKER = 0.045;
 export const THUMP = 0.07;
 
 const FOV = 50, REF_W = 1280, REF_H = 760;
+
+/**
+ * The world direction of a pixel of a cubemap face, for a three.js CubeTexture used as scene.background: files px, nx, py, ny, pz, nz
+ * (public/backdrops/<id>_cube), square `size` px, row 0 at the top. three samples a CubeTexture with x flipped, so the GL face
+ * rule (u = (sc/ma + 1) / 2, v = (tc/ma + 1) / 2) is applied to (-x, y, z). Only the -z face (where Easy's clock is) is needed.
+ */
+export function cubeDirection(face: 'nz', x: number, y: number, size: number): Vec3 {
+  const u = (2 * x) / size - 1, v = (2 * y) / size - 1;
+  const sx = -u, sy = -v, sz = -1; // GL -z face: sc = -sx, tc = -sy, ma = -sz
+  const n = Math.hypot(sx, sy, sz);
+  return [-sx / n, sy / n, sz / n];
+}
+/**
+ * The Easy attic clock's hub on c2_cube/nz.jpg (2048 px), measured by a circle fit (art/backdrops/fit_hub.ts) on the concentric inner
+ * ring (r about 62, centre 1425, 986) and the outer edge (r about 88, centre 1427, 991): face pixel (1426.5, 988.5) (+0.5 = texel centre).
+ */
+export const EASY_HUB = cubeDirection('nz', 1426.5, 988.5, 2048);
 const MODULE = 0.034;
 
 /** One escapement step per beat: a quick jump with a small overshoot in the first 22 % of the beat, then rest. */
@@ -152,15 +169,18 @@ export function createAmbient(stage: AmbientStage, opts: AmbientOptions): Ambien
   }
 
   if (stage === 'easy') {
-    // the attic clock: its hub sits at (1113, 8) of the reference frame (checked zoomed in at two aspects)
-    const HUB: [number, number] = [1113, 8];
+    // the attic clock: anchored on the hub measured on the cubemap itself (EASY_HUB), not picked by eye on a screen frame
+    const hub = (d: number) => new Vector3(...EASY_HUB).multiplyScalar(d).add(eye);
     const iron = keep(new MeshBasicMaterial({ color: 0x140b05 }));
     const L = px(250, 6), sweep = new Group();
-    const arm = mesh(new BoxGeometry(px(5, 6), L * 1.25, 0.01), iron); arm.position.y = L * 0.375;
-    const weight = mesh(new CircleGeometry(px(16, 6), 32), iron); weight.position.y = -L * 0.2;
+    // A hub cap at the pivot, the biggest round part, so the eye reads the pivot as the centre; the counterweight is a small
+    // disc close behind it on a short tail.
+    const cap = mesh(new CircleGeometry(px(18, 6), 40), iron);
+    const arm = mesh(new BoxGeometry(px(5, 6), L * 1.15, 0.01), iron); arm.position.y = L * 0.425;
+    const weight = mesh(new CircleGeometry(px(8, 6), 24), iron); weight.position.y = -L * 0.13;
     const tip = mesh(new CircleGeometry(px(9, 6), 24), iron); tip.position.y = L * 0.82;
-    sweep.add(arm, weight, tip);
-    group.add(face(new Group().add(sweep), at(...HUB, 6)));
+    sweep.add(arm, weight, tip, cap);
+    group.add(face(new Group().add(sweep), hub(6)));
     updates.push((b) => (sweep.rotation.z = 2.4 - ((Math.floor(b) + stepEase(b % 1)) * Math.PI * 2) / 60)); // a second hand: 60 beats a turn
 
     const rayTex = tex(512, 512, (x, w) => {
@@ -172,7 +192,7 @@ export function createAmbient(stage: AmbientStage, opts: AmbientOptions): Ambien
       }
     });
     const rayMat = additive({ map: rayTex, opacity: 0.18 }), rays = mesh(new PlaneGeometry(px(1700, 5.8), px(1700, 5.8)), rayMat);
-    group.add(face(rays, at(...HUB, 5.8)));
+    group.add(face(rays, hub(5.8)));
     updates.push((_b, s) => { rayMat.opacity = (0.13 + 0.07 * (0.5 + 0.5 * Math.sin(s * 0.9))) * cloudLight(s); rays.rotation.z = 0.05 * Math.sin(s * 0.21); });
 
     // a gull silhouette gliding past the window, wings flapping
