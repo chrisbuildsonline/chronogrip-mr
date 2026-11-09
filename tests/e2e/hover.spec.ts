@@ -23,6 +23,7 @@ const screen = (page: Page, kind: 'gears' | 'axles', id: string) =>
 test('desktop: hovering a gear marks it as the gaze target; dragging pulses the valid axles', async ({ page }) => {
   const errors = await open(page);
   await beginByMouse(page); // the menus cover the board: into level 1 first
+  await page.mouse.move(2, 2); // Begin's click spot now sits over a gear; start from a pointer that is off the board
   expect(await page.evaluate(() => window.__chrono!.gazeTarget)).toBeNull();
   expect(await page.evaluate(() => window.__chrono!.validAxles)).toEqual([]);
 

@@ -113,9 +113,9 @@ test('a completed run is posted with its total time and step 20, and appears on 
     await page.waitForFunction(([g, a]) => window.__chrono!.placements[g!] === a, [gear, axle]);
   }
   await calibrateByMouse(page);
-  await page.waitForFunction(() => window.__chrono!.card?.screen === 'complete');
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'cleared');
   expect(await page.evaluate(() => window.__chrono!.initials), 'no initials after a level').toBeNull();
-  await click(page, 'next'); // Finish
+  await click(page, 'next'); // Continue
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'initials');
   await click(page, 'save');
   await expect.poll(() => posts.length).toBe(1);

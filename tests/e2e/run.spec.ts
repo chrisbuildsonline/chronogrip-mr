@@ -210,7 +210,7 @@ test('desktop: Random level is practice: no run, no score; Next gives another pu
   expect(errors).toEqual([]);
 });
 
-test('desktop: finishing level 20 is the only way to a name: Finish asks for three letters, OK saves the time and sends step 20', async ({ page }) => {
+test('desktop: finishing level 20 is the way to a name on a full run: Continue then asks for three letters, OK saves the time and sends step 20', async ({ page }) => {
   const posts: unknown[] = [];
   await page.route('**/rest/v1/chronogrip_scores**', (r) => {
     if (r.request().method() === 'POST') {
@@ -223,7 +223,8 @@ test('desktop: finishing level 20 is the only way to a name: Finish asks for thr
   await click(page, 'continue');
   await page.waitForFunction(() => window.__chrono!.flow === 'playing' && window.__chrono!.levelIndex === 19);
   await solve(page);
-  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Finish']);
+  await cardIs(page, 'cleared'); // level 20 of a run is the stage-cleared card
+  expect(await page.evaluate(() => window.__chrono!.buttons().map((b) => b.label))).toEqual(['Continue']);
   expect(await page.evaluate(() => window.__chrono!.initials)).toBeNull();
   await click(page, 'next');
   await cardIs(page, 'initials');
