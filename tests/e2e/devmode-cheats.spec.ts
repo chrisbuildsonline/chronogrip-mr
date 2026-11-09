@@ -79,3 +79,14 @@ test('reduced motion: the celebration is calm, the sound and the card only', asy
   await page.waitForFunction(() => window.__chrono!.card?.screen === 'cleared');
   await ctx.close();
 });
+
+test('Clear stage: the board fades away at once, so the celebration plays over an empty bench', async ({ page }) => {
+  await page.mouse.click(5, 5);
+  await page.locator('#chronogrip-cheats .pill').click();
+  await page.locator('[data-cheat="clear"]').click();
+  await page.waitForFunction(() => window.__chrono!.flow === 'complete' && window.__chrono!.levelIndex === 19);
+  const t0 = Date.now();
+  await page.waitForFunction(() => window.__chrono!.boardHidden === 1, null, { timeout: 5_000 });
+  expect(Date.now() - t0, 'gone by about 1.8 s after the solve').toBeLessThan(1_800);
+  await page.waitForFunction(() => window.__chrono!.card?.screen === 'cleared', null, { timeout: 15_000 });
+});

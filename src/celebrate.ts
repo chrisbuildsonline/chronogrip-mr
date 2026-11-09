@@ -13,7 +13,19 @@ export const CELEBRATE = {
   spinBeats: 24,
   /** Seconds the spin-up lasts. */
   spinSeconds: 3.2,
+  /** The board starts to sink and fade this long after the last level is solved, and is gone `boardFadeMs` later (about 1.4 s in all). */
+  boardDelayMs: 300,
+  boardFadeMs: 1100,
 } as const;
+
+/**
+ * How far the board has faded `sinceMs` after the stage's last level was solved: 0 (all there) to 1 (gone). It eases in and out,
+ * so the confetti and the spin-up play over an empty bench.
+ */
+export function boardFade(sinceMs: number, delay = CELEBRATE.boardDelayMs, ms = CELEBRATE.boardFadeMs): number {
+  const k = Math.min(1, Math.max(0, (sinceMs - delay) / ms));
+  return k * k * (3 - 2 * k);
+}
 
 /**
  * Extra beats `t` seconds into the spin-up: a smooth speed bump (fast in the middle, still at both ends), so the parts whirr

@@ -1,6 +1,6 @@
 import { BoxGeometry, MeshBasicMaterial, Vector3 } from 'three';
 import { describe, expect, test } from 'vitest';
-import { CELEBRATE, createConfetti, spinUpBeats } from '../../src/celebrate';
+import { CELEBRATE, boardFade, createConfetti, spinUpBeats } from '../../src/celebrate';
 
 describe('spinUpBeats', () => {
   test('nothing before it starts, the full spin once it is over', () => {
@@ -60,5 +60,20 @@ describe('createConfetti', () => {
     const c = make(), sky = new Vector3(0, 0.6, 0.8);
     c.start(new Vector3(1, 1, 1), sky, 0, 2);
     expect(c.at(0, 0.3).sub(new Vector3(1, 1, 1)).dot(sky)).toBeGreaterThan(0);
+  });
+});
+
+describe('boardFade', () => {
+  test('the board waits 300 ms, is half gone about 0.85 s in and is gone by 1.4 s', () => {
+    expect(boardFade(0)).toBe(0);
+    expect(boardFade(CELEBRATE.boardDelayMs)).toBe(0);
+    expect(boardFade(850)).toBeCloseTo(0.5, 5);
+    expect(boardFade(1400)).toBe(1);
+    expect(boardFade(10_000)).toBe(1);
+    expect(boardFade(-5)).toBe(0);
+  });
+  test('only ever goes one way, and the cleared card (2.8 s) comes after it is gone', () => {
+    for (let t = 0; t < 1500; t += 50) expect(boardFade(t + 50)).toBeGreaterThanOrEqual(boardFade(t));
+    expect(CELEBRATE.boardDelayMs + CELEBRATE.boardFadeMs).toBeLessThanOrEqual(1500);
   });
 });

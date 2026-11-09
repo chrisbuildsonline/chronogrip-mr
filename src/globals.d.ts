@@ -212,6 +212,8 @@ interface ChronoHook {
   readonly cameraAt: [number, number, number];
   /** Live: true while the desktop camera eases to a new fit (a level or card change on a narrow window). */
   readonly cameraMoving: boolean;
+  /** Live: how far the board has faded away in the stage-cleared celebration: 0 all there, 1 gone (sunk and invisible). */
+  readonly boardHidden: number;
   /** The stage-cleared celebration: when it began (performance.now ms, -Infinity before any), whether the gear confetti is flying, its gear count, how many fanfares played, and whether it runs calm (reduced motion). */
   readonly celebration: { readonly at: number; readonly flying: boolean; readonly gears: number; readonly fanfares: number; readonly calm: boolean };
   /** Page pixel coordinates of a world point, for driving the mouse in tests. */
