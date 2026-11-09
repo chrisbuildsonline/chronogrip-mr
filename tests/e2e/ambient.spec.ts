@@ -141,3 +141,75 @@ test('Hard: turning the view 320 px never swings an ambient part in front of the
   await check('turned 320 px left');
   expect(errors).toEqual([]);
 });
+
+/** Crops of the Easy clock hub (second hand on, and the bare backdrop) for a look by eye: test-results/hub/<name>.png and <name>-bare.png. */
+test.describe('the Easy second hand on the clock hub', () => {
+  const HUB_OUT = 'test-results/hub';
+  const SIZE = 280;
+
+  async function crops(page: Page, name: string, w: number, h: number) {
+    await page.addStyleTag({ content: '#xr-entry, #progress, #title { visibility: hidden !important }' }); // the header sits over the hub at 1440
+    await page.waitForTimeout(700);
+    const a = (await page.evaluate(() => window.__chrono!.ambient))!;
+    const [ax, ay] = a.anchor;
+    const onScreen = ax > 0 && ax < w && ay > 0 && ay < h;
+    if (!onScreen) return { name, anchor: a.anchor, shot: false };
+    const clip = { x: Math.max(0, Math.min(w - SIZE, ax - SIZE / 2)), y: Math.max(0, Math.min(h - SIZE, ay - SIZE / 2)), width: SIZE, height: SIZE };
+    await page.screenshot({ path: `${HUB_OUT}/${name}.png`, clip });
+    await page.evaluate(() => window.__chrono!.setAmbientVisible(false));
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${HUB_OUT}/${name}-bare.png`, clip });
+    await page.evaluate(() => window.__chrono!.setAmbientVisible(true));
+    return { name, anchor: a.anchor, shot: true };
+  }
+
+  test.use({ classic: false });
+  test('hub crops: the default view, the four orbit clamp corners, zoom 0.8x and 1.45x, 1920x1080 and a phone', async ({ page }) => {
+    const errors = await open(page);
+    await newGame(page, (id) => click(page, id), 'easy');
+    await page.waitForFunction(() => window.__chrono!.ambient?.stage === 'easy');
+    const made: Awaited<ReturnType<typeof crops>>[] = [];
+    const drag = async (from: [number, number], to: [number, number]) => {
+      await page.mouse.move(...from);
+      await page.mouse.down();
+      await page.mouse.move(...to, { steps: 12 });
+      await page.mouse.up();
+    };
+    const settle = async () => {
+      await page.waitForTimeout(900);
+      await frames(page);
+    };
+    made.push(await crops(page, 'default-1440', 1440, 900));
+    for (const [name, sx, sy] of [['corner-up-left', -1, -1], ['corner-up-right', 1, -1], ['corner-down-left', -1, 1], ['corner-down-right', 1, 1]] as const) {
+      for (let i = 0; i < 3; i++) await drag([720 - sx * 300, 450 - sy * 250], [720 + sx * 300, 450 + sy * 250]);
+      await settle();
+      made.push(await crops(page, name, 1440, 900));
+      await page.keyboard.press('r');
+      await page.waitForTimeout(900);
+    }
+    for (const [name, dir] of [['zoom-0.8x', -1], ['zoom-1.45x', 1]] as const) {
+      await page.mouse.move(300, 700);
+      for (let i = 0; i < 40; i++) await page.mouse.wheel(0, dir * 400);
+      await settle();
+      made.push(await crops(page, name, 1440, 900));
+      await page.keyboard.press('r');
+      await page.waitForTimeout(900);
+    }
+    console.log('HUB crops: ' + JSON.stringify(made));
+    // the hub is on screen at the default view, and the hand is on it
+    expect(made[0]!.shot).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
+  for (const [w, h] of [[1920, 1080], [375, 812]] as const) {
+    test(`hub crop at ${w}x${h}`, async ({ page }) => {
+      const errors = await open(page, { width: w, height: h });
+      await newGame(page, (id) => click(page, id), 'easy');
+      await page.waitForFunction(() => window.__chrono!.ambient?.stage === 'easy');
+      const c = await crops(page, `default-${w}x${h}`, w, h);
+      console.log('HUB crops: ' + JSON.stringify([c]));
+      if (w > 500) expect(c.shot).toBe(true);
+      expect(errors).toEqual([]);
+    });
+  }
+});
