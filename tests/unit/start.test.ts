@@ -210,6 +210,6 @@ describe('sound setting', () => {
     s.click();
     s.grind();
     s.chime();
-    expect(s.counts).toEqual({ ticks: 0, clicks: 0, grinds: 0, chimes: 0, notes: 0 });
+    expect(s.counts).toEqual({ ticks: 0, clicks: 0, grinds: 0, chimes: 0, notes: 0, fanfares: 0 });
   });
 });

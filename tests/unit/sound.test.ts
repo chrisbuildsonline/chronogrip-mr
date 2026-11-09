@@ -36,12 +36,13 @@ describe('createSound before unlock', () => {
       s.click();
       s.grind();
       s.chime();
+      s.fanfare();
       s.setListener([0, 0, 0], [0, 0, -1], [0, 1, 0]);
       s.setSource([1, 0, 0]);
       s.suspend();
       s.resume();
     }).not.toThrow();
-    expect(s.counts).toEqual({ ticks: 0, clicks: 0, grinds: 0, chimes: 0, notes: 0 });
+    expect(s.counts).toEqual({ ticks: 0, clicks: 0, grinds: 0, chimes: 0, notes: 0, fanfares: 0 });
   });
 });
 

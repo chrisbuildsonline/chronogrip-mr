@@ -19,7 +19,7 @@ export const ticksBetween = (from: number, to: number) => (to > from ? Math.floo
 export const tickGain = (seconds: number): number => (seconds <= 2 ? 1 : seconds >= 3 ? 0 : 3 - seconds);
 
 export type SoundState = 'none' | 'suspended' | 'running' | 'closed';
-export type SoundCounts = { ticks: number; clicks: number; grinds: number; chimes: number; notes: number };
+export type SoundCounts = { ticks: number; clicks: number; grinds: number; chimes: number; notes: number; fanfares: number };
 
 const KEY = 'chronogrip.sound.v1';
 
@@ -47,7 +47,7 @@ export function createSound() {
   let panner: PannerNode;
   let noise: AudioBuffer;
   const source: [number, number, number] = [0, 0, 0];
-  const counts: SoundCounts = { ticks: 0, clicks: 0, grinds: 0, chimes: 0, notes: 0 };
+  const counts: SoundCounts = { ticks: 0, clicks: 0, grinds: 0, chimes: 0, notes: 0, fanfares: 0 };
 
   /** A one-shot voice: a source into a gain that falls to silence over `len` seconds, into `to`. */
   const voice = (c: AudioContext, src: AudioScheduledSourceNode, peak: number, len: number, to: AudioNode, chain: AudioNode[] = []) => {
@@ -399,6 +399,32 @@ export function createSound() {
       o.frequency.value = 70;
       voice(c, o, 0.3, 0.35, out, [filter(c, 'lowpass', 400)]);
       voice(c, noiseSource(c), 0.35, 0.35, out, [filter(c, 'bandpass', 220, 0.8)]);
+    },
+    /**
+     * A stage cleared (all 20 levels): a rising music-box arpeggio (C major up two octaves, each note with a soft octave
+     * shimmer), then the brass bird's song, two quick phrases of chirps that slide up. Played over the level's chime.
+     */
+    fanfare(): void {
+      const c = live();
+      if (!c) return;
+      counts.fanfares++;
+      const t0 = c.currentTime + 0.05;
+      const play = (start: number, f: number, peak: number, len: number, slideTo?: number) => {
+        const o = c.createOscillator(), env = c.createGain();
+        o.frequency.setValueAtTime(f, start);
+        if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, start + len * 0.7);
+        env.gain.setValueAtTime(0.0001, start);
+        env.gain.exponentialRampToValueAtTime(peak, start + 0.01);
+        env.gain.exponentialRampToValueAtTime(0.0001, start + len);
+        o.connect(env).connect(out);
+        o.start(start);
+        o.stop(start + len + 0.05);
+      };
+      [523.25, 659.25, 783.99, 1046.5, 1318.51, 1567.98].forEach((f, i) => {
+        play(t0 + i * 0.11, f, 0.11, 1.5);
+        play(t0 + i * 0.11, f * 2, 0.025, 0.6);
+      });
+      for (let i = 0; i < 10; i++) play(t0 + 0.8 + i * 0.085 + (i >= 5 ? 0.22 : 0), 2400 + (i % 3) * 320, 0.045, 0.09, 3400 + (i % 3) * 420);
     },
     /** Calibrated: a soft bell of a few inharmonic partials. */
     chime(): void {
