@@ -17,9 +17,11 @@ export default defineConfig({
   reporter: 'list',
   projects: [
     // Production build, no emulator.
-    { name: 'preview', testIgnore: /dev-.*\.spec\.ts/, use: { baseURL: 'http://localhost:4173', browserName: 'chromium', launchOptions } },
+    { name: 'preview', testIgnore: /(dev|devmode)-.*\.spec\.ts/, use: { baseURL: 'http://localhost:4173', browserName: 'chromium', launchOptions } },
     // Dev server, IWER emulator injected.
     { name: 'dev', testMatch: /dev-.*\.spec\.ts/, use: { baseURL: 'http://localhost:5174', browserName: 'chromium', launchOptions } },
+    // A DEV_MODE=on production build (the cheat panel), in its own folder and port.
+    { name: 'devmode', testMatch: /devmode-.*\.spec\.ts/, use: { baseURL: 'http://localhost:4179', browserName: 'chromium', launchOptions } },
   ],
   webServer: [
     {
@@ -31,6 +33,13 @@ export default defineConfig({
     {
       command: 'bun run dev --port 5174 --strictPort',
       url: 'http://localhost:5174',
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      command: 'bun run build --outDir dist-dev && bun run preview --outDir dist-dev --port 4179 --strictPort',
+      env: { DEV_MODE: 'on' },
+      url: 'http://localhost:4179',
       reuseExistingServer: false,
       timeout: 120_000,
     },
