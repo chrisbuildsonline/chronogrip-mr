@@ -148,3 +148,6 @@ export function markPosted(s: Scores, board: string, e: Entry, rejected = false)
 /** The entries still to send to the global board, in board order: not posted, not a cheated run. */
 export const unposted = (s: Scores): { board: string; entry: Entry }[] =>
   BOARDS.flatMap((board) => (s.boards[board] ?? []).filter((e) => !e.posted && !e.dev).map((entry) => ({ board, entry })));
+
+/** True when there are entries and every one is a cheated run (`dev`): none of them can ever reach the global board. */
+export const allDev = (rows: readonly Entry[]): boolean => rows.length > 0 && rows.every((e) => e.dev === true);

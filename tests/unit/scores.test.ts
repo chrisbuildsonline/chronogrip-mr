@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOARDS, boardOf, clearedOf, DEFAULT_INITIALS, TOP, addEntry, backInitial, emptyScores, formatDate, loadScores, qualifies, saveScores, stepInitial, typeInitial, type Entry } from '../../src/scores';
+import { BOARDS, allDev, boardOf, clearedOf, DEFAULT_INITIALS, TOP, addEntry, backInitial, emptyScores, formatDate, loadScores, qualifies, saveScores, stepInitial, typeInitial, type Entry } from '../../src/scores';
 
 const KEY = 'chronogrip.scores.v1';
 const store = (raw: string | null) => ({ getItem: (k: string) => (k === KEY ? raw : null) });
@@ -308,5 +308,14 @@ describe('partial runs: ranked by levels cleared, then time, then date', () => {
     const m = loadScores(store(raw)).boards['campaign-medium']!;
     expect(m.map((e) => e.name)).toEqual(['OLD', 'PAR']);
     expect(clearedOf(m[0]!)).toBe(20);
+  });
+});
+
+describe('allDev', () => {
+  const e = (extra = {}) => ({ name: 'ABC', ms: 5000, date: '2026-11-04', ...extra });
+  it('is true only for a non-empty list of cheated runs', () => {
+    expect(allDev([])).toBe(false);
+    expect(allDev([e({ dev: true }), e({ dev: true })])).toBe(true);
+    expect(allDev([e({ dev: true }), e()])).toBe(false);
   });
 });
