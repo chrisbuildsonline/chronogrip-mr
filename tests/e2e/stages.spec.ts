@@ -133,3 +133,12 @@ test('finishing a stage: level 20 asks for a name, the time lands on that stage\
   expect(await words(page)).toContain('HRD');
   expect(errors).toEqual([]);
 });
+
+test('the header logo has the pill background on every stage and menu', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => window.__chrono?.ready === true);
+  const pill = () => page.evaluate(() => getComputedStyle(document.getElementById('title')!).backgroundColor);
+  expect(await pill()).toBe('rgba(14, 10, 6, 0.55)');
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  expect(await pill()).toBe('rgba(14, 10, 6, 0.55)');
+});

@@ -15,13 +15,15 @@
       @font-face { font-family: "Josefin Sans"; font-weight: 600; font-display: swap; src: url("./fonts/josefin-sans-latin-600-normal.woff2") format("woff2"); }
       /* The logo: CHRONOGRIP in light spaced capitals, both Os small amber gears, an amber rule under it. */
       h1 {
-        position: fixed; top: 18px; left: 24px; margin: 0; z-index: 1;
+        position: fixed; top: 14px; left: 12px; margin: 0; z-index: 1; height: 46px; box-sizing: border-box; padding: 0 12px;
         font: 300 1.5rem/1 "Josefin Sans", system-ui, sans-serif; letter-spacing: 0.32em; color: #f1e8d8; pointer-events: none;
         display: flex; align-items: center;
+        /* the same dark translucent pill as the level chip (#progress), so a bright moon never washes the wordmark */
+        border-radius: 10px; background: rgba(14, 10, 6, 0.55); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
       }
       @media (max-width: 520px) { h1 { font-size: 1.05rem; letter-spacing: 0.2em; } h1 svg { width: 0.9rem; height: 0.9rem; } }
       h1 svg { width: 1.3rem; height: 1.3rem; margin: 0 0.1em 0 -0.12em; fill: #d99a2b; fill-rule: evenodd; }
-      h1::after { content: ""; position: absolute; left: 0; right: 0.32em; bottom: -9px; height: 2px; background: linear-gradient(90deg, #d99a2b, transparent); }
+      h1::after { content: ""; position: absolute; left: 12px; right: calc(12px + 0.32em); bottom: 8px; height: 2px; background: linear-gradient(90deg, #d99a2b, transparent); }
       /* Top right, opposite the wordmark, so it never covers the board in the desktop view. */
       /* One row in the corner: the level progress (when shown) left of the Enter MR column, so the two can never overlap or run off the edge. */
       /* A soft dark band behind the header row on every screen (the logo, the level pill, Enter MR): 0 to 35% of the palette's walnut night (C.menuBed #15110d) over the top 90 px, so a bright moon or clock face never washes the wordmark. */
@@ -66,13 +68,13 @@
       .cg-more.gone { opacity: 0; display: none; }
       /* Phone width: a tighter header and only the first sentence of the note, so the board and card get the room. */
       @media (max-width: 499px) {
-        h1 { left: 16px; }
+        h1 { left: 8px; }
         #hdr { right: 16px; }
         #xr-entry { max-width: 150px; }
       }
       /* Narrow windows: a compact "E · 2/20" under the logo, so it never meets the button or the wordmark. */
       @media (max-width: 719px) {
-        #progress { position: fixed; top: 50px; left: 16px; height: auto; align-items: flex-start; padding: 5px 8px; font-size: 0.7rem; letter-spacing: 0.2em; }
+        #progress { position: fixed; top: 66px; left: 8px; height: auto; align-items: flex-start; padding: 5px 8px; font-size: 0.7rem; letter-spacing: 0.2em; }
         #progress .full { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
         #progress .short { display: inline; }
         #progress .bar { width: 96px; }
