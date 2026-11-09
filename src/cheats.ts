@@ -46,9 +46,11 @@ export function mountCheats(dev: ChronoDev, state: CheatState): HTMLElement {
     </div>`;
   const $ = <T extends HTMLElement>(name: string) => root.querySelector<T>(`[data-cheat="${name}"]`)!;
   const stageSel = $<HTMLSelectElement>('stage'), levelIn = $<HTMLInputElement>('level');
+  let shown: Stage | null = null;
   const refresh = () => {
     const s = state();
-    stageSel.value = s.stage;
+    // follow the game's stage only when it changes, so a pick in the list is not snapped back by the 500 ms poll
+    if (s.stage !== shown) stageSel.value = shown = s.stage;
     $('now').textContent = `${s.stage[0]!.toUpperCase()}${s.stage.slice(1)} · level ${s.level} · ${s.flow}`;
   };
   $('toggle').addEventListener('click', () => {
