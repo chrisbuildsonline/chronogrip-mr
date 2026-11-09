@@ -63,6 +63,8 @@ export type PanelCtx = {
   initials?: { rank: number; letters: string; cursor: number; ms: number };
   /** The result card of a run that did not finish: the level it reached and its total time in ms. */
   result?: { level: number; ms: number };
+  /** The complete card after level 20 of a run: the stage is cleared; `ms` is the whole run's time. */
+  cleared?: { ms: number };
   /** The resume countdown: 3, 2 or 1. */
   countdown?: number;
   /** The About window: how far the text is scrolled, metres. */
@@ -662,16 +664,19 @@ function draw(g: Draw, screen: Screen, l: Layout, ctx: PanelCtx) {
       else if (ctx.goal) goalLine(g, ctx.goal, left(0.016), y(0.077));
       break;
     case 'complete': {
-      const pillEnd = status(g, 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);
-      if (ctx.par) text(g, `PAR ${clock(ctx.par)}`, pillEnd + mm(5), y(0.146) + 1, font(700, T.eyebrow), C.muted, 'left', 1);
+      // After level 20 the card is the stage's: "Easy cleared", and the whole run's time instead of this level's.
+      const cleared = ctx.cleared;
+      const pillEnd = status(g, cleared ? 'STAGE CLEARED' : 'SOLVED', left(0.016), y(0.146), 'left', T.body * 0.8);
+      if (ctx.par && !cleared) text(g, `PAR ${clock(ctx.par)}`, pillEnd + mm(5), y(0.146) + 1, font(700, T.eyebrow), C.muted, 'left', 1);
       // Shrunk, if need be, to stop short of the time at the right (a long name on a phone).
-      const title = `${name} complete`;
+      const title = cleared ? `${ctx.stage ?? 'Stage'} cleared` : `${name} complete`;
       g.font = font(600, T.heading, SERIF);
-      const titleSize = T.heading * Math.min(1, (right(0.016) - left(0.016) - mm(ctx.outcome === 'pass' ? 109 : 95)) / g.measureText(title).width); // a pass puts an amber check before the time
+      const titleSize = T.heading * Math.min(1, (right(0.016) - left(0.016) - mm(ctx.outcome === 'pass' && !cleared ? 109 : 95)) / g.measureText(title).width); // a pass puts an amber check before the time
       text(g, title, left(0.016), y(0.11), font(600, titleSize, SERIF), C.ink, 'left');
-      text(g, 'TIME', right(0.016), y(0.148), font(700, T.eyebrow), C.muted, 'right', 1);
-      text(g, clock(ctx.time), right(0.016), y(0.11), font(700, T.xl), C.ink, 'right');
-      if (ctx.outcome === 'pass') {
+      const shown = cleared ? cleared.ms / 1000 : ctx.time;
+      text(g, cleared ? 'TOTAL' : 'TIME', right(0.016), y(0.148), font(700, T.eyebrow), C.muted, 'right', 1);
+      text(g, clock(shown), right(0.016), y(0.11), font(700, T.xl), C.ink, 'right');
+      if (ctx.outcome === 'pass' && !cleared) {
         // Under par: the amber check sits just before the time.
         g.font = font(700, T.xl);
         check(g, right(0.016) - g.measureText(clock(ctx.time)).width - mm(8), y(0.11));
