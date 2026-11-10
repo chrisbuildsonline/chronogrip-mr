@@ -23,10 +23,17 @@ export type Scores = { initials: string; boards: Record<string, Entry[]> };
 
 export const emptyScores = (): Scores => ({ initials: DEFAULT_INITIALS, boards: Object.fromEntries(BOARDS.map((id) => [id, []])) });
 
-/** Exactly three letters A-Z: anything else is dropped and a short name is padded with A. */
+export const BLOCKED_INITIALS: readonly string[] = [
+  'ASS', 'BCH', 'CNT', 'COK', 'CUK', 'CUM', 'DIC', 'DIK', 'DYK', 'FAG', 'FCK', 'FUC', 'FUK', 'FUQ', 'FUX', 'HOE', 'JIZ', 'KKK', 'KYS', 'NAZ', 'NGR', 'NIG', 'PUS', 'SEX', 'SHT', 'SUK', 'TIT', 'TWA', 'TWT', 'VAG', 'WNK', 'WTF', 'XXX',
+];
+/** Whether three letters are on the blocklist (crude, rude or hateful); such initials are never kept or shown. */
+export const isBlockedInitials = (s: string): boolean => BLOCKED_INITIALS.includes(s.toUpperCase());
+
+/** Exactly three letters A-Z: anything else is dropped and a short name is padded with A; a blocked result becomes the default AAA. */
 export function sanitiseName(name: unknown): string {
   const letters = typeof name === 'string' ? name.toUpperCase().replace(/[^A-Z]/g, '') : '';
-  return letters.padEnd(3, 'A').slice(0, 3);
+  const out = letters.padEnd(3, 'A').slice(0, 3);
+  return isBlockedInitials(out) ? DEFAULT_INITIALS : out;
 }
 
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;

@@ -1,4 +1,4 @@
-import { BOARDS, RUN_STEP, formatDate, sanitiseName, TOP, type Entry } from './scores';
+import { BOARDS, RUN_STEP, formatDate, isBlockedInitials, sanitiseName, TOP, type Entry } from './scores';
 
 /**
  * STATE: the global high scores: a public Supabase table anyone can read and add to. Only a board (campaign), three
@@ -21,7 +21,7 @@ const isSeconds = (s: unknown): s is number => typeof s === 'number' && Number.i
 
 /** The body to post for a score, or null when anything about it is off (then nothing is sent). */
 export function scorePayload(level: string, initials: string, seconds: number, step: number): Payload | null {
-  if (typeof level !== 'string' || !BOARDS.includes(level) || typeof initials !== 'string' || !/^[A-Z]{3}$/.test(initials)) return null;
+  if (typeof level !== 'string' || !BOARDS.includes(level) || typeof initials !== 'string' || !/^[A-Z]{3}$/.test(initials) || isBlockedInitials(initials)) return null;
   if (typeof seconds !== 'number') return null;
   const s = Math.round(seconds * 100) / 100;
   if (!isSeconds(s)) return null;
@@ -42,7 +42,7 @@ export function parseRows(body: unknown, board: string): Entry[] {
     const { initials, seconds, step, created_at } = r as Record<string, unknown>;
     const secs = typeof seconds === 'string' && seconds.trim() !== '' ? Number(seconds) : seconds;
     const date = typeof created_at === 'string' ? created_at.slice(0, 10) : '';
-    if (typeof initials !== 'string' || !/^[A-Z]{3}$/.test(initials) || !isSeconds(secs) || !formatDate(date)) continue;
+    if (typeof initials !== 'string' || !/^[A-Z]{3}$/.test(initials) || isBlockedInitials(initials) || !isSeconds(secs) || !formatDate(date)) continue;
     if (typeof step !== 'number' || !Number.isInteger(step) || step < 1 || step > RUN_STEP) continue;
     out.push({ name: sanitiseName(initials), ms: Math.round(secs * 1000), date, ...(step < RUN_STEP ? { cleared: step } : {}) });
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOARDS, boardOf, clearedOf, DEFAULT_INITIALS, TOP, addEntry, backInitial, emptyScores, formatDate, loadScores, qualifies, saveScores, stepInitial, typeInitial, type Entry } from '../../src/scores';
+import { BOARDS, boardOf, clearedOf, BLOCKED_INITIALS, DEFAULT_INITIALS, TOP, isBlockedInitials, addEntry, backInitial, emptyScores, formatDate, loadScores, qualifies, saveScores, stepInitial, typeInitial, type Entry } from '../../src/scores';
 
 const KEY = 'chronogrip.scores.v1';
 const store = (raw: string | null) => ({ getItem: (k: string) => (k === KEY ? raw : null) });
@@ -308,5 +308,25 @@ describe('partial runs: ranked by levels cleared, then time, then date', () => {
     const m = loadScores(store(raw)).boards['campaign-medium']!;
     expect(m.map((e) => e.name)).toEqual(['OLD', 'PAR']);
     expect(clearedOf(m[0]!)).toBe(20);
+  });
+});
+
+describe('rude initials', () => {
+  it('saves a blocked name as AAA and leaves a normal one alone', () => {
+    let s = addEntry(emptyScores(), 'campaign-medium', lvl(5000, '2026-11-04', 'ASS'));
+    s = addEntry(s, 'campaign-medium', lvl(6000, '2026-11-04', 'fuk'));
+    s = addEntry(s, 'campaign-medium', lvl(7000, '2026-11-04', 'ZED'));
+    expect(s.boards['campaign-medium']!.map((e) => e.name)).toEqual(['AAA', 'AAA', 'ZED']);
+    expect(s.initials).toBe('ZED');
+  });
+  it('checks any case', () => {
+    expect(isBlockedInitials('sex')).toBe(true);
+    expect(isBlockedInitials('ABC')).toBe(false);
+  });
+  it('has a list of unique three-letter uppercase combos, sorted', () => {
+    for (const b of BLOCKED_INITIALS) expect(b).toMatch(/^[A-Z]{3}$/);
+    expect(new Set(BLOCKED_INITIALS).size).toBe(BLOCKED_INITIALS.length);
+    expect([...BLOCKED_INITIALS].sort()).toEqual([...BLOCKED_INITIALS]);
+    expect(BLOCKED_INITIALS).not.toContain('GAY');
   });
 });

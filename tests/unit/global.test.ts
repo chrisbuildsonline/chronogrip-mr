@@ -55,6 +55,19 @@ describe('boardUrl', () => {
   });
 });
 
+describe('rude initials', () => {
+  it('are dropped from the parsed board', () => {
+    const row = { initials: 'ABC', seconds: 5, step: 20, created_at: '2026-11-04T10:11:12.000Z' };
+    expect(parseRows([{ ...row, initials: 'ASS' }, row], 'campaign-medium').map((e) => e.name)).toEqual(['ABC']);
+  });
+  it('are refused on submit', async () => {
+    expect(scorePayload('campaign-medium', 'FUK', 5, 20)).toBeNull();
+    const f = vi.fn(async () => new Response(null, { status: 201 }));
+    expect(await submitGlobal('campaign-medium', 'FUK', 5000, 20, f)).not.toBe('ok');
+    expect(f).not.toHaveBeenCalled();
+  });
+});
+
 describe('parseRows', () => {
   const row = { initials: 'ABC', seconds: 612.34, step: 20, created_at: '2026-11-04T10:11:12.000Z' };
   const entry = { name: 'ABC', ms: 612340, date: '2026-11-04' };
