@@ -2,7 +2,7 @@ import { BOARDS, RUN_STEP, formatDate, isBlockedInitials, sanitiseName, TOP, typ
 
 /**
  * STATE: the global high scores: a public Supabase table anyone can read and add to. Only a board (campaign), three
- * initials, the levels cleared (the step, 1 to 20 here; the table allows 1 to 1000) and the total time go up. The top ten is read
+ * initials, the levels cleared (the step, 1 to 20; the table checks the same range) and the total time go up. The top ten is read
  * most levels first, then fastest. The range (step 1 to 20) is in the query, so the limit only counts rows that can be shown (the table
  * allows up to 1000, and a row above 20 would otherwise take a place in the ten and then be dropped here); the parse checks it again. The key below is the publishable one, safe in a frontend by design; the table's own checks and
  * policies are what guard it. Everything that comes back is untrusted and is re-checked here before it is drawn.
