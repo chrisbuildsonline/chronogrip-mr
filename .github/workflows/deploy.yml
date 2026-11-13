@@ -1,4 +1,5 @@
-# Builds the game and publishes dist/ to GitHub Pages (repo Settings > Pages > Source: GitHub Actions).
+# Builds the game and publishes it to GitHub Pages (repo Settings > Pages > Source: GitHub Actions):
+# the landing page (site/) at the root and the game (dist/) under play/.
 # The browser (e2e) suite is not run here: it needs software GL and takes several minutes, so it runs locally.
 name: deploy
 
@@ -26,9 +27,10 @@ jobs:
       - run: bun run typecheck
       - run: bun run test
       - run: bun run build
+      - run: mkdir -p out && cp -r dist out/play && cp -r site/. out/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: out
 
   deploy:
     needs: build

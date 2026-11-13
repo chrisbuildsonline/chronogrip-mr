@@ -21,8 +21,9 @@ describe('pages deploy workflow', () => {
     expect(yml).not.toMatch(/bun run e2e|playwright/);
   });
 
-  it('uploads dist as the pages artifact and deploys it', () => {
-    expect(yml).toMatch(/actions\/upload-pages-artifact@v3\s*\n\s*with:\s*\n\s*path:\s*['"]?\.?\/?dist\/?['"]?\s*$/m);
+  it('puts the landing page at the root and the game under play/, then uploads and deploys that', () => {
+    expect(yml).toMatch(/bun run build\s*\n\s*- run: mkdir -p out && cp -r dist out\/play && cp -r site\/\. out\/\s*$/m);
+    expect(yml).toMatch(/actions\/upload-pages-artifact@v3\s*\n\s*with:\s*\n\s*path:\s*['"]?\.?\/?out\/?['"]?\s*$/m);
     expect(yml).toMatch(/actions\/deploy-pages@v4/);
   });
 
