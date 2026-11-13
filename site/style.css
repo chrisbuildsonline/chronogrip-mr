@@ -1,0 +1,199 @@
+/* ChronoGrip MR landing page. The game's palette (src/palette.ts, design/DESIGN.md): walnut night, cream type, one amber accent, brass hairlines. */
+@font-face { font-family: "Josefin Sans"; font-weight: 300; font-display: swap; src: url("fonts/josefin-sans-latin-300-normal.woff2") format("woff2"); }
+@font-face { font-family: "Josefin Sans"; font-weight: 400; font-display: swap; src: url("fonts/josefin-sans-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Josefin Sans"; font-weight: 600; font-display: swap; src: url("fonts/josefin-sans-latin-600-normal.woff2") format("woff2"); }
+
+:root {
+  --night: #15110d;     /* C.menuBed */
+  --night-deep: #0d0a07;
+  --vignette: #3a2a1c;  /* C.vignette */
+  --cream: #f1e8d8;     /* C.logo: headings */
+  --ink: #cdbfa6;       /* C.menuInk: body, 10:1 on night */
+  --muted: #a8977f;     /* C.menuMuted: captions, 6.4:1 on night */
+  --amber: #d99a2b;     /* C.amber: the one accent, 7.6:1 on night */
+  --amber-hi: #e8b04a;
+  --brass: #b08d57;     /* C.brass: lines only */
+  --hair: rgba(176, 141, 87, 0.32);
+  --dark-ink: #1c1712;  /* C.ink: words on amber, 7.4:1 */
+  --wrap: 70rem;
+  --gutter: clamp(1.25rem, 5vw, 3rem);
+  --section: clamp(4rem, 10vw, 8rem);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--night) radial-gradient(ellipse 90% 60% at 70% 0%, #2a1e14 0%, var(--night) 70%) no-repeat;
+  color: var(--ink);
+  font: 400 clamp(1.0625rem, 0.98rem + 0.35vw, 1.25rem)/1.65 "Josefin Sans", "Gill Sans", "Trebuchet MS", sans-serif;
+}
+img { display: block; max-width: 100%; height: auto; }
+a { color: var(--amber); text-underline-offset: 0.22em; text-decoration-thickness: 1px; }
+a:hover { color: var(--amber-hi); }
+:focus-visible { outline: 3px solid var(--cream); outline-offset: 3px; border-radius: 4px; }
+strong { color: var(--cream); font-weight: 600; }
+
+.wrap { width: 100%; max-width: calc(var(--wrap) + 2 * var(--gutter)); margin-inline: auto; padding-inline: var(--gutter); }
+
+.eyebrow {
+  margin: 0 0 1.4rem; color: var(--amber); font-weight: 600; font-size: 0.8rem;
+  letter-spacing: 0.32em; text-transform: uppercase;
+}
+
+/* Hero: the copy on walnut night, the Iron Tower level fading in from the right. */
+.hero { position: relative; min-height: min(92svh, 50rem); display: flex; align-items: center; overflow: hidden; isolation: isolate; }
+.hero-shot { position: absolute; z-index: -1; top: 0; right: 0; bottom: 0; width: 64%; }
+.hero-shot img {
+  width: 100%; height: 100%; object-fit: cover; object-position: 30% 40%; opacity: 0.92;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 48%), linear-gradient(to bottom, transparent 0%, #000 12%, #000 72%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent 0%, #000 48%), linear-gradient(to bottom, transparent 0%, #000 12%, #000 72%, transparent 100%);
+  mask-composite: intersect;
+}
+.hero-copy { padding-block: 6rem; }
+.hero-copy > * { max-width: min(33rem, 44vw); }
+/* Big browser text can push the copy over the shot: a soft night halo keeps it readable. */
+.hero-copy .tagline, .hero-copy .also, .hero-copy .eyebrow { text-shadow: 0 0 18px var(--night), 0 1px 3px var(--night); }
+
+.wordmark {
+  position: relative; display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 0 0.5em;
+  max-width: none; margin: 0 0 2rem; padding-bottom: 0.45em;
+  color: var(--cream); font-weight: 300; font-size: clamp(2.1rem, 1rem + 4.4vw, 4rem); line-height: 1;
+  letter-spacing: 0.28em; white-space: nowrap;
+}
+/* The amber rule under the wordmark, fading out like the game's logo. */
+.wordmark::after { content: ""; position: absolute; left: 0; right: 0.3em; bottom: 0; height: 2px; background: linear-gradient(90deg, var(--amber), transparent); }
+.cog { display: inline-block; width: 0.8em; height: 0.8em; margin: 0 0.06em 0 -0.08em; vertical-align: -0.04em; fill: var(--amber); }
+/* Escapement motion: each O ticks one tooth at a time, the two turning against each other. */
+.cog-a { animation: tick 12s steps(24) infinite; }
+.cog-b { animation: tick 12s steps(24) infinite reverse; }
+@keyframes tick { to { transform: rotate(360deg); } }
+.mr {
+  align-self: center; padding: 0.35em 0.4em 0.2em 0.62em; border: 1px solid var(--amber); border-radius: 0.3em;
+  color: var(--amber); font-size: 0.24em; font-weight: 600; letter-spacing: 0.22em;
+}
+
+.tagline { margin: 0 0 2.4rem; color: var(--cream); font-size: clamp(1.2rem, 1rem + 0.6vw, 1.5rem); line-height: 1.5; font-weight: 300; }
+.cta { margin: 0 0 1.1rem; }
+.play {
+  display: inline-flex; align-items: center; gap: 0.8em; min-height: 3.5rem; padding: 1.05rem 2rem 0.85rem;
+  border-radius: 999px; background: var(--amber); color: var(--dark-ink); text-decoration: none;
+  font-weight: 600; font-size: 1.05rem; letter-spacing: 0.12em; text-transform: uppercase;
+  box-shadow: 0 10px 30px rgba(217, 154, 43, 0.22), 0 6px 20px rgba(20, 12, 4, 0.5);
+  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.play::after { content: ""; width: 0.55em; height: 0.55em; margin-top: -0.15em; border: solid currentColor; border-width: 2px 2px 0 0; transform: rotate(45deg); }
+.play:hover { background: var(--amber-hi); color: var(--dark-ink); transform: translateY(-2px); box-shadow: 0 14px 34px rgba(217, 154, 43, 0.3), 0 6px 20px rgba(20, 12, 4, 0.5); }
+.also { margin: 0; color: var(--muted); font-size: 0.95em; }
+
+/* A soft entrance for the hero copy. */
+.hero-copy > * { animation: rise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.hero-copy > :nth-child(2) { animation-delay: 0.08s; }
+.hero-copy > :nth-child(3) { animation-delay: 0.16s; }
+.hero-copy > :nth-child(4) { animation-delay: 0.24s; }
+.hero-copy > :nth-child(5) { animation-delay: 0.32s; }
+.hero-shot { animation: fade 1.4s ease both; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes fade { from { opacity: 0; } }
+
+/* At a glance */
+.facts dl { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; border-block: 1px solid var(--hair); }
+.facts dl > div { padding: 2rem 1.5rem 1.8rem; }
+.facts dl > div + div { border-left: 1px solid var(--hair); }
+.facts dt { color: var(--cream); font-weight: 300; font-size: clamp(1.7rem, 1.2rem + 1.4vw, 2.4rem); line-height: 1.1; letter-spacing: 0.04em; white-space: nowrap; }
+.facts dd { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.9em; line-height: 1.45; }
+
+/* Sections */
+main > section { padding-block: var(--section) 0; }
+h2 {
+  position: relative; margin: 0 0 3rem; padding-bottom: 1rem; max-width: 40rem;
+  color: var(--cream); font-weight: 300; font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.25rem); line-height: 1.2;
+  letter-spacing: 0.22em; text-transform: uppercase;
+}
+h2::after { content: ""; position: absolute; left: 0; bottom: 0; width: 6rem; height: 2px; background: linear-gradient(90deg, var(--amber), transparent); }
+.num { display: block; margin-bottom: 0.9rem; color: var(--amber); font-size: 0.42em; font-weight: 600; letter-spacing: 0.3em; }
+
+.points { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(2rem, 4vw, 3.5rem); margin: 0; padding: 0; list-style: none; }
+.points h3 { margin: 0 0 0.9rem; color: var(--amber); font-weight: 600; font-size: 0.85rem; letter-spacing: 0.26em; text-transform: uppercase; }
+.points p { margin: 0; }
+
+/* Screenshots in a brass bezel with four screws, like the regulator's plate. */
+.shots { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem clamp(1.5rem, 3vw, 2.5rem); }
+.shots h2, .shot.wide { grid-column: 1 / -1; }
+.shots h2 { margin-bottom: 0; }
+.shot { margin: 0; }
+.frame {
+  padding: 10px; border-radius: 8px; border: 1px solid var(--hair);
+  background:
+    radial-gradient(circle at 5px 5px, var(--brass) 1.6px, transparent 2.4px) top left / 10px 10px no-repeat,
+    radial-gradient(circle at 5px 5px, var(--brass) 1.6px, transparent 2.4px) top right / 10px 10px no-repeat,
+    radial-gradient(circle at 5px 5px, var(--brass) 1.6px, transparent 2.4px) bottom left / 10px 10px no-repeat,
+    radial-gradient(circle at 5px 5px, var(--brass) 1.6px, transparent 2.4px) bottom right / 10px 10px no-repeat,
+    linear-gradient(160deg, #241a12, var(--night-deep));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+.frame img { border-radius: 3px; }
+.ratio { aspect-ratio: 16 / 9; }
+.ratio iframe { display: block; width: 100%; height: 100%; border: 0; border-radius: 3px; }
+figcaption { margin-top: 1rem; max-width: 40rem; color: var(--muted); font-size: 0.92em; line-height: 1.5; }
+
+/* Play it on Quest */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(1.5rem, 3vw, 2.5rem); margin: 0; padding: 0; list-style: none; }
+.steps li { display: flex; flex-direction: column; gap: 1.1rem; padding-top: 1.6rem; border-top: 1px solid var(--hair); }
+.step {
+  display: grid; place-items: center; width: 3rem; height: 3rem; padding-top: 0.2em; border-radius: 50%;
+  border: 1px solid var(--amber); color: var(--amber); font-weight: 300; font-size: 1.4rem;
+}
+.steps p { margin: 0; }
+.addr { color: var(--amber); letter-spacing: 0.04em; }
+.aside { margin: 2.5rem 0 0; max-width: 42rem; color: var(--muted); }
+
+/* How it's built */
+.stack { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6rem clamp(2rem, 4vw, 3.5rem); margin: 0; padding: 0; list-style: none; }
+.stack li { padding-left: 1.4rem; border-left: 2px solid var(--hair); }
+.stack strong { display: block; margin-bottom: 0.2rem; letter-spacing: 0.06em; }
+.repo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1.2rem; margin: 3rem 0 0; }
+.repo a { font-weight: 600; letter-spacing: 0.06em; }
+.repo span { color: var(--muted); font-size: 0.92em; }
+
+.foot { margin-top: var(--section); padding-block: 2.5rem 3rem; border-top: 1px solid var(--hair); color: var(--ink); }
+.foot p { margin: 0 0 0.4rem; }
+.foot .small { color: var(--muted); font-size: 0.85em; }
+
+/* Tablet and down */
+@media (max-width: 960px) {
+  .facts dl { grid-template-columns: 1fr 1fr; }
+  .facts dl > div:nth-child(3) { border-left: 0; }
+  .facts dl > div:nth-child(n + 3) { border-top: 1px solid var(--hair); }
+  .points, .steps { grid-template-columns: 1fr; }
+  .points { max-width: 40rem; }
+}
+
+/* Phone: the level shot sits above the copy instead of behind it. */
+@media (max-width: 760px) {
+  .hero { flex-direction: column; align-items: stretch; min-height: 0; }
+  .hero-shot { position: relative; width: 100%; aspect-ratio: 4 / 3; }
+  .hero-shot img {
+    object-position: 55% 50%;
+    -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  }
+  .hero-copy { margin-top: -0.5rem; padding-block: 0 3.5rem; }
+  .hero-copy > * { max-width: none; }
+  .wordmark { letter-spacing: 0.2em; }
+  .play { width: 100%; justify-content: center; padding-inline: 1rem; font-size: 0.9rem; letter-spacing: 0.06em; text-align: center; }
+  .shots, .stack { grid-template-columns: 1fr; }
+  .shots h2 { margin-bottom: 0; }
+  .frame { padding: 6px; }
+  .frame { background-size: 0 0, 0 0, 0 0, 0 0, auto; }
+}
+@media (max-width: 420px) {
+  .facts dl > div { padding: 1.4rem 1rem 1.3rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cog-a, .cog-b, .hero-copy > *, .hero-shot { animation: none; }
+  .play { transition: none; }
+  .play:hover { transform: none; }
+}

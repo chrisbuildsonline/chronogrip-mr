@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChronoGrip MR: a hands-first clockwork puzzle for Quest</title>
+  <meta name="description" content="A seated mixed-reality clockwork puzzle you play with your bare hands. Pinch brass gears onto axles, roll your wrist to regulate the escapement. Free in the Quest browser.">
+  <meta name="theme-color" content="#15110d">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="fonts/josefin-sans-latin-300-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/josefin-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="ChronoGrip MR">
+  <meta property="og:description" content="A seated mixed-reality clockwork puzzle you play with your bare hands, right in the Quest browser.">
+  <meta property="og:url" content="https://chronogrip.online/">
+  <meta property="og:image" content="https://chronogrip.online/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The ChronoGrip title menu over the attic clock room">
+  <meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
+  <!-- The wordmark's gear (the same outline as the game's logo), drawn once and reused. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="gear" viewBox="-1.05 -1.05 2.1 2.1"><path fill-rule="evenodd" d="M0.740 0.000 L0.994 0.113 L0.980 0.200 L0.704 0.229 L0.599 0.435 L0.738 0.675 L0.675 0.738 L0.435 0.599 L0.229 0.704 L0.200 0.980 L0.113 0.994 L0.000 0.740 L-0.229 0.704 L-0.414 0.910 L-0.493 0.870 L-0.435 0.599 L-0.599 0.435 L-0.870 0.493 L-0.910 0.414 L-0.704 0.229 L-0.740 0.000 L-0.994 -0.113 L-0.980 -0.200 L-0.704 -0.229 L-0.599 -0.435 L-0.738 -0.675 L-0.675 -0.738 L-0.435 -0.599 L-0.229 -0.704 L-0.200 -0.980 L-0.113 -0.994 L-0.000 -0.740 L0.229 -0.704 L0.414 -0.910 L0.493 -0.870 L0.435 -0.599 L0.599 -0.435 L0.870 -0.493 L0.910 -0.414 L0.704 -0.229Z M0.34 0 A0.34 0.34 0 1 0 -0.34 0 A0.34 0.34 0 1 0 0.34 0Z"/></symbol>
+  </svg>
+
+  <header class="hero">
+    <picture class="hero-shot">
+      <source media="(max-width: 760px)" srcset="img/hero-760.webp">
+      <img src="img/hero-1140.webp" width="1140" height="780" alt="" fetchpriority="high">
+    </picture>
+    <div class="wrap hero-copy">
+      <p class="eyebrow">A clockwork puzzle for Quest</p>
+      <h1 class="wordmark" aria-label="ChronoGrip MR">
+        <span aria-hidden="true">CHR<svg class="cog cog-a"><use href="#gear"/></svg>N<svg class="cog cog-b"><use href="#gear"/></svg>GRIP</span>
+        <span class="mr" aria-hidden="true">MR</span>
+      </h1>
+      <p class="tagline">A seated mixed-reality puzzle you play with your bare hands. Pinch brass gears onto axles, then roll your wrist to bring a little brass bird to life.</p>
+      <p class="cta"><a class="play" href="play/">Play in your Quest browser</a></p>
+      <p class="also">Also runs in any desktop browser with WebGL, with mouse and keys. Nothing to install.</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="wrap facts" aria-label="At a glance">
+      <dl>
+        <div><dt>3 x 20</dt><dd>Three stages, twenty levels each</dd></div>
+        <div><dt>2 to 6 min</dt><dd>Time limit per level, growing with difficulty</dd></div>
+        <div><dt>40 x 30 cm</dt><dd>One walnut tray, all within arm's reach</dd></div>
+        <div><dt>0</dt><dd>Audio files: every note is played in code</dd></div>
+      </dl>
+    </section>
+
+    <section class="wrap what" aria-labelledby="what-h">
+      <h2 id="what-h"><span class="num">I</span>What it is</h2>
+      <ul class="points">
+        <li>
+          <h3>Hands first</h3>
+          <p>No controllers. Pinch a gear, carry it and let go over an axle. Poke a menu button with your index tip. Pinch the regulator dial and roll your wrist like turning a key.</p>
+        </li>
+        <li>
+          <h3>On your real table</h3>
+          <p>In passthrough the tray looks for the table or tray table in front of you and stands flush with its near edge. You stay seated: nothing asks you to stand, turn or stretch.</p>
+        </li>
+        <li>
+          <h3>Against the clock</h3>
+          <p>Easy, Medium and Hard, twenty levels each. Every level is generated fresh, so you can't memorise a stage. Runs go on a local and a global top ten.</p>
+        </li>
+      </ul>
+    </section>
+
+    <!--
+      Demo video: when it is uploaded, uncomment this section and put the video's embed URL in src.
+      <section class="wrap video" aria-labelledby="video-h">
+        <h2 id="video-h"><span class="num">&#8226;</span>Watch it</h2>
+        <div class="frame ratio">
+          <iframe src="https://www.youtube-nocookie.com/embed/VIDEO_ID" title="ChronoGrip MR demo video" loading="lazy"
+            allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe>
+        </div>
+      </section>
+    -->
+
+    <section class="wrap shots" aria-labelledby="shots-h">
+      <h2 id="shots-h"><span class="num">II</span>In the game</h2>
+      <figure class="shot wide">
+        <div class="frame"><img src="img/puzzle-1440.webp" srcset="img/puzzle-720.webp 720w, img/puzzle-1440.webp 1440w" sizes="(max-width: 1180px) 100vw, 1120px" width="1440" height="900" loading="lazy"
+          alt="Hard level 20 in front of the Iron Tower at midnight. A card reads Turn the marked gear 42 rpm, level 20 of 20. On the walnut tray a gear is carried above the board, free axles are ringed amber, and the regulator dial and brass bird sit at the near right."></div>
+        <figcaption>Hard, level 20, at the Iron Tower. Carry a gear and the axles it fits are ringed amber.</figcaption>
+      </figure>
+      <figure class="shot">
+        <div class="frame"><img src="img/stages-720.webp" srcset="img/stages-720.webp 720w, img/stages-1440.webp 1440w" sizes="(max-width: 760px) 100vw, 560px" width="1440" height="900" loading="lazy"
+          alt="The stage picker: three cards side by side, Easy, Medium and Hard, each showing its room and 20 levels."></div>
+        <figcaption>Three stages, each in its own room rendered in Blender.</figcaption>
+      </figure>
+      <figure class="shot">
+        <div class="frame"><img src="img/cleared-720.webp" srcset="img/cleared-720.webp 720w, img/cleared-1440.webp 1440w" sizes="(max-width: 760px) 100vw, 560px" width="1440" height="900" loading="lazy"
+          alt="The stage-cleared card over the darkened Iron Tower: Stage cleared, Hard, solved in 34 min 31 s, New local best."></div>
+        <figcaption>Level 20 cleared: brass confetti, the bird's song, then your time and place.</figcaption>
+      </figure>
+    </section>
+
+    <section class="wrap how" aria-labelledby="how-h">
+      <h2 id="how-h"><span class="num">III</span>Play it on Quest</h2>
+      <ol class="steps">
+        <li><span class="step">1</span><p>Put on your Quest and open the <strong>Browser</strong>.</p></li>
+        <li><span class="step">2</span><p>Go to <strong class="addr">chronogrip.online</strong></p></li>
+        <li><span class="step">3</span><p>Tap <strong>Play</strong>, then <strong>Enter MR</strong>. Put the controllers down and sit with a table in front of you.</p></li>
+      </ol>
+      <p class="aside">No headset? Open the same address on a computer. Drag gears with the mouse and drag the dial's knob sideways to set the rate.</p>
+    </section>
+
+    <section class="wrap built" aria-labelledby="built-h">
+      <h2 id="built-h"><span class="num">IV</span>How it's built</h2>
+      <ul class="stack">
+        <li><strong>IWSDK</strong> Runs the WebXR mixed-reality session and grabs the gears; the game reads thumb, index and wrist joints itself for pokes and the wrist twist.</li>
+        <li><strong>three.js</strong> Renders the tray, with involute gear teeth drawn in code and a solver that finds speed, direction and jams.</li>
+        <li><strong>Blender</strong> Renders the three rooms from scripts, and their clocks and pendulums move in time with the music.</li>
+        <li><strong>WebAudio</strong> Composes and plays each stage's theme, and synthesises every click, grind and chime.</li>
+      </ul>
+      <p class="repo"><a href="https://github.com/chrisbuildsonline/chronogrip-mr">Source on GitHub</a> <span>MIT licensed, with unit, fuzz and emulated-headset tests.</span></p>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <p>Made by Chris for the Meta VR Start Developer Competition 2026.</p>
+    <p class="small">An independent entry, not made or endorsed by Meta. Type: Josefin Sans, <a href="fonts/OFL.txt">SIL Open Font License</a>.</p>
+  </footer>
+</body>
+</html>
