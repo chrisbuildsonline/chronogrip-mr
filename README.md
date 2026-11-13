@@ -2,7 +2,7 @@
 
 A seated mixed-reality clockwork puzzle you play with your bare hands: pinch brass gears onto axles, then roll your wrist to regulate the escapement until a little brass bird comes to life.
 
-**Play it:** https://chrisbuildsonline.github.io/chronogrip-mr/ (open it in the Quest browser and press **Enter MR**; any desktop browser gets a mouse-driven preview).
+**Play it:** https://chrisbuildsonline.github.io/chronogrip-mr/play/ (open it in the Quest browser and press **Enter MR**; any desktop browser gets a mouse-driven preview).
 
 Built for the [Meta VR Start Developer Competition 2026](https://start-developer-competition-26.devpost.com/). **Track:** Gaming. **Division:** New Experience.
 
@@ -93,7 +93,7 @@ The run in progress (`chronogrip.run.v1`), the high scores (`chronogrip.scores.v
 
 ## Testing it (for judges)
 
-**On a Quest 3.** Open https://chrisbuildsonline.github.io/chronogrip-mr/ in the Quest browser. Put the controllers down, sit with a table or tray table in front of you and press **Enter MR**. Poke **New Game**, then the **Easy** card. Pinch a gear onto its axle, then pinch the dial and roll your wrist.
+**On a Quest 3.** Open https://chrisbuildsonline.github.io/chronogrip-mr/play/ in the Quest browser. Put the controllers down, sit with a table or tray table in front of you and press **Enter MR**. Poke **New Game**, then the **Easy** card. Pinch a gear onto its axle, then pinch the dial and roll your wrist.
 
 **In any desktop browser.** Open the same URL. Enter MR stays disabled, but the whole game runs with the mouse:
 
@@ -140,7 +140,7 @@ The unit tests cover the gear geometry, the train solver, the level generator an
 
 **Developer cheats.** A build made with `DEV_MODE=on` (in the shell or `.env`) adds a small DEV pill at the bottom left: pick a stage, solve the level on the board, play any level 1-20, or clear the stage to see the celebration. Each cheat runs the game's own flow, and a cheated run never goes to the global board. Without the flag the panel is compiled out of the build.
 
-Deploys: `.github/workflows/deploy.yml` typechecks, runs the unit tests, builds and publishes `dist/` to GitHub Pages on every push to `main`. The build uses relative asset paths, so it works under `/chronogrip-mr/`.
+Deploys: `.github/workflows/deploy.yml` typechecks, runs the unit tests, builds, puts the game under `play/` and the landing page (`site/`) at the root, and publishes that to GitHub Pages on every push to `main`. The build uses relative asset paths, so the game works under any path.
 
 ## How we built it
 
