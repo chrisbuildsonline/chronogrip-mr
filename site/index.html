@@ -10,6 +10,8 @@
   <link rel="preload" href="fonts/josefin-sans-latin-300-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/josefin-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
+  <script>document.documentElement.classList.add('js')</script>
+  <script type="module" src="scores.js"></script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="ChronoGrip MR">
   <meta property="og:description" content="A seated mixed-reality clockwork puzzle you play with your bare hands, right in the Quest browser.">
@@ -101,8 +103,31 @@
       </figure>
     </section>
 
+    <section class="wrap scores" aria-labelledby="scores-h">
+      <h2 id="scores-h"><span class="num">III</span>Global high scores</h2>
+      <div class="scores-grid">
+        <div class="board frame" data-board>
+          <div class="tabs" role="tablist" aria-label="Stage">
+            <button type="button" role="tab" id="tab-easy" aria-controls="panel-easy" aria-selected="true" data-board-id="campaign-easy">Easy</button>
+            <button type="button" role="tab" id="tab-medium" aria-controls="panel-medium" aria-selected="false" tabindex="-1" data-board-id="campaign-medium">Medium</button>
+            <button type="button" role="tab" id="tab-hard" aria-controls="panel-hard" aria-selected="false" tabindex="-1" data-board-id="campaign-hard">Hard</button>
+          </div>
+          <div class="panel" role="tabpanel" id="panel-easy" aria-labelledby="tab-easy" tabindex="0"></div>
+          <div class="panel" role="tabpanel" id="panel-medium" aria-labelledby="tab-medium" tabindex="0" hidden></div>
+          <div class="panel" role="tabpanel" id="panel-hard" aria-labelledby="tab-hard" tabindex="0" hidden></div>
+        </div>
+        <div class="dare">
+          <p class="dare-q">Think you can beat it?</p>
+          <p>Every run on a timer goes on its stage's top ten, from a Quest or a desktop browser alike. Clear more levels, or the same levels faster, and three letters of yours sit here.</p>
+          <p class="cta"><a class="play" href="play/">Play</a></p>
+          <p class="small">Ranked by levels cleared, then total time. Live from the same board the game reads.</p>
+        </div>
+      </div>
+      <noscript><p class="aside">The live top ten for each stage is in the game. <a href="play/">Play ChronoGrip MR</a> to see it, and to get on it.</p></noscript>
+    </section>
+
     <section class="wrap how" aria-labelledby="how-h">
-      <h2 id="how-h"><span class="num">III</span>Play it on Quest</h2>
+      <h2 id="how-h"><span class="num">IV</span>Play it on Quest</h2>
       <ol class="steps">
         <li><span class="step">1</span><p>Put on your Quest and open the <strong>Browser</strong>.</p></li>
         <li><span class="step">2</span><p>Go to <strong class="addr">chronogrip.online</strong></p></li>
@@ -112,7 +137,7 @@
     </section>
 
     <section class="wrap built" aria-labelledby="built-h">
-      <h2 id="built-h"><span class="num">IV</span>How it's built</h2>
+      <h2 id="built-h"><span class="num">V</span>How it's built</h2>
       <ul class="stack">
         <li><strong>IWSDK</strong> Runs the WebXR mixed-reality session and grabs the gears; the game reads thumb, index and wrist joints itself for pokes and the wrist twist.</li>
         <li><strong>three.js</strong> Renders the tray, with involute gear teeth drawn in code and a solver that finds speed, direction and jams.</li>

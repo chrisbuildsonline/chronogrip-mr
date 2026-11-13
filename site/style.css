@@ -138,6 +138,72 @@ h2::after { content: ""; position: absolute; left: 0; bottom: 0; width: 6rem; he
 .ratio iframe { display: block; width: 100%; height: 100%; border: 0; border-radius: 3px; }
 figcaption { margin-top: 1rem; max-width: 40rem; color: var(--muted); font-size: 0.92em; line-height: 1.5; }
 
+/* Global high scores: the game's board card on a brass plate. Stage tabs over a faint cream bed, ten fixed slots, the top three tinted brass. */
+.sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+html:not(.js) .scores-grid { display: none; }
+.scores-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(15rem, 1fr); gap: 2.5rem clamp(2rem, 5vw, 4.5rem); align-items: center; }
+.board.frame { padding: clamp(1rem, 2.4vw, 1.75rem) clamp(1rem, 2.6vw, 2rem) clamp(1rem, 2vw, 1.5rem); }
+
+.tabs { display: flex; gap: 0.25rem; width: fit-content; margin: 0 0 1.4rem; padding: 0.25rem; border-radius: 999px; background: rgba(241, 232, 216, 0.06); border: 1px solid rgba(176, 141, 87, 0.18); }
+.tabs [role="tab"] {
+  position: relative; min-height: 2.75rem; padding: 0.7rem 1.35rem 0.55rem; border: 0; border-radius: 999px; background: none; cursor: pointer;
+  color: var(--muted); font: 400 0.8rem/1 "Josefin Sans", "Gill Sans", "Trebuchet MS", sans-serif; letter-spacing: 0.26em; text-transform: uppercase;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+/* The amber underline close under the word, as on the game's stage tabs. */
+.tabs [role="tab"]::after {
+  content: ""; position: absolute; left: 28%; right: 28%; bottom: 0.35rem; height: 2px; border-radius: 1px; background: var(--amber);
+  transform: scaleX(0); transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.tabs [role="tab"]:hover { color: var(--cream); }
+.tabs [aria-selected="true"] { color: var(--amber); font-weight: 600; background: rgba(217, 154, 43, 0.1); }
+.tabs [aria-selected="true"]::after { transform: scaleX(1); }
+
+.panel { position: relative; min-height: calc(2.2rem + 10 * 2.6rem); border-radius: 4px; }
+.rows { width: 100%; border-collapse: collapse; font-size: 0.95em; line-height: 1.2; }
+.rows th {
+  height: 2.2rem; padding: 0 0.6rem 0.35rem; vertical-align: bottom; text-align: left; border-bottom: 1px solid rgba(241, 232, 216, 0.14);
+  color: var(--amber); font-weight: 600; font-size: 0.7rem; letter-spacing: 0.26em; text-transform: uppercase;
+}
+.rows td { height: 2.6rem; padding: 0.3rem 0.6rem 0.1rem; border-bottom: 1px solid rgba(241, 232, 216, 0.07); white-space: nowrap; }
+.rows tbody tr:last-child td { border-bottom: 0; }
+.rows .c-rank { width: 2.6rem; }
+.rows td.c-rank { color: var(--muted); font-size: 0.88em; }
+.rows td.c-name { color: var(--cream); font-weight: 600; letter-spacing: 0.16em; }
+.rows td.c-lvl { color: var(--ink); font-size: 0.92em; }
+.rows td.c-lvl.full { color: var(--amber); font-weight: 600; }
+.rows .c-time, .rows .c-date { text-align: right; }
+.rows td.c-time { color: var(--cream); }
+/* Josefin's digits are proportional: each sits in a fixed cell so the times line up, as the game's board does. */
+.cells .d, .cells .p { display: inline-block; text-align: center; }
+.cells .d { width: 0.6em; }
+.cells .p { width: 0.3em; }
+.rows td.c-date { color: var(--muted); font-size: 0.88em; }
+.rows .podium td { background: rgba(176, 141, 87, 0.1); }
+.rows .podium td.c-rank { color: var(--brass); font-weight: 600; }
+.rows .slot td { color: rgba(168, 151, 127, 0.3); font-weight: 400; }
+.entry { animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i) * 45ms); }
+.panel[data-state="loading"] tbody { animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: 0.45; } }
+
+/* The loading, empty or offline line sits over the faint slots on a dark patch, as in the game; it never resizes the board. */
+.board-status {
+  position: absolute; left: 50%; top: calc(2.2rem + 5 * 2.6rem); transform: translate(-50%, -50%);
+  display: flex; align-items: center; justify-content: center; gap: 0.6em; width: max-content; max-width: calc(100% - 1.5rem); margin: 0;
+  padding: 0.8rem 1.5rem 0.65rem; border-radius: 999px; border: 1px solid var(--hair); background: rgba(16, 11, 7, 0.94);
+  color: var(--ink); font-size: 0.95em; line-height: 1.35; text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.panel[data-state="ready"] .board-status { display: none; }
+.panel[data-state="offline"] .board-status { color: var(--muted); }
+.board-status a { font-weight: 600; }
+.board-status .cog { flex: none; width: 1.05em; height: 1.05em; margin: -0.15em 0 0; animation: tick 3s steps(24) infinite; }
+
+.dare-q { margin: 0 0 1rem; color: var(--cream); font-weight: 300; font-size: clamp(1.6rem, 1.2rem + 1.2vw, 2.25rem); line-height: 1.2; letter-spacing: 0.02em; }
+.dare p { margin: 0 0 1.4rem; }
+.dare .cta { margin: 2rem 0 1.4rem; }
+.dare .small { margin: 0; color: var(--muted); font-size: 0.85em; }
+
 /* Play it on Quest */
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(1.5rem, 3vw, 2.5rem); margin: 0; padding: 0; list-style: none; }
 .steps li { display: flex; flex-direction: column; gap: 1.1rem; padding-top: 1.6rem; border-top: 1px solid var(--hair); }
@@ -168,6 +234,9 @@ figcaption { margin-top: 1rem; max-width: 40rem; color: var(--muted); font-size:
   .facts dl > div:nth-child(n + 3) { border-top: 1px solid var(--hair); }
   .points, .steps { grid-template-columns: 1fr; }
   .points { max-width: 40rem; }
+  .scores-grid { grid-template-columns: 1fr; }
+  .board { max-width: 44rem; }
+  .dare { max-width: 36rem; }
 }
 
 /* Phone: the level shot sits above the copy instead of behind it. */
@@ -187,13 +256,22 @@ figcaption { margin-top: 1rem; max-width: 40rem; color: var(--muted); font-size:
   .shots h2 { margin-bottom: 0; }
   .frame { padding: 6px; }
   .frame { background-size: 0 0, 0 0, 0 0, 0 0, auto; }
+  .board.frame { padding: 0.9rem 0.6rem 0.6rem; }
+  .tabs { width: 100%; }
+  .tabs [role="tab"] { flex: 1; padding-inline: 0.4rem; letter-spacing: 0.18em; }
+  .rows { font-size: 0.88em; }
+  .rows th, .rows td { padding-inline: 0.35rem; }
+  .rows th { letter-spacing: 0.16em; }
+  .rows .c-rank { width: 2rem; }
+  .rows td.c-name { letter-spacing: 0.1em; }
 }
 @media (max-width: 420px) {
   .facts dl > div { padding: 1.4rem 1rem 1.3rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cog-a, .cog-b, .hero-copy > *, .hero-shot { animation: none; }
+  .cog-a, .cog-b, .hero-copy > *, .hero-shot, .entry, .panel[data-state="loading"] tbody, .board-status .cog { animation: none; }
+  .tabs [role="tab"], .tabs [role="tab"]::after { transition: none; }
   .play { transition: none; }
   .play:hover { transform: none; }
 }
